@@ -6,7 +6,7 @@ django-crispy-forms==2.4
 crispy-bootstrap5==2024.2
 
 # Base de datos
-psycopg2-binary==2.9.5
+psycopg[binary]>=3.2.0
 
 # Cache y sesiones
 django-redis==5.4.0
