@@ -82,30 +82,16 @@ import os
 from urllib.parse import urlparse
 
 # Configuración de base de datos para Docker
-if os.getenv('DATABASE_URL'):
-    # Para Docker
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'bd_empresa_exportadora',
-            'USER': 'postgres',
-            'PASSWORD': '',
-            'HOST': 'db',
-            'PORT': '5432',
-        }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'bd_empresa_exportadora'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+        'HOST': 'db',
+        'PORT': '5432',
     }
-else:
-    # Para desarrollo local
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'bd_empresa_exportadora',
-            'USER': 'postgres',
-            'PASSWORD': '',
-            'HOST': 'localhost',
-            'PORT': '5432',
-        }
-    }
+}
 
 
 # Password validation
