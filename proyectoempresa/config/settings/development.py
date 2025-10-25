@@ -1,4 +1,6 @@
 from .base import *
+import os
+import dj_database_url
 
 # Debug mode
 DEBUG = True
@@ -26,3 +28,10 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Logging for development
 LOGGING['handlers']['console']['level'] = 'DEBUG'
 LOGGING['root']['level'] = 'DEBUG'
+
+# Base de datos PostgreSQL usando variables de entorno
+DATABASES = {
+    'default': dj_database_url.config(
+        default=f"postgresql://{os.environ.get('DB_USER','postgres')}:{os.environ.get('DB_PASSWORD','masterkpo123')}@{os.environ.get('DB_HOST','db')}:{os.environ.get('DB_PORT','5432')}/{os.environ.get('DB_NAME','bd_empresa_exportadora')}"
+    )
+}
