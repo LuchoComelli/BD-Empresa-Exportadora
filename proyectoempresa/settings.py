@@ -89,7 +89,7 @@ if os.getenv('DATABASE_URL'):
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': 'bd_empresa_exportadora',
             'USER': 'postgres',
-            'PASSWORD': 'maxi',
+            'PASSWORD': '',
             'HOST': 'db',
             'PORT': '5432',
         }
@@ -101,7 +101,7 @@ else:
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': 'bd_empresa_exportadora',
             'USER': 'postgres',
-            'PASSWORD': 'maxi',
+            'PASSWORD': '',
             'HOST': 'localhost',
             'PORT': '5432',
         }
