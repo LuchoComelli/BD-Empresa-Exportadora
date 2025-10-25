@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   db:
-    image: postgres:15
+    image: postgres:17
     environment:
       POSTGRES_DB: empresa_exportadora_dev
       POSTGRES_USER: postgres
@@ -37,13 +35,15 @@ services:
       - DEBUG=1
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/empresa_exportadora_dev
       - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=settings
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+    working_dir: /app/proyectoempresa
     env_file:
-      - .env
+      - proyectoempresa/config/docker.env
 
 volumes:
   postgres_data:

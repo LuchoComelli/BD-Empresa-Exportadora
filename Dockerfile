@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # Variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=settings.development
+ENV DJANGO_SETTINGS_MODULE=settings
 
 # Directorio de trabajo
 WORKDIR /app
@@ -12,7 +12,8 @@ WORKDIR /app
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
     gcc \
-    postgresql-client \
+    postgresql-client-17 \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements
@@ -26,6 +27,9 @@ COPY . .
 
 # Crear directorios necesarios
 RUN mkdir -p logs media static
+
+# Cambiar al directorio del proyecto Django
+WORKDIR /app/proyectoempresa
 
 # Exponer puerto
 EXPOSE 8000
