@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:17
     environment:
-      POSTGRES_DB: bd_empresa_exportadora
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: maxi
+      POSTGRES_DB: ${DB_NAME:-bd_empresa_exportadora}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -25,23 +25,18 @@ services:
   web:
     build: .
     command: python manage.py runserver 0.0.0.0:8000
+    working_dir: /app/proyectoempresa
     volumes:
       - .:/app
       - /app/venv
       - /app/__pycache__
     ports:
       - "8000:8000"
-    environment:
-      - DEBUG=1
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/bd_empresa_exportadora
-      - REDIS_URL=redis://redis:6379/0
-      - DJANGO_SETTINGS_MODULE=settings
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    working_dir: /app/proyectoempresa
     env_file:
       - proyectoempresa/config/docker.env
 
