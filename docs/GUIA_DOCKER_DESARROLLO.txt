@@ -1,0 +1,835 @@
+# GUÍA DOCKER PARA DESARROLLO DEL PROYECTO
+# Sistema de Gestión de Empresas Exportadoras - Catamarca
+
+## ÍNDICE
+1. ¿POR QUÉ DOCKER?
+2. CONFIGURACIÓN INICIAL
+3. ARCHIVOS DOCKER NECESARIOS
+4. COMANDOS BÁSICOS
+5. DESARROLLO CON DOCKER
+6. PRODUCCIÓN CON DOCKER
+7. BENEFICIOS ESPECÍFICOS PARA EL PROYECTO
+8. TROUBLESHOOTING
+9. MEJORES PRÁCTICAS
+
+## 1. ¿POR QUÉ DOCKER?
+
+### ✅ **VENTAJAS PARA EL PROYECTO:**
+
+#### **1.1 CONSISTENCIA DE ENTORNO**
+- **Mismo entorno en todos los equipos**: Windows, Mac, Linux
+- **Sin problemas de versiones**: Python, PostgreSQL, Redis
+- **Configuración idéntica**: Variables de entorno, puertos, volúmenes
+
+#### **1.2 FÁCIL ONBOARDING**
+- **Nuevo desarrollador**: `git clone` + `docker-compose up`
+- **Sin instalación manual**: Python, PostgreSQL, Redis, dependencias
+- **Configuración automática**: Base de datos, migraciones, datos de prueba
+
+#### **1.3 AISLAMIENTO**
+- **Sin conflictos**: Diferentes versiones de Python/PostgreSQL
+- **Limpieza fácil**: `docker-compose down -v`
+- **Múltiples proyectos**: Sin interferencias entre proyectos
+
+#### **1.4 DESARROLLO EFICIENTE**
+- **Hot reload**: Cambios en código se reflejan automáticamente
+- **Volúmenes persistentes**: Datos de base de datos se mantienen
+- **Logs centralizados**: Fácil debugging
+
+#### **1.5 PRODUCCIÓN PROFESIONAL**
+- **Despliegue consistente**: Mismo entorno en desarrollo y producción
+- **Escalabilidad**: Fácil escalado horizontal
+- **Monitoreo**: Integración con herramientas de monitoreo
+
+## 2. CONFIGURACIÓN INICIAL
+
+### **2.1 INSTALACIÓN DE DOCKER**
+
+#### **Windows:**
+```bash
+# Descargar Docker Desktop desde:
+# https://www.docker.com/products/docker-desktop/
+
+# Verificar instalación:
+docker --version
+docker-compose --version
+```
+
+#### **Linux (Ubuntu/Debian):**
+```bash
+# Instalar Docker
+sudo apt update
+sudo apt install docker.io docker-compose
+
+# Agregar usuario al grupo docker
+sudo usermod -aG docker $USER
+
+# Verificar instalación
+docker --version
+docker-compose --version
+```
+
+### **2.2 ESTRUCTURA DE ARCHIVOS DOCKER**
+
+```
+proyectoempresa/
+├── docker-compose.yml          # ← CONFIGURACIÓN PRINCIPAL
+├── docker-compose.override.yml # ← CONFIGURACIÓN DESARROLLO
+├── docker-compose.prod.yml     # ← CONFIGURACIÓN PRODUCCIÓN
+├── Dockerfile                  # ← IMAGEN DE LA APLICACIÓN
+├── .dockerignore              # ← ARCHIVOS A IGNORAR
+├── docker/                    # ← CONFIGURACIONES DOCKER
+│   ├── nginx/
+│   │   └── nginx.conf
+│   ├── postgres/
+│   │   └── init.sql
+│   └── redis/
+│       └── redis.conf
+└── scripts/                   # ← SCRIPTS DE UTILIDAD
+    ├── setup.sh
+    ├── backup.sh
+    └── restore.sh
+```
+
+## 3. ARCHIVOS DOCKER NECESARIOS
+
+### **3.1 DOCKERFILE**
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+# Variables de entorno
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=proyectoEmpresa.settings
+
+# Directorio de trabajo
+WORKDIR /app
+
+# Instalar dependencias del sistema
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-client \
+        build-essential \
+        libpq-dev \
+        gettext \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código
+COPY . /app/
+
+# Crear usuario no-root
+RUN adduser --disabled-password --gecos '' appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Exponer puerto
+EXPOSE 8000
+
+# Comando por defecto
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+```
+
+### **3.2 DOCKER-COMPOSE.YML**
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-empresa_exportadora}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cache Redis
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+  # Aplicación Django
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - static_volume:/app/static
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=1
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-empresa_exportadora}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx (solo en producción)
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - static_volume:/app/static
+      - media_volume:/app/media
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:
+```
+
+### **3.3 DOCKER-COMPOSE.OVERRIDE.YML**
+
+```yaml
+# docker-compose.override.yml (desarrollo)
+version: '3.8'
+
+services:
+  web:
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      - DEBUG=1
+      - DJANGO_SETTINGS_MODULE=proyectoEmpresa.settings
+    volumes:
+      - .:/app
+      - /app/venv  # Excluir venv local
+
+  db:
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=empresa_exportadora_dev
+
+  redis:
+    ports:
+      - "6379:6379"
+```
+
+### **3.4 DOCKER-COMPOSE.PROD.YML**
+
+```yaml
+# docker-compose.prod.yml (producción)
+version: '3.8'
+
+services:
+  web:
+    command: gunicorn proyectoEmpresa.wsgi:application --bind 0.0.0.0:8000
+    environment:
+      - DEBUG=0
+      - DJANGO_SETTINGS_MODULE=proyectoEmpresa.settings_production
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+    restart: unless-stopped
+
+  db:
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    restart: unless-stopped
+
+  redis:
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  nginx:
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+      - static_volume:/app/static
+      - media_volume:/app/media
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+```
+
+### **3.5 .DOCKERIGNORE**
+
+```dockerignore
+# .dockerignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+static/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+```
+
+## 4. COMANDOS BÁSICOS
+
+### **4.1 COMANDOS DE DESARROLLO**
+
+```bash
+# Construir y levantar servicios
+docker-compose up --build
+
+# Levantar en segundo plano
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Ver logs de un servicio específico
+docker-compose logs -f web
+
+# Ejecutar comandos en el contenedor
+docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py createsuperuser
+docker-compose exec web python manage.py collectstatic
+
+# Acceder al shell del contenedor
+docker-compose exec web bash
+
+# Parar servicios
+docker-compose down
+
+# Parar y eliminar volúmenes
+docker-compose down -v
+
+# Reconstruir un servicio específico
+docker-compose up --build web
+```
+
+### **4.2 COMANDOS DE PRODUCCIÓN**
+
+```bash
+# Levantar en modo producción
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Ver logs de producción
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+
+# Backup de base de datos
+docker-compose exec db pg_dump -U postgres empresa_exportadora > backup.sql
+
+# Restore de base de datos
+docker-compose exec -T db psql -U postgres empresa_exportadora < backup.sql
+```
+
+## 5. DESARROLLO CON DOCKER
+
+### **5.1 FLUJO DE DESARROLLO**
+
+```bash
+# 1. Clonar repositorio
+git clone <url-repositorio>
+cd proyectoempresa
+
+# 2. Copiar variables de entorno
+cp .env.example .env
+
+# 3. Levantar servicios
+docker-compose up --build
+
+# 4. Aplicar migraciones
+docker-compose exec web python manage.py migrate
+
+# 5. Crear superusuario
+docker-compose exec web python manage.py createsuperuser
+
+# 6. Cargar datos de prueba
+docker-compose exec web python manage.py loaddata fixtures/datos_prueba.json
+
+# 7. Acceder a la aplicación
+# http://localhost:8000
+```
+
+### **5.2 DESARROLLO CON HOT RELOAD**
+
+```bash
+# El código se actualiza automáticamente
+# No necesitas reconstruir la imagen
+# Solo guarda los archivos y se reflejan los cambios
+```
+
+### **5.3 DEBUGGING**
+
+```bash
+# Ver logs en tiempo real
+docker-compose logs -f web
+
+# Acceder al shell del contenedor
+docker-compose exec web bash
+
+# Ver procesos en ejecución
+docker-compose ps
+
+# Ver uso de recursos
+docker stats
+```
+
+## 6. PRODUCCIÓN CON DOCKER
+
+### **6.1 CONFIGURACIÓN DE PRODUCCIÓN**
+
+```bash
+# Variables de entorno para producción
+DB_NAME=empresa_exportadora_prod
+DB_USER=postgres
+DB_PASSWORD=password_seguro
+SECRET_KEY=clave_secreta_muy_larga
+DEBUG=0
+ALLOWED_HOSTS=dominio.com,www.dominio.com
+```
+
+### **6.2 DESPLIEGUE**
+
+```bash
+# 1. Construir imagen de producción
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml build
+
+# 2. Levantar servicios de producción
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# 3. Aplicar migraciones
+docker-compose exec web python manage.py migrate
+
+# 4. Recopilar archivos estáticos
+docker-compose exec web python manage.py collectstatic --noinput
+
+# 5. Crear superusuario
+docker-compose exec web python manage.py createsuperuser
+```
+
+### **6.3 MONITOREO**
+
+```bash
+# Ver estado de servicios
+docker-compose ps
+
+# Ver logs de producción
+docker-compose logs -f
+
+# Ver uso de recursos
+docker stats
+
+# Backup automático
+docker-compose exec db pg_dump -U postgres empresa_exportadora > backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+## 7. BENEFICIOS ESPECÍFICOS PARA EL PROYECTO
+
+### **7.1 PARA EL EQUIPO DE DESARROLLO**
+
+#### **✅ ONBOARDING RÁPIDO**
+- **Nuevo desarrollador**: 5 minutos para tener el proyecto funcionando
+- **Sin instalaciones**: Python, PostgreSQL, Redis, dependencias
+- **Configuración automática**: Base de datos, migraciones, datos de prueba
+
+#### **✅ CONSISTENCIA TOTAL**
+- **Mismo entorno**: Windows, Mac, Linux
+- **Mismas versiones**: Python 3.11, PostgreSQL 15, Redis 7
+- **Misma configuración**: Variables de entorno, puertos, volúmenes
+
+#### **✅ DESARROLLO EFICIENTE**
+- **Hot reload**: Cambios en código se reflejan automáticamente
+- **Volúmenes persistentes**: Datos de base de datos se mantienen
+- **Logs centralizados**: Fácil debugging
+
+### **7.2 PARA EL PROYECTO**
+
+#### **✅ BASE DE DATOS PROFESIONAL**
+- **PostgreSQL 15**: Base de datos robusta y escalable
+- **Redis**: Cache de alta performance
+- **Backups automáticos**: Scripts de respaldo integrados
+
+#### **✅ SEGURIDAD**
+- **Aislamiento**: Cada servicio en su propio contenedor
+- **Variables de entorno**: Configuración segura
+- **Usuario no-root**: Aplicación ejecuta con usuario limitado
+
+#### **✅ ESCALABILIDAD**
+- **Fácil escalado**: Aumentar réplicas de servicios
+- **Load balancing**: Nginx para distribución de carga
+- **Monitoreo**: Integración con herramientas de monitoreo
+
+### **7.3 PARA PRODUCCIÓN**
+
+#### **✅ DESPLIEGUE CONSISTENTE**
+- **Mismo entorno**: Desarrollo y producción idénticos
+- **Configuración automática**: Variables de entorno
+- **Scripts de despliegue**: Automatización completa
+
+#### **✅ MANTENIMIENTO**
+- **Actualizaciones**: Fácil actualización de servicios
+- **Backups**: Scripts automáticos de respaldo
+- **Logs**: Centralización y rotación de logs
+
+## 8. TROUBLESHOOTING
+
+### **8.1 PROBLEMAS COMUNES**
+
+#### **❌ Error: Puerto en uso**
+```bash
+# Solución: Cambiar puerto en docker-compose.yml
+ports:
+  - "8001:8000"  # Cambiar 8000 por 8001
+```
+
+#### **❌ Error: Permisos de archivos**
+```bash
+# Solución: Cambiar permisos
+sudo chown -R $USER:$USER .
+```
+
+#### **❌ Error: Base de datos no conecta**
+```bash
+# Solución: Verificar variables de entorno
+docker-compose exec web python manage.py dbshell
+```
+
+#### **❌ Error: Cache Redis no funciona**
+```bash
+# Solución: Verificar conexión Redis
+docker-compose exec web python manage.py shell
+>>> from django.core.cache import cache
+>>> cache.set('test', 'value')
+>>> cache.get('test')
+```
+
+### **8.2 COMANDOS DE DIAGNÓSTICO**
+
+```bash
+# Ver estado de servicios
+docker-compose ps
+
+# Ver logs de errores
+docker-compose logs --tail=50 web
+
+# Ver uso de recursos
+docker stats
+
+# Verificar conectividad
+docker-compose exec web ping db
+docker-compose exec web ping redis
+
+# Verificar base de datos
+docker-compose exec db psql -U postgres -d empresa_exportadora -c "\dt"
+```
+
+## 9. MEJORES PRÁCTICAS
+
+### **9.1 DESARROLLO**
+
+#### **✅ USAR VOLÚMENES PARA CÓDIGO**
+```yaml
+volumes:
+  - .:/app  # Código se sincroniza automáticamente
+```
+
+#### **✅ VARIABLES DE ENTORNO**
+```bash
+# Usar archivo .env para configuración
+DB_NAME=empresa_exportadora
+DB_USER=postgres
+DB_PASSWORD=postgres
+```
+
+#### **✅ HEALTHCHECKS**
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+```
+
+### **9.2 PRODUCCIÓN**
+
+#### **✅ USAR IMÁGENES OFICIALES**
+```yaml
+services:
+  db:
+    image: postgres:15-alpine  # Imagen oficial y ligera
+```
+
+#### **✅ CONFIGURAR RESTART**
+```yaml
+restart: unless-stopped  # Reiniciar automáticamente
+```
+
+#### **✅ BACKUPS AUTOMÁTICOS**
+```bash
+# Script de backup diario
+#!/bin/bash
+docker-compose exec db pg_dump -U postgres empresa_exportadora > backup_$(date +%Y%m%d).sql
+```
+
+### **9.3 SEGURIDAD**
+
+#### **✅ USUARIO NO-ROOT**
+```dockerfile
+# Crear usuario no-root
+RUN adduser --disabled-password --gecos '' appuser
+USER appuser
+```
+
+#### **✅ VARIABLES DE ENTORNO SEGURAS**
+```bash
+# No hardcodear contraseñas
+DB_PASSWORD=${DB_PASSWORD}
+SECRET_KEY=${SECRET_KEY}
+```
+
+#### **✅ LIMPIAR CACHE**
+```dockerfile
+# Limpiar cache de apt
+RUN apt-get update && apt-get install -y package && rm -rf /var/lib/apt/lists/*
+```
+
+## 10. SCRIPTS DE UTILIDAD
+
+### **10.1 SETUP.SH**
+
+```bash
+#!/bin/bash
+# scripts/setup.sh
+
+echo "🚀 Configurando proyecto..."
+
+# Copiar variables de entorno
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "✅ Archivo .env creado"
+fi
+
+# Levantar servicios
+docker-compose up --build -d
+
+# Esperar a que la base de datos esté lista
+echo "⏳ Esperando base de datos..."
+sleep 10
+
+# Aplicar migraciones
+docker-compose exec web python manage.py migrate
+
+# Crear superusuario
+echo "👤 Creando superusuario..."
+docker-compose exec web python manage.py createsuperuser
+
+echo "✅ Proyecto configurado correctamente!"
+echo "🌐 Accede a: http://localhost:8000"
+```
+
+### **10.2 BACKUP.SH**
+
+```bash
+#!/bin/bash
+# scripts/backup.sh
+
+BACKUP_DIR="./backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="$BACKUP_DIR/backup_$DATE.sql"
+
+# Crear directorio de backups
+mkdir -p $BACKUP_DIR
+
+# Crear backup
+echo "💾 Creando backup..."
+docker-compose exec db pg_dump -U postgres empresa_exportadora > $BACKUP_FILE
+
+echo "✅ Backup creado: $BACKUP_FILE"
+```
+
+### **10.3 RESTORE.SH**
+
+```bash
+#!/bin/bash
+# scripts/restore.sh
+
+if [ -z "$1" ]; then
+    echo "❌ Uso: ./restore.sh <archivo_backup>"
+    exit 1
+fi
+
+BACKUP_FILE=$1
+
+if [ ! -f "$BACKUP_FILE" ]; then
+    echo "❌ Archivo no encontrado: $BACKUP_FILE"
+    exit 1
+fi
+
+echo "🔄 Restaurando backup: $BACKUP_FILE"
+docker-compose exec -T db psql -U postgres empresa_exportadora < $BACKUP_FILE
+
+echo "✅ Backup restaurado correctamente"
+```
+
+## 11. INTEGRACIÓN CON GIT
+
+### **11.1 GITIGNORE PARA DOCKER**
+
+```gitignore
+# .gitignore
+# Docker
+.docker/
+docker-compose.override.yml
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Backups
+backups/
+*.sql
+
+# Volúmenes
+postgres_data/
+redis_data/
+static_volume/
+media_volume/
+```
+
+### **11.2 WORKFLOW CON DOCKER**
+
+```bash
+# 1. Clonar repositorio
+git clone <url-repositorio>
+cd proyectoempresa
+
+# 2. Configurar entorno
+./scripts/setup.sh
+
+# 3. Desarrollar
+# Los cambios se reflejan automáticamente
+
+# 4. Commit y push
+git add .
+git commit -m "feat: nueva funcionalidad"
+git push origin main
+
+# 5. Otro desarrollador
+git pull origin main
+docker-compose up -d
+```
+
+## 12. CONCLUSIÓN
+
+### **🎯 DOCKER ES ESENCIAL PARA ESTE PROYECTO**
+
+#### **✅ BENEFICIOS INMEDIATOS:**
+- **Onboarding rápido**: Nuevos desarrolladores en 5 minutos
+- **Consistencia total**: Mismo entorno en todos los equipos
+- **Desarrollo eficiente**: Hot reload y debugging fácil
+- **Producción profesional**: Despliegue consistente y escalable
+
+#### **✅ ESPECÍFICO PARA EL PROYECTO:**
+- **Base de datos robusta**: PostgreSQL 15 con Redis
+- **Seguridad**: Aislamiento y configuración segura
+- **Mantenimiento**: Backups automáticos y monitoreo
+- **Escalabilidad**: Fácil escalado horizontal
+
+#### **✅ RECOMENDACIÓN:**
+**SÍ, es altamente recomendable usar Docker** para este proyecto. Los beneficios superan ampliamente la complejidad inicial, especialmente considerando:
+
+- **Equipo de desarrollo**: Múltiples desarrolladores
+- **Complejidad del proyecto**: Base de datos, cache, múltiples servicios
+- **Producción**: Despliegue profesional y mantenimiento
+- **Colaboración**: Onboarding rápido y consistencia
+
+### **🚀 PRÓXIMOS PASOS:**
+
+1. **Implementar Docker**: Seguir la guía paso a paso
+2. **Configurar CI/CD**: Integración continua con Docker
+3. **Monitoreo**: Herramientas de monitoreo para producción
+4. **Documentación**: Guías específicas para el equipo
+
+**¡Docker hará que el desarrollo sea más profesional, eficiente y escalable!** 🐳
