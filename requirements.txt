@@ -32,3 +32,5 @@ factory-boy==3.3.0
 # Producción
 gunicorn==23.0.0
 whitenoise==6.7.0
+
+python-dotenv>=1.0.0

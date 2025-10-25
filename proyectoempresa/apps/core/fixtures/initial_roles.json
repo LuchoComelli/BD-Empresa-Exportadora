@@ -1,0 +1,59 @@
+[
+    {
+      "model": "core.rolusuario",
+      "pk": 1,
+      "fields": {
+        "nombre": "Administrador",
+        "descripcion": "Acceso completo y control total del sistema",
+        "puede_crear_empresas": true,
+        "puede_editar_empresas": true,
+        "puede_eliminar_empresas": true,
+        "puede_ver_auditoria": true,
+        "puede_exportar_datos": true,
+        "puede_importar_datos": true,
+        "puede_gestionar_usuarios": true,
+        "puede_acceder_admin": true,
+        "nivel_acceso": 3,
+        "activo": true,
+        "fecha_creacion": "2024-01-01T00:00:00Z"
+      }
+    },
+    {
+      "model": "core.rolusuario",
+      "pk": 2,
+      "fields": {
+        "nombre": "Analista",
+        "descripcion": "Gestión y consulta de datos",
+        "puede_crear_empresas": true,
+        "puede_editar_empresas": true,
+        "puede_eliminar_empresas": false,
+        "puede_ver_auditoria": true,
+        "puede_exportar_datos": true,
+        "puede_importar_datos": true,
+        "puede_gestionar_usuarios": false,
+        "puede_acceder_admin": true,
+        "nivel_acceso": 2,
+        "activo": true,
+        "fecha_creacion": "2024-01-01T00:00:00Z"
+      }
+    },
+    {
+      "model": "core.rolusuario",
+      "pk": 3,
+      "fields": {
+        "nombre": "Consulta",
+        "descripcion": "Visualización y exportación, sin modificar información",
+        "puede_crear_empresas": false,
+        "puede_editar_empresas": false,
+        "puede_eliminar_empresas": false,
+        "puede_ver_auditoria": false,
+        "puede_exportar_datos": true,
+        "puede_importar_datos": false,
+        "puede_gestionar_usuarios": false,
+        "puede_acceder_admin": false,
+        "nivel_acceso": 1,
+        "activo": true,
+        "fecha_creacion": "2024-01-01T00:00:00Z"
+      }
+    }
+  ]

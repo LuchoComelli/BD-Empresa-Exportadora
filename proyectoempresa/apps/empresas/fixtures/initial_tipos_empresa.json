@@ -1,0 +1,29 @@
+[
+    {
+      "model": "empresas.tipoempresa",
+      "pk": 1,
+      "fields": {
+        "nombre": "Producto",
+        "descripcion": "Empresa que solo vende productos",
+        "activo": true
+      }
+    },
+    {
+      "model": "empresas.tipoempresa",
+      "pk": 2,
+      "fields": {
+        "nombre": "Servicio",
+        "descripcion": "Empresa que solo ofrece servicios",
+        "activo": true
+      }
+    },
+    {
+      "model": "empresas.tipoempresa",
+      "pk": 3,
+      "fields": {
+        "nombre": "Mixta",
+        "descripcion": "Empresa que vende productos y ofrece servicios",
+        "activo": true
+      }
+    }
+  ]
