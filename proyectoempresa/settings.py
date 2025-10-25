@@ -87,9 +87,9 @@ if os.getenv('DATABASE_URL'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'empresa_exportadora_dev',
+            'NAME': 'bd_empresa_exportadora',
             'USER': 'postgres',
-            'PASSWORD': 'postgres',
+            'PASSWORD': 'maxi',
             'HOST': 'db',
             'PORT': '5432',
         }
@@ -99,9 +99,9 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'empresa_exportadora_dev',
+            'NAME': 'bd_empresa_exportadora',
             'USER': 'postgres',
-            'PASSWORD': 'postgres',
+            'PASSWORD': 'maxi',
             'HOST': 'localhost',
             'PORT': '5432',
         }
