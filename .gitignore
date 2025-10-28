@@ -157,3 +157,18 @@ logs/
 # Backup files
 *.bak
 *.backup
+
+# Node.js (frontend)
+node_modules/
+dist/
+.npm
+.eslintcache
+
+# Frontend environment files
+frontend/.env.local
+frontend/.env.production.local
+frontend/.env.development.local
+
+# Build artifacts
+frontend/build/
+frontend/dist/

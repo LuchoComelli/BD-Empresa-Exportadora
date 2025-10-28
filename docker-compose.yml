@@ -1,19 +1,21 @@
 services:
   db:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_DB: ${DB_NAME:-bd_empresa_exportadora}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     ports:
-      - "5433:5432"
+      - "5435:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
   redis:
     image: redis:7-alpine
@@ -21,15 +23,23 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - app-network
 
-  web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      sh -c "
+      mkdir -p /app/proyectoempresa/logs &&
+      python manage.py runserver 0.0.0.0:8000
+      "
     working_dir: /app/proyectoempresa
     volumes:
-      - .:/app
-      - /app/venv
-      - /app/__pycache__
+      - ./backend:/app
+      - /app/proyectoempresa/venv
+      - /app/proyectoempresa/__pycache__
     ports:
       - "8000:8000"
     depends_on:
@@ -38,8 +48,39 @@ services:
       redis:
         condition: service_started
     env_file:
-      - proyectoempresa/config/docker.env
+      - ./backend/proyectoempresa/config/docker.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.development
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    command: >
+      sh -c "
+      rm -rf node_modules package-lock.json &&
+      npm install &&
+      npm run dev -- --host 0.0.0.0
+      "
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_API_BASE_URL=http://localhost:8000/api
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  app-network:
+    driver: bridge
