@@ -1,91 +1,131 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import authService, { LoginCredentials, User } from '../services/auth';
-import { getErrorMessage } from '../services/api';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+interface User {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  rol?: string;
+}
 
 interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
-  logout: () => void;
   isAuthenticated: boolean;
-  error: string | null;
+  isLoading: boolean;
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  checkAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // Cargar usuario al iniciar
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        if (authService.isAuthenticated()) {
-          const userData = await authService.getCurrentUser();
-          setUser(userData);
-        }
-      } catch (err) {
-        console.error('Error loading user:', err);
-        authService.logout();
-      } finally {
-        setLoading(false);
+  const checkAuth = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      setIsAuthenticated(false);
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Verificar token con el backend
+      const response = await fetch('http://localhost:8000/api/auth/me/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        setIsAuthenticated(true);
+      } else {
+        // Token inválido o expirado
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        setIsAuthenticated(false);
+        setUser(null);
       }
-    };
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      setIsAuthenticated(false);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    loadUser();
+  useEffect(() => {
+    checkAuth();
   }, []);
 
-  const login = async (credentials: LoginCredentials) => {
+  const login = async (email: string, password: string) => {
     try {
-      setError(null);
-      setLoading(true);
-      const response = await authService.login(credentials);
+      const response = await fetch('http://localhost:8000/api/auth/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Error al iniciar sesión');
+      }
+
+      const data = await response.json();
       
-      // Obtener datos completos del usuario
-      const userData = await authService.getCurrentUser();
-      setUser(userData);
+      localStorage.setItem('access_token', data.access);
+      localStorage.setItem('refresh_token', data.refresh);
       
-      // Guardar usuario en localStorage para persistencia
-      localStorage.setItem('user', JSON.stringify(userData));
-    } catch (err) {
-      const errorMessage = getErrorMessage(err);
-      setError(errorMessage);
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      
+      // Redirigir al dashboard
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
     }
   };
 
   const logout = () => {
-    authService.logout();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setIsAuthenticated(false);
     setUser(null);
-    setError(null);
+    navigate('/login');
   };
 
-  const value: AuthContextType = {
-    user,
-    loading,
-    login,
-    logout,
-    isAuthenticated: !!user,
-    error,
-  };
+  return (
+    <AuthContext.Provider 
+      value={{ 
+        isAuthenticated, 
+        isLoading, 
+        user, 
+        login, 
+        logout,
+        checkAuth 
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// Hook personalizado para usar el contexto de autenticación
-export const useAuth = (): AuthContextType => {
+export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
-};
-
+}
