@@ -24,17 +24,22 @@ class SolicitudRegistro(TimestampedModel):
     
     # Información básica de la empresa
     razon_social = models.CharField(max_length=150, verbose_name="Razón Social")
+    nombre_fantasia = models.CharField(max_length=150, blank=True, null=True, verbose_name="Nombre de Fantasía")
+    tipo_sociedad = models.CharField(max_length=50, blank=True, null=True, verbose_name="Tipo de Sociedad")
     cuit_cuil = models.CharField(
-        max_length=11, 
+        max_length=15, 
         verbose_name="CUIT/CUIL",
-        help_text="Ingrese el CUIT/CUIL sin guiones"
+        help_text="Ingrese el CUIT/CUIL"
     )
     direccion = models.CharField(max_length=255, verbose_name="Dirección")
+    codigo_postal = models.CharField(max_length=10, blank=True, null=True, verbose_name="Código Postal")
     
     # Ubicación
+    provincia = models.CharField(max_length=100, blank=True, null=True, verbose_name="Provincia")
     departamento = models.CharField(max_length=100, verbose_name="Departamento")
     municipio = models.CharField(max_length=100, blank=True, null=True, verbose_name="Municipio")
     localidad = models.CharField(max_length=100, blank=True, null=True, verbose_name="Localidad")
+    geolocalizacion = models.CharField(max_length=255, blank=True, null=True, verbose_name="Geolocalización")
     
     # Contacto
     telefono = models.CharField(
@@ -52,17 +57,47 @@ class SolicitudRegistro(TimestampedModel):
         verbose_name="Tipo de Empresa"
     )
     rubro_principal = models.CharField(max_length=100, verbose_name="Rubro Principal")
-    descripcion_actividad = models.TextField(verbose_name="Descripción de la Actividad")
+    sub_rubro = models.CharField(max_length=100, blank=True, null=True, verbose_name="Sub-Rubro")
+    descripcion_actividad = models.TextField(blank=True, null=True, verbose_name="Descripción de la Actividad")
+    
+    # Datos complejos en JSON
+    productos = models.JSONField(default=list, blank=True, verbose_name="Productos")
+    servicios_ofrecidos = models.JSONField(default=dict, blank=True, null=True, verbose_name="Servicios Ofrecidos")
+    actividades_promocion = models.JSONField(default=list, blank=True, verbose_name="Actividades de Promoción")
+    contactos_secundarios = models.JSONField(default=list, blank=True, verbose_name="Contactos Secundarios")
+    
+    # Redes sociales
+    instagram = models.CharField(max_length=100, blank=True, null=True, verbose_name="Instagram")
+    facebook = models.CharField(max_length=100, blank=True, null=True, verbose_name="Facebook")
+    linkedin = models.CharField(max_length=100, blank=True, null=True, verbose_name="LinkedIn")
     
     # Exportación/Importación
-    exporta = models.BooleanField(default=False, verbose_name="¿Exporta productos/servicios?")
-    destino_exportacion = models.CharField(
-        max_length=200, 
+    exporta = models.CharField(
+        max_length=20,
+        choices=[
+            ('si', 'Sí'),
+            ('no', 'No'),
+            ('en-proceso', 'En proceso'),
+        ],
+        blank=True,
+        null=True,
+        verbose_name="¿Exporta productos/servicios?"
+    )
+    destino_exportacion = models.TextField(
         blank=True, 
         null=True, 
         verbose_name="Principales destinos de exportación"
     )
-    importa = models.BooleanField(default=False, verbose_name="¿Importa productos/servicios?")
+    importa = models.CharField(
+        max_length=10,
+        choices=[
+            ('si', 'Sí'),
+            ('no', 'No'),
+        ],
+        blank=True,
+        null=True,
+        verbose_name="¿Importa productos/servicios?"
+    )
     tipo_importacion = models.CharField(
         max_length=200, 
         blank=True, 
@@ -71,23 +106,68 @@ class SolicitudRegistro(TimestampedModel):
     )
     
     # Certificaciones
-    certificado_pyme = models.BooleanField(default=False, verbose_name="¿Tiene certificado MiPYME?")
+    certificado_pyme = models.CharField(
+        max_length=20,
+        choices=[
+            ('si', 'Sí, vigente'),
+            ('vencido', 'Sí, vencido'),
+            ('en-tramite', 'En trámite'),
+            ('no', 'No'),
+        ],
+        blank=True,
+        null=True,
+        verbose_name="¿Tiene certificado MiPYME?"
+    )
     certificaciones = models.TextField(
         blank=True, 
         null=True, 
         verbose_name="Certificaciones (ISO, etc.)"
     )
+    brochure_url = models.CharField(max_length=255, blank=True, null=True, verbose_name="URL del Brochure")
+    catalogo_pdf = models.FileField(
+        upload_to='catalogos/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name="Catálogo en PDF",
+        help_text="Subir catálogo o brochure en formato PDF"
+    )
+    catalogo_pdf_nombre = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Nombre del Archivo PDF"
+    )
     
     # Promoción
-    material_promocional_idiomas = models.BooleanField(
-        default=False, 
+    material_promocional_idiomas = models.CharField(
+        max_length=20,
+        choices=[
+            ('si', 'Sí'),
+            ('no', 'No'),
+            ('en-desarrollo', 'En desarrollo'),
+        ],
+        blank=True,
+        null=True,
         verbose_name="¿Tiene material promocional en otros idiomas?"
     )
     idiomas_trabajo = models.CharField(
-        max_length=100, 
+        max_length=200, 
         blank=True, 
         null=True, 
         verbose_name="Idiomas en los que trabaja"
+    )
+    
+    # Observaciones
+    observaciones = models.TextField(blank=True, null=True, verbose_name="Observaciones Generales")
+    
+    # Usuario creado (para login)
+    usuario_creado = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='solicitud_registro',
+        verbose_name="Usuario Creado"
     )
     
     # Información del contacto

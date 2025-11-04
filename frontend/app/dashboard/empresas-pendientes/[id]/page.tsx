@@ -1,0 +1,416 @@
+"use client"
+
+import { useState, useEffect, use } from "react"
+import { useRouter } from "next/navigation"
+import { MainLayout } from "@/components/layout/main-layout"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, CheckCircle, XCircle, Edit2, Save, Loader2 } from "lucide-react"
+import Link from "next/link"
+import api from "@/lib/api"
+import { Skeleton } from "@/components/ui/skeleton"
+
+interface EmpresaPendiente {
+  id: number
+  razon_social: string
+  nombre_fantasia?: string
+  cuit_cuil: string
+  rubro_principal?: string
+  sub_rubro?: string
+  direccion: string
+  departamento: string
+  municipio?: string
+  localidad?: string
+  correo: string
+  telefono: string
+  sitioweb?: string
+  tipo_empresa?: string
+  productos?: Array<{
+    nombre: string
+    descripcion?: string
+    posicion_arancelaria?: string
+    capacidad_productiva?: number
+  }>
+  servicios_ofrecidos?: any
+  exporta?: string
+  destino_exportacion?: string
+  certificado_pyme?: string
+  certificaciones?: string
+  observaciones?: string
+  fecha_creacion: string
+  estado: string
+  contacto_principal?: {
+    nombre: string
+    cargo: string
+    telefono: string
+    email: string
+  }
+  contactos_secundarios?: Array<{
+    nombre: string
+    cargo: string
+    telefono: string
+    email: string
+  }>
+}
+
+export default function EmpresaPendientePage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter()
+  const resolvedParams = use(params)
+  const [empresa, setEmpresa] = useState<EmpresaPendiente | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingAction, setLoadingAction] = useState(false)
+  const [observaciones, setObservaciones] = useState("")
+
+  useEffect(() => {
+    loadEmpresa()
+  }, [resolvedParams.id])
+
+  const loadEmpresa = async () => {
+    try {
+      setLoading(true)
+      const data = await api.get(`/registro/solicitudes/${resolvedParams.id}/`)
+      setEmpresa(data)
+      setObservaciones(data.observaciones_admin || "")
+    } catch (error) {
+      console.error("Error loading empresa:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAprobar = async () => {
+    try {
+      setLoadingAction(true)
+      await api.post(`/registro/solicitudes/${resolvedParams.id}/aprobar/`, {
+        observaciones: observaciones
+      })
+      router.push("/dashboard/empresas-pendientes")
+    } catch (error) {
+      console.error("Error aprobando empresa:", error)
+      alert("Error al aprobar la empresa. Por favor, intenta nuevamente.")
+    } finally {
+      setLoadingAction(false)
+    }
+  }
+
+  const handleRechazar = async () => {
+    if (!confirm("¿Estás seguro de que deseas rechazar esta solicitud?")) {
+      return
+    }
+    
+    try {
+      setLoadingAction(true)
+      await api.post(`/registro/solicitudes/${resolvedParams.id}/rechazar/`, {
+        observaciones: observaciones
+      })
+      router.push("/dashboard/empresas-pendientes")
+    } catch (error) {
+      console.error("Error rechazando empresa:", error)
+      alert("Error al rechazar la empresa. Por favor, intenta nuevamente.")
+    } finally {
+      setLoadingAction(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-full" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-64 w-full" />
+            </div>
+            <div className="space-y-6">
+              <Skeleton className="h-48 w-full" />
+              <Skeleton className="h-48 w-full" />
+            </div>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  if (!empresa) {
+    return (
+      <MainLayout>
+        <div className="text-center py-12">
+          <p className="text-[#6B7280]">No se encontró la empresa</p>
+          <Link href="/dashboard/empresas-pendientes">
+            <Button className="mt-4">Volver</Button>
+          </Link>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  return (
+    <MainLayout>
+      <div className="space-y-6">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href="/dashboard/empresas-pendientes">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Revisar Solicitud de Registro</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">
+              {empresa.razon_social} - {empresa.cuit_cuil}
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              onClick={handleRechazar} 
+              variant="destructive" 
+              className="gap-2"
+              disabled={loadingAction}
+            >
+              {loadingAction ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              Rechazar
+            </Button>
+            <Button 
+              onClick={handleAprobar} 
+              className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] gap-2"
+              disabled={loadingAction}
+            >
+              {loadingAction ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
+              Aprobar
+            </Button>
+          </div>
+        </div>
+
+        <Card className="p-6">
+          <Label className="text-sm font-semibold mb-2">Observaciones del Administrador</Label>
+          <Textarea
+            value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            placeholder="Agregar observaciones sobre la solicitud..."
+            className="min-h-[100px]"
+          />
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="p-6">
+              <h2 className="text-xl font-bold text-[#222A59] mb-4">Información General</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-muted-foreground">Razón Social</Label>
+                  <p className="font-medium">{empresa.razon_social}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Nombre de Fantasía</Label>
+                  <p className="font-medium">{empresa.nombre_fantasia || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">CUIT</Label>
+                  <p className="font-medium">{empresa.cuit_cuil}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Rubro Principal</Label>
+                  <p className="font-medium">{empresa.rubro_principal || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Sub-Rubro</Label>
+                  <p className="font-medium">{empresa.sub_rubro || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Tipo de Empresa</Label>
+                  <p className="font-medium">
+                    {empresa.tipo_empresa === 'producto' ? 'Productos' : 
+                     empresa.tipo_empresa === 'servicio' ? 'Servicios' : 
+                     empresa.tipo_empresa === 'mixta' ? 'Mixta' : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Dirección</Label>
+                  <p className="font-medium">{empresa.direccion}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Departamento</Label>
+                  <p className="font-medium">{empresa.departamento}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Municipio</Label>
+                  <p className="font-medium">{empresa.municipio || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Localidad</Label>
+                  <p className="font-medium">{empresa.localidad || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Teléfono</Label>
+                  <p className="font-medium">{empresa.telefono}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Email</Label>
+                  <p className="font-medium">{empresa.correo}</p>
+                </div>
+                {empresa.sitioweb && (
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Sitio Web</Label>
+                    <p className="font-medium">
+                      <a href={empresa.sitioweb} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        {empresa.sitioweb}
+                      </a>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {empresa.productos && empresa.productos.length > 0 && (
+              <Card className="p-6">
+                <h2 className="text-xl font-bold text-[#222A59] mb-4">Productos</h2>
+                <div className="space-y-4">
+                  {empresa.productos.map((producto, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <h3 className="font-semibold text-[#222A59]">{producto.nombre}</h3>
+                      {producto.descripcion && (
+                        <p className="text-sm text-muted-foreground mt-1">{producto.descripcion}</p>
+                      )}
+                      <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+                        {producto.posicion_arancelaria && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Posición Arancelaria</Label>
+                            <p className="font-medium">{producto.posicion_arancelaria}</p>
+                          </div>
+                        )}
+                        {producto.capacidad_productiva && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Capacidad Productiva</Label>
+                            <p className="font-medium">{producto.capacidad_productiva}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {empresa.servicios_ofrecidos && Object.keys(empresa.servicios_ofrecidos).length > 0 && (
+              <Card className="p-6">
+                <h2 className="text-xl font-bold text-[#222A59] mb-4">Servicios</h2>
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold text-[#222A59]">
+                      {empresa.servicios_ofrecidos.nombre || 'Servicios'}
+                    </h3>
+                    {empresa.servicios_ofrecidos.descripcion && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {empresa.servicios_ofrecidos.descripcion}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {empresa.observaciones && (
+              <Card className="p-6">
+                <h2 className="text-xl font-bold text-[#222A59] mb-4">Observaciones</h2>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{empresa.observaciones}</p>
+              </Card>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h2 className="text-xl font-bold text-[#222A59] mb-4">Estado</h2>
+              <Badge className={`${
+                empresa.estado === 'pendiente' ? 'bg-[#F59E0B]' :
+                empresa.estado === 'aprobada' ? 'bg-green-600' :
+                empresa.estado === 'rechazada' ? 'bg-red-600' :
+                'bg-gray-600'
+              } text-white mb-4`}>
+                {empresa.estado.charAt(0).toUpperCase() + empresa.estado.slice(1)}
+              </Badge>
+              <div className="space-y-2 text-sm">
+                <div>
+                  <Label className="text-muted-foreground">Fecha de Registro</Label>
+                  <p className="font-medium">{new Date(empresa.fecha_creacion).toLocaleDateString("es-AR")}</p>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h2 className="text-xl font-bold text-[#222A59] mb-4">Contacto Principal</h2>
+              <div className="space-y-3">
+                {empresa.contacto_principal ? (
+                  <>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Nombre</Label>
+                      <p className="font-medium">{empresa.contacto_principal.nombre}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Cargo</Label>
+                      <p className="font-medium">{empresa.contacto_principal.cargo || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Teléfono</Label>
+                      <p className="font-medium">{empresa.contacto_principal.telefono}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Email</Label>
+                      <p className="font-medium">{empresa.contacto_principal.email}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Email</Label>
+                      <p className="font-medium">{empresa.correo}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Teléfono</Label>
+                      <p className="font-medium">{empresa.telefono}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+
+            {empresa.exporta && (
+              <Card className="p-6">
+                <h2 className="text-xl font-bold text-[#222A59] mb-4">Exportación</h2>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <Label className="text-muted-foreground">Exporta</Label>
+                    <p className="font-medium">
+                      {empresa.exporta === 'si' ? 'Sí' : 
+                       empresa.exporta === 'no' ? 'No' : 
+                       empresa.exporta === 'en-proceso' ? 'En proceso' : 'N/A'}
+                    </p>
+                  </div>
+                  {empresa.destino_exportacion && (
+                    <div>
+                      <Label className="text-muted-foreground">Destinos</Label>
+                      <p className="font-medium">{empresa.destino_exportacion}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
+    </MainLayout>
+  )
+}
+

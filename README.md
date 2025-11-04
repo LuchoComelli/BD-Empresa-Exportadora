@@ -17,14 +17,15 @@ BD-Empresa-Exportadora/
 │   │   └── manage.py
 │   ├── requirements.txt
 │   └── Dockerfile
-├── frontend/                 # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── components/      # Componentes reutilizables
-│   │   ├── pages/           # Páginas/vistas
-│   │   ├── services/        # Servicios API
-│   │   ├── context/         # Context API
-│   │   ├── types/           # TypeScript types
-│   │   └── App.tsx
+├── frontend/                 # Next.js + TypeScript
+│   ├── app/                  # App Router de Next.js
+│   │   ├── (dashboard)/     # Rutas protegidas
+│   │   ├── (public)/        # Rutas públicas
+│   │   └── layout.tsx
+│   ├── components/          # Componentes reutilizables
+│   ├── lib/                 # Utilidades y servicios API
+│   ├── hooks/               # Custom hooks
+│   ├── public/              # Archivos estáticos
 │   ├── package.json
 │   └── Dockerfile
 └── docker-compose.yml
@@ -52,10 +53,10 @@ docker-compose up --build
 ```
 
 Esto levantará 4 servicios:
-- **PostgreSQL**: Base de datos (puerto 5435)
+- **PostgreSQL**: Base de datos (puerto 5433)
 - **Redis**: Cache (puerto 6379)
 - **Backend**: API Django (puerto 8000)
-- **Frontend**: React Vite (puerto 5173)
+- **Frontend**: Next.js (puerto 3000)
 
 ### 3. Ejecutar migraciones (primera vez)
 
@@ -73,11 +74,11 @@ docker-compose exec backend python manage.py createsuperuser
 
 ### 5. Acceder a la aplicación
 
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000/api/
 - **Django Admin**: http://localhost:8000/admin/
 - **API Docs (Swagger)**: http://localhost:8000/api/docs/
-- **PostgreSQL**: localhost:5435
+- **PostgreSQL**: localhost:5433
 
 ## 📦 Stack Tecnológico
 
@@ -92,14 +93,13 @@ docker-compose exec backend python manage.py createsuperuser
 - drf-spectacular (documentación API)
 
 ### Frontend
-- React 18
+- Next.js 15.5.6
+- React 19
 - TypeScript
-- Vite
-- TailwindCSS
-- React Router v6
-- Axios
-- React Query
+- TailwindCSS 4
+- App Router (Next.js)
 - React Hook Form + Zod
+- Radix UI (componentes)
 - Lucide React (iconos)
 
 ## 🔧 Comandos Útiles

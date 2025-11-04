@@ -50,16 +50,28 @@ class OtrorubroSerializer(serializers.ModelSerializer):
 
 class PosicionArancelariaSerializer(serializers.ModelSerializer):
     """Serializer para posiciones arancelarias"""
+    producto_id = serializers.IntegerField(source='producto.id', read_only=True)
     
     class Meta:
         model = PosicionArancelaria
-        fields = ['id', 'producto', 'codigo_arancelario', 'descripcion_arancelaria']
-        read_only_fields = ['id']
+        fields = ['id', 'producto_id', 'codigo_arancelario', 'descripcion_arancelaria']
+        read_only_fields = ['id', 'producto_id']
 
 
 class ProductoEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para productos de empresa"""
-    posicion_arancelaria = PosicionArancelariaSerializer(read_only=True)
+    posicion_arancelaria = serializers.SerializerMethodField()
+    
+    def get_posicion_arancelaria(self, obj):
+        """Obtener la posición arancelaria del producto si existe"""
+        try:
+            # Intentar obtener la posición arancelaria relacionada
+            posicion = obj.posicion_arancelaria.first() if hasattr(obj, 'posicion_arancelaria') else None
+            if posicion:
+                return PosicionArancelariaSerializer(posicion).data
+            return None
+        except Exception:
+            return None
     
     class Meta:
         model = ProductoEmpresa
@@ -110,6 +122,11 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
     productos = ProductoEmpresaSerializer(many=True, read_only=True)
     tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
     rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
+    # Agregar nombres de campos relacionados
+    rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
+    localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
     
     class Meta:
         model = Empresaproducto
@@ -138,6 +155,11 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
     servicios = ServicioEmpresaSerializer(many=True, read_only=True)
     tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
     rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
+    # Agregar nombres de campos relacionados
+    rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
+    localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
     
     class Meta:
         model = Empresaservicio
@@ -197,6 +219,11 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
     servicios = ServicioEmpresaMixtaSerializer(many=True, read_only=True)
     tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
     rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
+    # Agregar nombres de campos relacionados
+    rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
+    localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
     
     class Meta:
         model = EmpresaMixta

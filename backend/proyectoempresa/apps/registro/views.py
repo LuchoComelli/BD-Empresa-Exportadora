@@ -320,6 +320,12 @@ def crear_empresa_desde_solicitud(solicitud):
     """
     Crear empresa desde solicitud aprobada
     """
+    # Importar modelos de empresas al inicio
+    from apps.empresas.models import (
+        Empresaproducto, Empresaservicio, EmpresaMixta,
+        Rubro, TipoEmpresa
+    )
+    
     # Obtener o crear departamento
     from apps.core.models import Dpto, Municipio, Localidades
     dpto, _ = Dpto.objects.get_or_create(
@@ -330,32 +336,95 @@ def crear_empresa_desde_solicitud(solicitud):
     # Obtener o crear municipio
     municipio = None
     if solicitud.municipio:
-        municipio, _ = Municipio.objects.get_or_create(
-            nommun=solicitud.municipio,
-            dpto=dpto
-        )
+        # Generar un código único para el municipio basado en el nombre y departamento
+        import uuid
+        dpto_cod = dpto.coddpto[:3] if hasattr(dpto, 'coddpto') and dpto.coddpto else ''
+        mun_nombre = solicitud.municipio[:5].upper().replace(' ', '')
+        codmun_base = mun_nombre + dpto_cod if dpto_cod else mun_nombre
+        codmun = codmun_base[:10] if codmun_base else str(uuid.uuid4())[:10]  # Si está vacío, usar UUID
+        
+        # Asegurar que el código no esté vacío
+        if not codmun or codmun.strip() == '':
+            codmun = str(uuid.uuid4())[:10]
+        
+        # Buscar si ya existe un municipio con este nombre y departamento
+        try:
+            municipio = Municipio.objects.get(
+                nommun=solicitud.municipio,
+                dpto=dpto
+            )
+        except Municipio.DoesNotExist:
+            # Si no existe, crear uno nuevo con un código único
+            # Intentar crear con el código base, si falla por duplicado, agregar un sufijo único
+            codmun_final = codmun
+            counter = 1
+            while Municipio.objects.filter(codmun=codmun_final).exists() or codmun_final == '':
+                if codmun_final == '' or counter > 999:
+                    # Si está vacío o hay demasiados intentos, usar un UUID truncado
+                    codmun_final = str(uuid.uuid4())[:10]
+                    break
+                codmun_final = codmun[:7] + str(counter).zfill(3)
+                counter += 1
+            
+            municipio = Municipio.objects.create(
+                nommun=solicitud.municipio,
+                dpto=dpto,
+                codmun=codmun_final,
+                coddpto=dpto.coddpto if hasattr(dpto, 'coddpto') and dpto.coddpto else '',
+                codprov=''
+            )
     
     # Obtener o crear localidad
     localidad = None
     if solicitud.localidad and municipio:
-        localidad, _ = Localidades.objects.get_or_create(
-            nomloc=solicitud.localidad,
-            municipio=municipio,
-            defaults={'latitud': -34.6037, 'longitud': -58.3816}
-        )
+        # Generar un código único para la localidad basado en el nombre y municipio
+        import uuid
+        codloc_base = solicitud.localidad[:10].upper().replace(' ', '') + municipio.codmun[:5]
+        codloc = codloc_base[:20]  # Asegurar que no exceda 20 caracteres
+        
+        # Buscar si ya existe una localidad con este nombre y municipio
+        try:
+            localidad = Localidades.objects.get(
+                nomloc=solicitud.localidad,
+                municipio=municipio
+            )
+        except Localidades.DoesNotExist:
+            # Si no existe, crear una nueva con un código único
+            # Intentar crear con el código base, si falla por duplicado, agregar un sufijo único
+            codloc_final = codloc
+            counter = 1
+            while Localidades.objects.filter(codloc=codloc_final).exists():
+                codloc_final = codloc[:15] + str(counter).zfill(5)
+                counter += 1
+            
+            localidad = Localidades.objects.create(
+                nomloc=solicitud.localidad,
+                municipio=municipio,
+                codloc=codloc_final,
+                codlocsv='',
+                codmun=municipio.codmun if hasattr(municipio, 'codmun') else '',
+                coddpto=dpto.coddpto if hasattr(dpto, 'coddpto') else '',
+                codprov='',
+                codpais='ARG',
+                latitud=-34.6037,
+                longitud=-58.3816
+            )
     
-    # Obtener o crear rubro
-    from apps.empresas.models import Rubro, TipoEmpresa
+    # Obtener o crear rubro (ya importado arriba)
     rubro, _ = Rubro.objects.get_or_create(
         nombre=solicitud.rubro_principal,
         defaults={'descripcion': solicitud.descripcion_actividad}
     )
     
-    # Obtener tipo de empresa
-    tipo_empresa = TipoEmpresa.objects.get(nombre=solicitud.tipo_empresa.title())
+    # Obtener o crear tipo de empresa
+    tipo_empresa_nombre = solicitud.tipo_empresa.title() if solicitud.tipo_empresa else 'Producto'
+    tipo_empresa, _ = TipoEmpresa.objects.get_or_create(
+        nombre=tipo_empresa_nombre
+    )
     
     # Crear usuario para la empresa
     from django.contrib.auth import get_user_model
+    from apps.core.models import RolUsuario
     User = get_user_model()
     
     # Crear usuario con rol de empresa
@@ -375,86 +444,134 @@ def crear_empresa_desde_solicitud(solicitud):
         }
     )
     
-    usuario_empresa = User.objects.create_user(
-        email=solicitud.correo,
-        nombre=solicitud.nombre_contacto,
-        apellido=solicitud.cargo_contacto,
-        rol=rol_empresa,
-        telefono=solicitud.telefono_contacto,
-        departamento=solicitud.departamento,
-        municipio=solicitud.municipio,
-        localidad=solicitud.localidad
-    )
+    # Verificar si ya existe un usuario con este email (creado durante el registro)
+    usuario_empresa = None
+    try:
+        usuario_empresa = User.objects.get(email=solicitud.correo)
+        # Actualizar el usuario existente
+        usuario_empresa.nombre = solicitud.nombre_contacto
+        usuario_empresa.apellido = solicitud.cargo_contacto
+        usuario_empresa.rol = rol_empresa
+        usuario_empresa.telefono = solicitud.telefono_contacto
+        usuario_empresa.departamento = solicitud.departamento
+        usuario_empresa.municipio = solicitud.municipio
+        usuario_empresa.localidad = solicitud.localidad
+        usuario_empresa.is_active = True  # Activar usuario al aprobar
+        usuario_empresa.save()
+    except User.DoesNotExist:
+        # Si no existe, crear nuevo usuario
+        usuario_empresa = User.objects.create_user(
+            email=solicitud.correo,
+            password=solicitud.cuit_cuil,  # Contraseña inicial es el CUIT
+            nombre=solicitud.nombre_contacto,
+            apellido=solicitud.cargo_contacto,
+            rol=rol_empresa,
+            telefono=solicitud.telefono_contacto,
+            departamento=solicitud.departamento,
+            municipio=solicitud.municipio,
+            localidad=solicitud.localidad,
+            is_active=True  # Activar usuario al aprobar
+        )
+    
+    # Preparar datos comunes para la empresa
+    empresa_kwargs = {
+        'razon_social': solicitud.razon_social,
+        'cuit_cuil': solicitud.cuit_cuil,
+        'direccion': solicitud.direccion,
+        'departamento': dpto,
+        'municipio': municipio,
+        'localidad': localidad,
+        'telefono': solicitud.telefono,
+        'correo': solicitud.correo,
+        'sitioweb': solicitud.sitioweb,
+        'exporta': 'Sí' if solicitud.exporta == 'si' else 'No, solo ventas nacionales',
+        'destinoexporta': solicitud.destino_exportacion,
+        'importa': True if solicitud.importa == 'si' else False,
+        'certificadopyme': True if solicitud.certificado_pyme == 'si' else False,
+        'certificaciones': solicitud.certificaciones,
+        'promo2idiomas': True if solicitud.material_promocional_idiomas == 'si' else False,
+        'idiomas_trabaja': solicitud.idiomas_trabajo,
+        'id_usuario': usuario_empresa,
+        'id_rubro': rubro,
+        'tipo_empresa': tipo_empresa,
+    }
+    
+    # Agregar catálogo PDF si existe
+    if solicitud.catalogo_pdf:
+        empresa_kwargs['brochure'] = solicitud.catalogo_pdf
     
     # Crear empresa según tipo
-    if solicitud.tipo_empresa == 'producto':
-        empresa = Empresaproducto.objects.create(
-            razon_social=solicitud.razon_social,
-            cuit_cuil=solicitud.cuit_cuil,
-            direccion=solicitud.direccion,
-            departamento=dpto,
-            municipio=municipio,
-            localidad=localidad,
-            telefono=solicitud.telefono,
-            correo=solicitud.correo,
-            sitioweb=solicitud.sitioweb,
-            exporta=solicitud.exporta,
-            destinoexporta=solicitud.destino_exportacion,
-            importa=solicitud.importa,
-            tipoimporta=solicitud.tipo_importacion,
-            certificadopyme=solicitud.certificado_pyme,
-            certificaciones=solicitud.certificaciones,
-            promo2idiomas=solicitud.material_promocional_idiomas,
-            idiomas_trabaja=solicitud.idiomas_trabajo,
-            id_usuario=usuario_empresa,
-            id_rubro=rubro,
-            tipo_empresa=tipo_empresa
-        )
-    elif solicitud.tipo_empresa == 'servicio':
-        empresa = Empresaservicio.objects.create(
-            razon_social=solicitud.razon_social,
-            cuit_cuil=solicitud.cuit_cuil,
-            direccion=solicitud.direccion,
-            departamento=dpto,
-            municipio=municipio,
-            localidad=localidad,
-            telefono=solicitud.telefono,
-            correo=solicitud.correo,
-            sitioweb=solicitud.sitioweb,
-            exporta=solicitud.exporta,
-            destinoexporta=solicitud.destino_exportacion,
-            importa=solicitud.importa,
-            tipoimporta=solicitud.tipo_importacion,
-            certificadopyme=solicitud.certificado_pyme,
-            certificaciones=solicitud.certificaciones,
-            promo2idiomas=solicitud.material_promocional_idiomas,
-            idiomas_trabaja=solicitud.idiomas_trabajo,
-            id_usuario=usuario_empresa,
-            id_rubro=rubro,
-            tipo_empresa=tipo_empresa
-        )
+    tipo_empresa_value = solicitud.tipo_empresa or 'producto'
+    empresa = None
+    
+    if tipo_empresa_value == 'producto':
+        empresa = Empresaproducto.objects.create(**empresa_kwargs)
+        # Crear productos en la tabla ProductoEmpresa
+        from apps.empresas.models import ProductoEmpresa
+        if solicitud.productos:
+            for producto_data in solicitud.productos:
+                ProductoEmpresa.objects.create(
+                    empresa=empresa,
+                    nombre_producto=producto_data.get('nombre', ''),
+                    descripcion=producto_data.get('descripcion', ''),
+                    capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
+                )
+                
+    elif tipo_empresa_value == 'servicio':
+        empresa = Empresaservicio.objects.create(**empresa_kwargs)
+        # Crear servicios en la tabla ServicioEmpresa
+        from apps.empresas.models import ServicioEmpresa
+        if solicitud.servicios_ofrecidos:
+            servicios_data = solicitud.servicios_ofrecidos
+            if isinstance(servicios_data, dict):
+                ServicioEmpresa.objects.create(
+                    empresa=empresa,
+                    nombre_servicio=servicios_data.get('nombre', 'Servicios'),
+                    descripcion=servicios_data.get('descripcion', '') or solicitud.descripcion_actividad or '',
+                    tipo_servicio=servicios_data.get('tipo_servicio', 'otro'),
+                    sector_atendido=servicios_data.get('sector_atendido', 'otro'),
+                )
+            elif isinstance(servicios_data, list):
+                for servicio_data in servicios_data:
+                    ServicioEmpresa.objects.create(
+                        empresa=empresa,
+                        nombre_servicio=servicio_data.get('nombre', ''),
+                        descripcion=servicio_data.get('descripcion', ''),
+                        tipo_servicio=servicio_data.get('tipo_servicio', 'otro'),
+                        sector_atendido=servicio_data.get('sector_atendido', 'otro'),
+                    )
+                    
     else:  # mixta
-        empresa = EmpresaMixta.objects.create(
-            razon_social=solicitud.razon_social,
-            cuit_cuil=solicitud.cuit_cuil,
-            direccion=solicitud.direccion,
-            departamento=dpto,
-            municipio=municipio,
-            localidad=localidad,
-            telefono=solicitud.telefono,
-            correo=solicitud.correo,
-            sitioweb=solicitud.sitioweb,
-            exporta=solicitud.exporta,
-            destinoexporta=solicitud.destino_exportacion,
-            importa=solicitud.importa,
-            tipoimporta=solicitud.tipo_importacion,
-            certificadopyme=solicitud.certificado_pyme,
-            certificaciones=solicitud.certificaciones,
-            promo2idiomas=solicitud.material_promocional_idiomas,
-            idiomas_trabaja=solicitud.idiomas_trabajo,
-            id_usuario=usuario_empresa,
-            id_rubro=rubro,
-            tipo_empresa=tipo_empresa
-        )
+        empresa = EmpresaMixta.objects.create(**empresa_kwargs)
+        # Crear productos en ProductoEmpresaMixta
+        from apps.empresas.models import ProductoEmpresaMixta, ServicioEmpresaMixta
+        if solicitud.productos:
+            for producto_data in solicitud.productos:
+                ProductoEmpresaMixta.objects.create(
+                    empresa=empresa,
+                    nombre_producto=producto_data.get('nombre', ''),
+                    descripcion=producto_data.get('descripcion', ''),
+                    capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
+                )
+        # Crear servicios en ServicioEmpresaMixta
+        if solicitud.servicios_ofrecidos:
+            servicios_data = solicitud.servicios_ofrecidos
+            if isinstance(servicios_data, dict):
+                ServicioEmpresaMixta.objects.create(
+                    empresa=empresa,
+                    nombre_servicio=servicios_data.get('nombre', 'Servicios'),
+                    descripcion=servicios_data.get('descripcion', '') or solicitud.descripcion_actividad or '',
+                    tipo_servicio=servicios_data.get('tipo_servicio', 'otro'),
+                    sector_atendido=servicios_data.get('sector_atendido', 'otro'),
+                )
+            elif isinstance(servicios_data, list):
+                for servicio_data in servicios_data:
+                    ServicioEmpresaMixta.objects.create(
+                        empresa=empresa,
+                        nombre_servicio=servicio_data.get('nombre', ''),
+                        descripcion=servicio_data.get('descripcion', ''),
+                        tipo_servicio=servicio_data.get('tipo_servicio', 'otro'),
+                        sector_atendido=servicio_data.get('sector_atendido', 'otro'),
+                    )
     
     return empresa

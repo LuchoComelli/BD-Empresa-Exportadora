@@ -41,7 +41,7 @@
       "model": "core.rolusuario",
       "pk": 3,
       "fields": {
-        "nombre": "Consulta",
+        "nombre": "Consultor",
         "descripcion": "Visualización y exportación, sin modificar información",
         "puede_crear_empresas": false,
         "puede_editar_empresas": false,
@@ -52,6 +52,25 @@
         "puede_gestionar_usuarios": false,
         "puede_acceder_admin": false,
         "nivel_acceso": 1,
+        "activo": true,
+        "fecha_creacion": "2024-01-01T00:00:00Z"
+      }
+    },
+    {
+      "model": "core.rolusuario",
+      "pk": 4,
+      "fields": {
+        "nombre": "Empresa",
+        "descripcion": "Rol para empresas registradas en el sistema",
+        "puede_crear_empresas": false,
+        "puede_editar_empresas": false,
+        "puede_eliminar_empresas": false,
+        "puede_ver_auditoria": false,
+        "puede_exportar_datos": false,
+        "puede_importar_datos": false,
+        "puede_gestionar_usuarios": false,
+        "puede_acceder_admin": false,
+        "nivel_acceso": 0,
         "activo": true,
         "fecha_creacion": "2024-01-01T00:00:00Z"
       }

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import RolUsuario, Dpto, Municipio, Localidades
 
 User = get_user_model()
@@ -19,6 +20,152 @@ class RolUsuarioSerializer(serializers.ModelSerializer):
             'nivel_acceso', 'activo', 'fecha_creacion'
         ]
         read_only_fields = ['id', 'fecha_creacion']
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Serializer personalizado para usar email en lugar de username"""
+    username_field = 'email'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cambiar el campo username por email
+        # El frontend envía 'username' pero debe contener el email
+        self.fields['username'] = serializers.EmailField(required=True)
+        self.fields['username'].label = 'Email'
+        self.fields['username'].help_text = 'Ingrese su email'
+        # Asegurar que el username_field esté configurado correctamente
+        self.username_field = 'email'
+        # No requerir el campo 'email' directamente ya que usamos 'username'
+        if 'email' in self.fields:
+            self.fields['email'] = serializers.EmailField(required=False)
+    
+    def validate(self, attrs):
+        import logging
+        from django.contrib.auth import authenticate
+        
+        logger = logging.getLogger(__name__)
+        
+        # El frontend envía 'email' pero el serializer puede recibir 'username' o 'email'
+        # Como username_field = 'email', necesitamos mapear ambos casos
+        email = attrs.get('email') or attrs.get('username')
+        password = attrs.get('password')
+        
+        # Si el frontend envió 'username', mapearlo a 'email' para el serializer padre
+        if 'username' in attrs and 'email' not in attrs:
+            attrs['email'] = attrs.pop('username')
+        
+        email = attrs.get('email')
+        
+        logger.info(f"Intento de login con email: {email}")
+        
+        if not email:
+            logger.error("No se proporcionó email en el login")
+            raise serializers.ValidationError({
+                'username': ['El email es obligatorio.']
+            })
+        
+        if not password:
+            logger.error("No se proporcionó contraseña en el login")
+            raise serializers.ValidationError({
+                'password': ['La contraseña es obligatoria.']
+            })
+        
+        # Buscar usuario por email
+        try:
+            user = User.objects.get(email=email)
+            logger.info(f"Usuario encontrado: {user.email}, activo: {user.is_active}")
+            
+            # Verificar que el usuario esté activo
+            if not user.is_active:
+                logger.warning(f"Intento de login con usuario inactivo: {email}")
+                raise serializers.ValidationError({
+                    'email': ['Este usuario está inactivo.']
+                })
+            
+            # Verificar estado de la solicitud de registro si el usuario tiene una
+            from apps.registro.models import SolicitudRegistro
+            solicitud = SolicitudRegistro.objects.filter(usuario_creado=user).first()
+            if solicitud:
+                if solicitud.estado == 'pendiente':
+                    logger.warning(f"Intento de login con solicitud pendiente: {email}")
+                    raise serializers.ValidationError({
+                        'email': ['Tu solicitud de registro está pendiente de aprobación. Recibirás un email cuando sea aprobada.']
+                    })
+                elif solicitud.estado == 'rechazada':
+                    logger.warning(f"Intento de login con solicitud rechazada: {email}")
+                    raise serializers.ValidationError({
+                        'email': ['Tu solicitud de registro fue rechazada. Por favor, contacta con el administrador.']
+                    })
+            
+            # Autenticar usando authenticate() que usa USERNAME_FIELD = 'email'
+            # authenticate() busca por el campo USERNAME_FIELD automáticamente
+            authenticated_user = authenticate(
+                request=self.context.get('request'),
+                username=user.email,  # Usar email como username
+                password=password
+            )
+            
+            if not authenticated_user:
+                logger.error(f"Contraseña incorrecta para usuario: {email}")
+                # Verificar manualmente la contraseña para dar un mensaje más específico
+                if not user.check_password(password):
+                    raise serializers.ValidationError({
+                        'password': ['Contraseña incorrecta.']
+                    })
+                else:
+                    raise serializers.ValidationError({
+                        'password': ['Error al autenticar. Por favor, intenta nuevamente.']
+                    })
+            
+            if authenticated_user != user:
+                logger.error(f"Usuario autenticado no coincide con el usuario buscado")
+                raise serializers.ValidationError({
+                    'password': ['Error al autenticar. Por favor, intenta nuevamente.']
+                })
+            
+            # Asignar el usuario autenticado y el email para el serializer padre
+            attrs['user'] = authenticated_user
+            # El serializer padre espera que attrs tenga 'email' cuando username_field = 'email'
+            attrs['email'] = authenticated_user.email
+            
+            logger.info(f"Login exitoso para usuario: {email}")
+            
+        except User.DoesNotExist:
+            logger.error(f"Usuario no encontrado: {email}")
+            raise serializers.ValidationError({
+                'email': ['No se encontró un usuario con este email.']
+            })
+        except serializers.ValidationError:
+            # Re-lanzar errores de validación sin modificar
+            raise
+        except Exception as e:
+            logger.error(f"Error al buscar o autenticar usuario: {str(e)}", exc_info=True)
+            raise serializers.ValidationError({
+                'email': ['Error al procesar la autenticación.']
+            })
+        
+        # Generar tokens JWT directamente usando el usuario autenticado
+        # El serializer padre TokenObtainPairSerializer tiene un método get_token()
+        try:
+            from rest_framework_simplejwt.tokens import RefreshToken
+            
+            # Generar el refresh token directamente
+            refresh = RefreshToken.for_user(authenticated_user)
+            
+            # Crear los datos de respuesta con los tokens
+            validated_data = {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+            
+            logger.info(f"Tokens generados exitosamente para usuario: {email}")
+            return validated_data
+            
+        except Exception as e:
+            logger.error(f"Error al generar tokens: {str(e)}", exc_info=True)
+            raise serializers.ValidationError({
+                'password': ['Error al generar tokens de autenticación.']
+            })
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -61,10 +208,11 @@ class UsuarioSerializer(serializers.ModelSerializer):
 class UsuarioListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de usuarios"""
     rol_nombre = serializers.CharField(source='rol.nombre', read_only=True)
+    rol = serializers.IntegerField(source='rol.id', read_only=True, allow_null=True)
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'nombre', 'apellido', 'rol_nombre', 'is_active']
+        fields = ['id', 'email', 'nombre', 'apellido', 'rol', 'rol_nombre', 'is_active', 'last_login', 'date_joined']
 
 
 class DptoSerializer(serializers.ModelSerializer):
@@ -72,31 +220,29 @@ class DptoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Dpto
-        fields = ['id', 'coddpto', 'nomdpto', 'codprov', 'activo']
+        fields = ['id', 'nombre', 'codigo', 'activo']
         read_only_fields = ['id']
 
 
 class MunicipioSerializer(serializers.ModelSerializer):
     """Serializer para municipios"""
-    dpto_nombre = serializers.CharField(source='dpto.nomdpto', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
     
     class Meta:
         model = Municipio
-        fields = ['id', 'codmun', 'nommun', 'coddpto', 'codprov', 'dpto', 'dpto_nombre', 'activo']
+        fields = ['id', 'nombre', 'codigo', 'departamento', 'departamento_nombre', 'activo']
         read_only_fields = ['id']
 
 
 class LocalidadesSerializer(serializers.ModelSerializer):
     """Serializer para localidades"""
-    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True)
-    dpto_nombre = serializers.CharField(source='municipio.dpto.nomdpto', read_only=True)
+    municipio_nombre = serializers.CharField(source='municipio.nombre', read_only=True)
+    departamento_nombre = serializers.CharField(source='municipio.departamento.nombre', read_only=True)
     
     class Meta:
         model = Localidades
         fields = [
-            'id', 'codloc', 'codlocsv', 'nomloc', 'codmun', 'coddpto',
-            'codprov', 'codpais', 'latitud', 'longitud', 'codpos',
-            'municipio', 'municipio_nombre', 'dpto_nombre', 'activo'
+            'id', 'nombre', 'codigo', 'municipio', 
+            'municipio_nombre', 'departamento_nombre', 'activo'
         ]
         read_only_fields = ['id']
-

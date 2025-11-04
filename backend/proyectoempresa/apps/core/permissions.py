@@ -124,3 +124,35 @@ class IsPublicRegistration(permissions.BasePermission):
         # Todo lo demás requiere autenticación
         return request.user and request.user.is_authenticated
 
+
+class CanAccessDashboard(permissions.BasePermission):
+    """
+    Permiso para acceder al dashboard
+    Permite acceso a superusuarios, administradores, analistas y consultores
+    """
+    
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Superusuarios siempre tienen acceso
+        if request.user.is_superuser:
+            return True
+        
+        # Si no tiene rol, no tiene acceso
+        if not request.user.rol:
+            return False
+        
+        # Verificar si el rol permite acceso al dashboard
+        rol_nombre = request.user.rol.nombre.lower()
+        
+        # Roles que pueden acceder al dashboard
+        allowed_roles = [
+            'administrador',
+            'admin',
+            'analista',
+            'consulta',
+            'consultor'
+        ]
+        
+        return any(allowed_role in rol_nombre for allowed_role in allowed_roles)

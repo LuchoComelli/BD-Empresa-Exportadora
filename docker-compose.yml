@@ -8,7 +8,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     ports:
-      - "5435:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -60,20 +60,29 @@ services:
       dockerfile: Dockerfile
     command: >
       sh -c "
-      rm -rf node_modules package-lock.json &&
-      npm install &&
-      npm run dev -- --host 0.0.0.0
+      if [ ! -d node_modules ]; then
+        if [ -f pnpm-lock.yaml ]; then
+          npm install -g pnpm && pnpm install
+        else
+          npm install
+        fi
+      fi &&
+      npm run dev
       "
     working_dir: /app
     volumes:
       - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     ports:
-      - "5173:5173"
+      - "3000:3000"
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_API_BASE_URL=http://localhost:8000/api
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+      - NEXT_TELEMETRY_DISABLED=1
     networks:
       - app-network
 
