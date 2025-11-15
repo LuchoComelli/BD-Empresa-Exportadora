@@ -632,6 +632,97 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             'total_empresas_exportadoras': total_empresas_exportadoras,
         })
     
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='empresas_aprobadas/exportar_pdf')
+    def exportar_empresas_aprobadas_pdf(self, request):
+        """Exportar empresas aprobadas a PDF con identidad visual institucional"""
+        from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+        from apps.empresas.utils import generate_empresas_aprobadas_pdf
+        from django.db.models import Q
+        
+        # Obtener parámetros de filtro
+        search = request.query_params.get('search', '')
+        tipo_empresa = request.query_params.get('tipo_empresa', '')
+        exporta = request.query_params.get('exporta', '')
+        departamento = request.query_params.get('departamento', '')
+        rubro = request.query_params.get('rubro', '')
+        
+        # Obtener campos seleccionados (si vienen en los parámetros)
+        campos_seleccionados = request.query_params.getlist('campos', [])
+        # Si no se especifican campos, usar los predeterminados
+        if not campos_seleccionados:
+            campos_seleccionados = ['exporta', 'importa', 'certificadopyme']
+        
+        # Obtener todas las empresas aprobadas
+        empresas_producto = Empresaproducto.objects.select_related(
+            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
+        ).prefetch_related('productos')
+        
+        empresas_servicio = Empresaservicio.objects.select_related(
+            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
+        ).prefetch_related('servicios')
+        
+        empresas_mixta = EmpresaMixta.objects.select_related(
+            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
+        ).prefetch_related('productos', 'servicios')
+        
+        # Aplicar filtros (similar a empresas_aprobadas)
+        if search:
+            empresas_producto = empresas_producto.filter(
+                Q(razon_social__icontains=search) |
+                Q(cuit_cuil__icontains=search) |
+                Q(correo__icontains=search)
+            )
+            empresas_servicio = empresas_servicio.filter(
+                Q(razon_social__icontains=search) |
+                Q(cuit_cuil__icontains=search) |
+                Q(correo__icontains=search)
+            )
+            empresas_mixta = empresas_mixta.filter(
+                Q(razon_social__icontains=search) |
+                Q(cuit_cuil__icontains=search) |
+                Q(correo__icontains=search)
+            )
+        
+        if tipo_empresa:
+            if tipo_empresa == 'producto':
+                empresas_servicio = empresas_servicio.none()
+                empresas_mixta = empresas_mixta.none()
+            elif tipo_empresa == 'servicio':
+                empresas_producto = empresas_producto.none()
+                empresas_mixta = empresas_mixta.none()
+            elif tipo_empresa == 'mixta':
+                empresas_producto = empresas_producto.none()
+                empresas_servicio = empresas_servicio.none()
+        
+        if exporta:
+            if exporta == 'si':
+                empresas_producto = empresas_producto.filter(exporta='Sí')
+                empresas_servicio = empresas_servicio.filter(exporta='Sí')
+                empresas_mixta = empresas_mixta.filter(exporta='Sí')
+            elif exporta == 'no':
+                empresas_producto = empresas_producto.filter(exporta='No, solo ventas nacionales')
+                empresas_servicio = empresas_servicio.filter(exporta='No, solo ventas nacionales')
+                empresas_mixta = empresas_mixta.filter(exporta='No, solo ventas nacionales')
+        
+        if departamento:
+            empresas_producto = empresas_producto.filter(departamento__nomdpto__icontains=departamento)
+            empresas_servicio = empresas_servicio.filter(departamento__nomdpto__icontains=departamento)
+            empresas_mixta = empresas_mixta.filter(departamento__nomdpto__icontains=departamento)
+        
+        if rubro:
+            empresas_producto = empresas_producto.filter(id_rubro__nombre__icontains=rubro)
+            empresas_servicio = empresas_servicio.filter(id_rubro__nombre__icontains=rubro)
+            empresas_mixta = empresas_mixta.filter(id_rubro__nombre__icontains=rubro)
+        
+        # Generar PDF
+        pdf_response = generate_empresas_aprobadas_pdf(
+            empresas_producto,
+            empresas_servicio,
+            empresas_mixta,
+            campos_seleccionados
+        )
+        return pdf_response
+    
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def mi_perfil(self, request):
         """Obtener la solicitud del usuario actual"""

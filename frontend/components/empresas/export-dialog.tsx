@@ -154,63 +154,60 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
     document.body.removeChild(link)
   }
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (selectedFields.length === 0) {
       alert("Por favor selecciona al menos un campo para exportar")
       return
     }
 
-    // For PDF, we'll create a simple HTML table and use print
-    const headers = selectedFields.map(fieldId => {
-      const field = availableFields.find(f => f.id === fieldId)
-      return field?.label || fieldId
-    })
-
-    const rows = empresas.map(empresa => {
-      return selectedFields.map(fieldId => {
-        return empresa[fieldId] || ""
-      })
-    })
-
-    // Create HTML table
-    let html = `
-      <html>
-        <head>
-          <title>Empresas Exportadas</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #222A59; color: white; }
-            tr:nth-child(even) { background-color: #f2f2f2; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <h1>Listado de Empresas</h1>
-          <p>Fecha de exportación: ${new Date().toLocaleDateString("es-AR")}</p>
-          <p>Total de empresas: ${empresas.length}</p>
-          <table>
-            <thead>
-              <tr>
-                ${headers.map(h => `<th>${h}</th>`).join("")}
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `
-
-    const blob = new Blob([html], { type: "text/html" })
-    const url = URL.createObjectURL(blob)
-    const printWindow = window.open(url, "_blank")
-    if (printWindow) {
-      printWindow.onload = () => {
-        printWindow.print()
+    try {
+      // Importar API
+      const api = (await import("@/lib/api")).default
+      
+      // Mapear campos seleccionados a los nombres que espera el backend
+      const camposBackend = selectedFields.map(fieldId => {
+        // Mapear campos del frontend a campos del backend
+        const fieldMap: Record<string, string> = {
+          'exporta': 'exporta',
+          'importa': 'importa',
+          'certificadopyme': 'certificadopyme',
+        }
+        return fieldMap[fieldId] || fieldId
+      }).filter(Boolean) // Filtrar campos vacíos
+      
+      // Si no hay campos válidos, usar los predeterminados
+      if (camposBackend.length === 0) {
+        camposBackend.push('exporta', 'importa', 'certificadopyme')
       }
+      
+      console.log("Exportando PDF con campos:", camposBackend)
+      
+      // Obtener filtros de las empresas seleccionadas (si hay filtros aplicados)
+      // Por ahora, exportar todas las empresas aprobadas con los filtros actuales
+      const blob = await api.exportEmpresasPDF({
+        campos: camposBackend,
+      })
+      
+      console.log("PDF recibido, tamaño:", blob.size, "tipo:", blob.type)
+      
+      // Verificar que sea un PDF
+      if (!blob.type.includes('pdf') && blob.type !== 'application/pdf') {
+        console.warn("El blob no es un PDF, tipo recibido:", blob.type)
+      }
+      
+      // Crear URL del blob y descargar
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `empresas_${new Date().toISOString().split("T")[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error: any) {
+      console.error("Error exporting PDF:", error)
+      alert(error.message || "Error al exportar el PDF. Por favor, intenta nuevamente.")
+      throw error // Re-lanzar el error para que handleExport lo capture
     }
   }
 
@@ -230,7 +227,7 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
           exportToExcel()
           break
         case "pdf":
-          exportToPDF()
+          await exportToPDF()
           break
       }
       onClose()
