@@ -184,7 +184,7 @@ class PosicionArancelariaAdmin(admin.ModelAdmin):
 class MatrizClasificacionExportadorAdmin(admin.ModelAdmin):
     list_display = ['get_empresa_nombre', 'puntaje_total', 'categoria', 'fecha_evaluacion']
     list_filter = ['categoria', 'fecha_evaluacion']
-    search_fields = ['empresa_producto__razon_social', 'empresa_servicio__razon_social', 'empresa_mixta__razon_social']
+    search_fields = ['empresa__razon_social']
     ordering = ['-fecha_evaluacion']
     
     def get_empresa_nombre(self, obj):

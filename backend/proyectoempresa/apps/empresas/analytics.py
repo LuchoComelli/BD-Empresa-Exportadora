@@ -1,27 +1,26 @@
 from django.db.models import Count, Q, Avg, Sum
 from django.db.models.functions import Extract
-from .models import Empresaproducto, Empresaservicio, EmpresaMixta
+from .models import Empresa
 
 class MetricasEmpresas:
     """
     Clase para generar métricas y estadísticas de empresas
+    Usa el modelo unificado Empresa
     """
     
     @staticmethod
     def get_metricas_generales():
         """Métricas generales del sistema"""
         return {
-            'total_empresas': Empresaproducto.objects.count() + Empresaservicio.objects.count() + EmpresaMixta.objects.count(),
-            'empresas_exportadoras': Empresaproducto.objects.filter(exporta='Sí').count() + 
-                                   Empresaservicio.objects.filter(exporta='Sí').count() + 
-                                   EmpresaMixta.objects.filter(exporta='Sí').count(),
-            'empresas_con_certificaciones': Empresaproducto.objects.filter(certificacionesbool=True).count() + 
-                                          Empresaservicio.objects.filter(certificacionesbool=True).count() + 
-                                          EmpresaMixta.objects.filter(certificacionesbool=True).count(),
-            'empresas_por_departamento': Empresaproducto.objects.values('departamento__nomdpto').annotate(
+            'total_empresas': Empresa.objects.count(),
+            'empresas_exportadoras': Empresa.objects.filter(exporta='Sí').count(),
+            'empresas_con_certificaciones': Empresa.objects.filter(certificacionesbool=True).count(),
+            'empresas_por_departamento': Empresa.objects.values('departamento__nomdpto').annotate(
                 total=Count('id')
             ).order_by('-total'),
-            'capacidad_productiva_promedio': Empresaproducto.objects.aggregate(
+            'capacidad_productiva_promedio': Empresa.objects.filter(
+                tipo_empresa_valor__in=['producto', 'mixta']
+            ).aggregate(
                 promedio=Avg('capacidadproductiva')
             )['promedio'],
         }
@@ -29,7 +28,7 @@ class MetricasEmpresas:
     @staticmethod
     def get_metricas_por_rubro():
         """Métricas agrupadas por rubro"""
-        return Empresaproducto.objects.values('id_rubro__nombre').annotate(
+        return Empresa.objects.values('id_rubro__nombre').annotate(
             total=Count('id'),
             exportadoras=Count('id', filter=Q(exporta='Sí')),
             con_certificaciones=Count('id', filter=Q(certificacionesbool=True)),
@@ -40,11 +39,11 @@ class MetricasEmpresas:
     def get_metricas_geograficas():
         """Métricas geográficas"""
         return {
-            'por_departamento': Empresaproducto.objects.values('departamento__nomdpto').annotate(
+            'por_departamento': Empresa.objects.values('departamento__nomdpto').annotate(
                 total=Count('id'),
                 exportadoras=Count('id', filter=Q(exporta='Sí'))
             ).order_by('-total'),
-            'por_municipio': Empresaproducto.objects.values('municipio__nommun').annotate(
+            'por_municipio': Empresa.objects.values('municipio__nommun').annotate(
                 total=Count('id')
             ).order_by('-total')[:10],
         }
@@ -53,11 +52,11 @@ class MetricasEmpresas:
     def get_metricas_exportacion():
         """Métricas específicas de exportación"""
         return {
-            'tipos_exportacion': Empresaproducto.objects.values('tipoexporta').annotate(
+            'tipos_exportacion': Empresa.objects.values('tipoexporta').annotate(
                 total=Count('id')
             ).exclude(tipoexporta__isnull=True),
-            'destinos_principales': Empresaproducto.objects.values('destinoexporta').annotate(
+            'destinos_principales': Empresa.objects.values('destinoexporta').annotate(
                 total=Count('id')
             ).exclude(destinoexporta__isnull=True).order_by('-total')[:10],
-            'empresas_interesadas_exportar': Empresaproducto.objects.filter(interes_exportar=True).count(),
+            'empresas_interesadas_exportar': Empresa.objects.filter(interes_exportar=True).count(),
         }

@@ -32,14 +32,14 @@ export function CategoryChart({ stats }: CategoryChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-[#222A59]">Empresas por Categoría</CardTitle>
+        <CardTitle className="text-[#222A59] text-base md:text-lg">Empresas por Categoría</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="p-4 md:p-6">
+        <ResponsiveContainer width="100%" height={250} className="sm:h-[300px] md:h-[350px]">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-            <XAxis dataKey="name" stroke="#6B7280" style={{ fontSize: "12px" }} />
-            <YAxis stroke="#6B7280" style={{ fontSize: "12px" }} />
+            <XAxis dataKey="name" stroke="#6B7280" style={{ fontSize: "10px" }} className="text-xs md:text-sm" />
+            <YAxis stroke="#6B7280" style={{ fontSize: "10px" }} className="text-xs md:text-sm" />
             <Tooltip
               contentStyle={{
                 backgroundColor: "white",

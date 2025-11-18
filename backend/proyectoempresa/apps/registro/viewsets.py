@@ -210,8 +210,8 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def empresas_aprobadas(self, request):
-        """Obtener todas las empresas aprobadas (desde los modelos Empresaproducto, Empresaservicio, EmpresaMixta)"""
-        from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+        """Obtener todas las empresas aprobadas (desde el modelo unificado Empresa)"""
+        from apps.empresas.models import Empresa
         from apps.empresas.serializers import (
             EmpresaproductoListSerializer, EmpresaservicioListSerializer, EmpresaMixtaListSerializer
         )
@@ -227,67 +227,38 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         departamento = request.query_params.get('departamento', '')
         rubro = request.query_params.get('rubro', '')
         
-        # Obtener todas las empresas aprobadas
-        empresas_producto = Empresaproducto.objects.select_related(
+        # Obtener todas las empresas aprobadas usando el modelo unificado
+        empresas = Empresa.objects.select_related(
             'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-        ).prefetch_related('productos')
-        
-        empresas_servicio = Empresaservicio.objects.select_related(
-            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-        ).prefetch_related('servicios')
-        
-        empresas_mixta = EmpresaMixta.objects.select_related(
-            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-        ).prefetch_related('productos', 'servicios')
+        ).prefetch_related('productos_empresa', 'servicios_empresa', 'productos_mixta', 'servicios_mixta')
         
         # Aplicar filtros
         if search:
-            empresas_producto = empresas_producto.filter(
-                Q(razon_social__icontains=search) |
-                Q(cuit_cuil__icontains=search) |
-                Q(correo__icontains=search)
-            )
-            empresas_servicio = empresas_servicio.filter(
-                Q(razon_social__icontains=search) |
-                Q(cuit_cuil__icontains=search) |
-                Q(correo__icontains=search)
-            )
-            empresas_mixta = empresas_mixta.filter(
+            empresas = empresas.filter(
                 Q(razon_social__icontains=search) |
                 Q(cuit_cuil__icontains=search) |
                 Q(correo__icontains=search)
             )
         
         if tipo_empresa:
-            if tipo_empresa == 'producto':
-                empresas_servicio = empresas_servicio.none()
-                empresas_mixta = empresas_mixta.none()
-            elif tipo_empresa == 'servicio':
-                empresas_producto = empresas_producto.none()
-                empresas_mixta = empresas_mixta.none()
-            elif tipo_empresa == 'mixta':
-                empresas_producto = empresas_producto.none()
-                empresas_servicio = empresas_servicio.none()
+            empresas = empresas.filter(tipo_empresa_valor=tipo_empresa)
         
         if exporta:
             if exporta == 'si':
-                empresas_producto = empresas_producto.filter(exporta='Sí')
-                empresas_servicio = empresas_servicio.filter(exporta='Sí')
-                empresas_mixta = empresas_mixta.filter(exporta='Sí')
+                empresas = empresas.filter(exporta='Sí')
             elif exporta == 'no':
-                empresas_producto = empresas_producto.filter(exporta='No, solo ventas nacionales')
-                empresas_servicio = empresas_servicio.filter(exporta='No, solo ventas nacionales')
-                empresas_mixta = empresas_mixta.filter(exporta='No, solo ventas nacionales')
+                empresas = empresas.filter(exporta='No, solo ventas nacionales')
         
         if departamento:
-            empresas_producto = empresas_producto.filter(departamento__nomdpto__icontains=departamento)
-            empresas_servicio = empresas_servicio.filter(departamento__nomdpto__icontains=departamento)
-            empresas_mixta = empresas_mixta.filter(departamento__nomdpto__icontains=departamento)
+            empresas = empresas.filter(departamento__nomdpto__icontains=departamento)
         
         if rubro:
-            empresas_producto = empresas_producto.filter(id_rubro__nombre__icontains=rubro)
-            empresas_servicio = empresas_servicio.filter(id_rubro__nombre__icontains=rubro)
-            empresas_mixta = empresas_mixta.filter(id_rubro__nombre__icontains=rubro)
+            empresas = empresas.filter(id_rubro__nombre__icontains=rubro)
+        
+        # Separar por tipo para usar los serializers apropiados
+        empresas_producto = empresas.filter(tipo_empresa_valor='producto')
+        empresas_servicio = empresas.filter(tipo_empresa_valor='servicio')
+        empresas_mixta = empresas.filter(tipo_empresa_valor='mixta')
         
         # Serializar todas las empresas
         empresas_producto_data = EmpresaproductoListSerializer(empresas_producto, many=True).data
@@ -307,8 +278,17 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             empresa['tipo_empresa'] = 'mixta'
             empresa['estado'] = 'aprobada'
         
-        # Combinar todas las empresas
+        # Combinar todas las empresas y eliminar duplicados por ID
         todas_empresas = empresas_producto_data + empresas_servicio_data + empresas_mixta_data
+        
+        # Eliminar duplicados basándose en el ID (por si acaso)
+        empresas_unicas = {}
+        for empresa in todas_empresas:
+            empresa_id = empresa.get('id')
+            if empresa_id and empresa_id not in empresas_unicas:
+                empresas_unicas[empresa_id] = empresa
+        
+        todas_empresas = list(empresas_unicas.values())
         
         # Ordenar por fecha de creación (más recientes primero)
         todas_empresas.sort(key=lambda x: x.get('fecha_creacion', ''), reverse=True)
@@ -334,7 +314,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='empresas_aprobadas/(?P<empresa_id>[0-9]+)', permission_classes=[permissions.IsAuthenticated])
     def empresa_por_id(self, request, empresa_id=None):
         """Obtener una empresa aprobada por ID (sin importar tipo)"""
-        from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+        from apps.empresas.models import Empresa
         from apps.empresas.serializers import (
             EmpresaproductoSerializer, EmpresaservicioSerializer, EmpresaMixtaSerializer
         )
@@ -350,41 +330,22 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Buscar en todos los tipos de empresas
-        empresa = None
-        tipo_empresa = None
-        
-        # Intentar encontrar en Empresaproducto
+        # Buscar empresa usando el modelo unificado
         try:
-            empresa = Empresaproducto.objects.select_related(
+            empresa = Empresa.objects.select_related(
                 'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-            ).prefetch_related('productos').get(id=empresa_id_int)
-            tipo_empresa = 'producto'
-            serializer = EmpresaproductoSerializer(empresa)
-        except Empresaproducto.DoesNotExist:
-            pass
-        
-        # Si no se encontró, buscar en Empresaservicio
-        if empresa is None:
-            try:
-                empresa = Empresaservicio.objects.select_related(
-                    'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-                ).prefetch_related('servicios').get(id=empresa_id_int)
-                tipo_empresa = 'servicio'
+            ).prefetch_related('productos_empresa', 'servicios_empresa', 'productos_mixta', 'servicios_mixta').get(id=empresa_id_int)
+            tipo_empresa = empresa.tipo_empresa_valor
+            
+            # Usar el serializer apropiado según el tipo
+            if tipo_empresa == 'producto':
+                serializer = EmpresaproductoSerializer(empresa)
+            elif tipo_empresa == 'servicio':
                 serializer = EmpresaservicioSerializer(empresa)
-            except Empresaservicio.DoesNotExist:
-                pass
-        
-        # Si no se encontró, buscar en EmpresaMixta
-        if empresa is None:
-            try:
-                empresa = EmpresaMixta.objects.select_related(
-                    'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-                ).prefetch_related('productos', 'servicios').get(id=empresa_id_int)
-                tipo_empresa = 'mixta'
+            else:  # mixta
                 serializer = EmpresaMixtaSerializer(empresa)
-            except EmpresaMixta.DoesNotExist:
-                pass
+        except Empresa.DoesNotExist:
+            empresa = None
         
         if empresa is None:
             return Response(
@@ -401,7 +362,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['patch', 'put'], url_path='empresas_aprobadas/(?P<empresa_id>[0-9]+)/actualizar', permission_classes=[permissions.IsAuthenticated])
     def actualizar_empresa_por_id(self, request, empresa_id=None):
         """Actualizar una empresa aprobada por ID (sin importar tipo)"""
-        from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+        from apps.empresas.models import Empresa
         from apps.empresas.serializers import (
             EmpresaproductoSerializer, EmpresaservicioSerializer, EmpresaMixtaSerializer
         )
@@ -417,35 +378,20 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Buscar en todos los tipos de empresas
-        empresa = None
-        tipo_empresa = None
-        
-        # Intentar encontrar en Empresaproducto
+        # Buscar empresa usando el modelo unificado
         try:
-            empresa = Empresaproducto.objects.get(id=empresa_id_int)
-            tipo_empresa = 'producto'
-            serializer_class = EmpresaproductoSerializer
-        except Empresaproducto.DoesNotExist:
-            pass
-        
-        # Si no se encontró, buscar en Empresaservicio
-        if empresa is None:
-            try:
-                empresa = Empresaservicio.objects.get(id=empresa_id_int)
-                tipo_empresa = 'servicio'
+            empresa = Empresa.objects.get(id=empresa_id_int)
+            tipo_empresa = empresa.tipo_empresa_valor
+            
+            # Usar el serializer apropiado según el tipo
+            if tipo_empresa == 'producto':
+                serializer_class = EmpresaproductoSerializer
+            elif tipo_empresa == 'servicio':
                 serializer_class = EmpresaservicioSerializer
-            except Empresaservicio.DoesNotExist:
-                pass
-        
-        # Si no se encontró, buscar en EmpresaMixta
-        if empresa is None:
-            try:
-                empresa = EmpresaMixta.objects.get(id=empresa_id_int)
-                tipo_empresa = 'mixta'
+            else:  # mixta
                 serializer_class = EmpresaMixtaSerializer
-            except EmpresaMixta.DoesNotExist:
-                pass
+        except Empresa.DoesNotExist:
+            empresa = None
         
         if empresa is None:
             return Response(
@@ -478,32 +424,16 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Buscar en todos los tipos de empresas
+        # Buscar empresa usando el modelo unificado
+        from apps.empresas.models import Empresa
         empresa = None
         tipo_empresa = None
         
-        # Intentar encontrar en Empresaproducto
         try:
-            empresa = Empresaproducto.objects.get(id=empresa_id_int)
-            tipo_empresa = 'producto'
-        except Empresaproducto.DoesNotExist:
+            empresa = Empresa.objects.get(id=empresa_id_int)
+            tipo_empresa = empresa.tipo_empresa_valor
+        except Empresa.DoesNotExist:
             pass
-        
-        # Si no se encontró, buscar en Empresaservicio
-        if empresa is None:
-            try:
-                empresa = Empresaservicio.objects.get(id=empresa_id_int)
-                tipo_empresa = 'servicio'
-            except Empresaservicio.DoesNotExist:
-                pass
-        
-        # Si no se encontró, buscar en EmpresaMixta
-        if empresa is None:
-            try:
-                empresa = EmpresaMixta.objects.get(id=empresa_id_int)
-                tipo_empresa = 'mixta'
-            except EmpresaMixta.DoesNotExist:
-                pass
         
         if empresa is None:
             return Response(
@@ -540,6 +470,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         """Obtener estadísticas de solicitudes para el dashboard"""
         from django.utils import timezone
         from datetime import timedelta
+        from apps.empresas.models import Empresa, MatrizClasificacionExportador
         
         queryset = self.get_queryset()
         total = queryset.count()
@@ -550,10 +481,30 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         rechazadas = queryset.filter(estado='rechazada').count()
         en_revision = queryset.filter(estado='en_revision').count()
         
-        # Estadísticas de exportación
-        exportadoras = queryset.filter(exporta='si').count()
-        potencial_exportadora = queryset.filter(exporta='en-proceso').count()
-        etapa_inicial = queryset.filter(exporta='no').count()
+        # Obtener todas las empresas aprobadas usando el modelo unificado
+        from apps.empresas.models import Empresa
+        empresas_aprobadas = Empresa.objects.all()
+        
+        # Estadísticas de categoría basadas en matriz de clasificación
+        exportadoras = 0
+        potencial_exportadora = 0
+        etapa_inicial = 0
+        
+        # Contar por categoría usando la matriz de clasificación (usando el campo empresa unificado)
+        matrices = MatrizClasificacionExportador.objects.filter(empresa__isnull=False).select_related('empresa')
+        
+        for matriz in matrices:
+            if matriz.categoria == 'exportadora':
+                exportadoras += 1
+            elif matriz.categoria == 'potencial_exportadora':
+                potencial_exportadora += 1
+            else:
+                etapa_inicial += 1
+        
+        # Si una empresa no tiene matriz, se cuenta como "Etapa Inicial"
+        total_empresas_con_matriz = matrices.count()
+        total_empresas_aprobadas = empresas_aprobadas.count()
+        etapa_inicial += (total_empresas_aprobadas - total_empresas_con_matriz)
         
         # Estadísticas recientes (último mes)
         fecha_limite = timezone.now() - timedelta(days=30)
@@ -567,28 +518,41 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         # Estadísticas de certificación
         con_certificado_pyme = queryset.filter(certificado_pyme='si').count()
         
-        # Empresas recientes (últimas 5)
-        empresas_recientes = queryset.order_by('-fecha_creacion')[:5]
+        # Empresas recientes (últimas 5) - usar empresas aprobadas del modelo unificado
         empresas_recientes_data = []
+        
+        # Obtener empresas recientes de todos los tipos usando el modelo unificado
+        empresas_recientes = empresas_aprobadas.order_by('-fecha_creacion')[:5]
+        
         for empresa in empresas_recientes:
-            # Determinar categoría basada en exporta
+            # Obtener categoría de la matriz
             categoria = "Etapa Inicial"
-            if empresa.exporta == 'si':
-                categoria = "Exportadora"
-            elif empresa.exporta == 'en-proceso':
-                categoria = "Potencial Exportadora"
+            try:
+                # Usar el campo empresa unificado
+                matriz = MatrizClasificacionExportador.objects.filter(empresa=empresa).first()
+                
+                if matriz:
+                    categoria_map = {
+                        'exportadora': 'Exportadora',
+                        'potencial_exportadora': 'Potencial Exportadora',
+                        'etapa_inicial': 'Etapa Inicial'
+                    }
+                    categoria = categoria_map.get(matriz.categoria, 'Etapa Inicial')
+            except Exception:
+                pass
             
             empresas_recientes_data.append({
                 'id': empresa.id,
                 'nombre': empresa.razon_social,
                 'categoria': categoria,
-                'ubicacion': empresa.departamento or empresa.provincia or 'N/A',
+                'ubicacion': (empresa.departamento.nomdpto if empresa.departamento else 'N/A') or 'N/A',
                 'fecha': empresa.fecha_creacion.isoformat(),
-                'estado': empresa.estado,
+                'estado': 'aprobada',
+                'tipo_empresa': empresa.tipo_empresa_valor,  # Usar tipo_empresa_valor del modelo unificado
             })
         
         return Response({
-            'total_empresas': total,
+            'total_empresas': total_empresas_aprobadas,
             'exportadoras': exportadoras,
             'potencial_exportadora': potencial_exportadora,
             'etapa_inicial': etapa_inicial,
@@ -607,24 +571,18 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def estadisticas_publicas(self, request):
         """Obtener estadísticas públicas de empresas aprobadas"""
-        from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+        from apps.empresas.models import Empresa
         
         # Contar empresas aprobadas (estado='aprobada')
-        empresas_aprobadas = self.get_queryset().filter(estado='aprobada')
-        total_empresas_registradas = empresas_aprobadas.count()
+        solicitudes_aprobadas = self.get_queryset().filter(estado='aprobada')
+        total_empresas_registradas = solicitudes_aprobadas.count()
         
-        # Contar empresas exportadoras (tanto en solicitudes como en empresas aprobadas)
-        # En solicitudes aprobadas
-        empresas_exportadoras_solicitudes = empresas_aprobadas.filter(exporta='si').count()
-        
-        # En empresas aprobadas (Empresaproducto, Empresaservicio, EmpresaMixta)
-        empresas_exportadoras_producto = Empresaproducto.objects.filter(exporta='Sí').count()
-        empresas_exportadoras_servicio = Empresaservicio.objects.filter(exporta='Sí').count()
-        empresas_exportadoras_mixta = EmpresaMixta.objects.filter(exporta='Sí').count()
-        total_empresas_exportadoras = empresas_exportadoras_producto + empresas_exportadoras_servicio + empresas_exportadoras_mixta
+        # Contar empresas exportadoras usando el modelo unificado
+        total_empresas_exportadoras = Empresa.objects.filter(exporta='Sí').count()
         
         # Si no hay empresas aprobadas como empresas, usar datos de solicitudes
         if total_empresas_exportadoras == 0:
+            empresas_exportadoras_solicitudes = solicitudes_aprobadas.filter(exporta='si').count()
             total_empresas_exportadoras = empresas_exportadoras_solicitudes
         
         return Response({

@@ -333,3 +333,107 @@ class Localidades(models.Model):
     
     def __str__(self):
         return f"{self.nomloc} - {self.municipio.nommun}"
+
+
+class ConfiguracionSistema(TimestampedModel):
+    """
+    Modelo singleton para almacenar la configuración general del sistema
+    Solo debe existir una instancia de este modelo
+    """
+    nombre_sistema = models.CharField(
+        max_length=200,
+        default="Sistema de Gestión de Empresas Exportadoras",
+        verbose_name="Nombre del Sistema"
+    )
+    institucion = models.CharField(
+        max_length=200,
+        default="Dirección de Intercambio Comercial Internacional y Regional - Catamarca",
+        verbose_name="Institución"
+    )
+    email_contacto = models.EmailField(
+        default="contacto@catamarca.gob.ar",
+        verbose_name="Email de Contacto"
+    )
+    telefono = models.CharField(
+        max_length=50,
+        default="+54 383 4123456",
+        verbose_name="Teléfono"
+    )
+    direccion = models.CharField(
+        max_length=255,
+        default="San Martín 320, San Fernando del Valle de Catamarca",
+        verbose_name="Dirección"
+    )
+    paises_destino = models.IntegerField(
+        default=12,
+        verbose_name="Países de Destino"
+    )
+    valor_exportado = models.CharField(
+        max_length=50,
+        default="$2.5M",
+        verbose_name="Valor Exportado"
+    )
+    # Beneficios
+    beneficio1_titulo = models.CharField(
+        max_length=200,
+        default="Evaluación de Perfil Exportador",
+        verbose_name="Beneficio 1 - Título"
+    )
+    beneficio1_descripcion = models.TextField(
+        default="Conoce tu nivel de preparación para exportar mediante nuestra matriz de clasificación",
+        verbose_name="Beneficio 1 - Descripción"
+    )
+    beneficio2_titulo = models.CharField(
+        max_length=200,
+        default="Acceso a Mercados Internacionales",
+        verbose_name="Beneficio 2 - Título"
+    )
+    beneficio2_descripcion = models.TextField(
+        default="Conecta con oportunidades de exportación y participa en ferias internacionales",
+        verbose_name="Beneficio 2 - Descripción"
+    )
+    beneficio3_titulo = models.CharField(
+        max_length=200,
+        default="Capacitación y Asesoramiento",
+        verbose_name="Beneficio 3 - Título"
+    )
+    beneficio3_descripcion = models.TextField(
+        default="Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora",
+        verbose_name="Beneficio 3 - Descripción"
+    )
+    
+    class Meta:
+        db_table = 'configuracion_sistema'
+        verbose_name = 'Configuración del Sistema'
+        verbose_name_plural = 'Configuraciones del Sistema'
+    
+    def __str__(self):
+        return f"Configuración: {self.nombre_sistema}"
+    
+    @classmethod
+    def get_config(cls):
+        """Obtener o crear la configuración del sistema (singleton)"""
+        config, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                'nombre_sistema': 'Sistema de Gestión de Empresas Exportadoras',
+                'institucion': 'Dirección de Intercambio Comercial Internacional y Regional - Catamarca',
+                'email_contacto': 'contacto@catamarca.gob.ar',
+                'telefono': '+54 383 4123456',
+                'direccion': 'San Martín 320, San Fernando del Valle de Catamarca',
+                'paises_destino': 12,
+                'valor_exportado': '$2.5M',
+                'beneficio1_titulo': 'Evaluación de Perfil Exportador',
+                'beneficio1_descripcion': 'Conoce tu nivel de preparación para exportar mediante nuestra matriz de clasificación',
+                'beneficio2_titulo': 'Acceso a Mercados Internacionales',
+                'beneficio2_descripcion': 'Conecta con oportunidades de exportación y participa en ferias internacionales',
+                'beneficio3_titulo': 'Capacitación y Asesoramiento',
+                'beneficio3_descripcion': 'Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora',
+            }
+        )
+        return config
+    
+    def save(self, *args, **kwargs):
+        """Asegurar que solo exista una instancia"""
+        self.pk = 1
+        super().save(*args, **kwargs)

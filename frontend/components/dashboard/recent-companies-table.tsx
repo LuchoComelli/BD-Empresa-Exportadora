@@ -10,6 +10,7 @@ interface Company {
   ubicacion: string
   fecha: string
   estado: string
+  tipo_empresa?: string
 }
 
 interface RecentCompaniesTableProps {
@@ -33,10 +34,10 @@ export function RecentCompaniesTable({ companies }: RecentCompaniesTableProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-[#222A59] text-lg md:text-xl">Empresas Recientes</CardTitle>
+        <CardTitle className="text-[#222A59] text-base md:text-lg lg:text-xl">Empresas Recientes</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
+      <CardContent className="p-0 md:p-6">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-border">
@@ -68,8 +69,13 @@ export function RecentCompaniesTable({ companies }: RecentCompaniesTableProps) {
                   </td>
                 </tr>
               ) : (
-                companies.map((company, index) => (
-                  <tr key={company.id} className={index % 2 === 0 ? "bg-white" : "bg-muted/30"}>
+                companies.map((company, index) => {
+                  // Crear key única combinando id y tipo_empresa si existe, o usar index como fallback
+                  const uniqueKey = company.tipo_empresa 
+                    ? `${company.id}-${company.tipo_empresa}` 
+                    : `company-${company.id}-${index}`
+                  return (
+                  <tr key={uniqueKey} className={index % 2 === 0 ? "bg-white" : "bg-muted/30"}>
                     <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-medium text-foreground">
                       {company.nombre}
                     </td>
@@ -95,7 +101,8 @@ export function RecentCompaniesTable({ companies }: RecentCompaniesTableProps) {
                       </Button>
                     </td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>

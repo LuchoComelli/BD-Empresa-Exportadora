@@ -15,6 +15,7 @@ interface Empresa {
   estado: string
   tipo_empresa?: string
   exporta?: string
+  categoria_matriz?: string
   departamento?: string
   provincia?: string
   rubro_principal?: string
@@ -41,9 +42,14 @@ interface CompaniesTableProps {
   onPageChange: (page: number) => void
 }
 
-function getCategoryFromExporta(exporta?: string): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" {
-  if (exporta === 'si') return "Exportadora"
-  if (exporta === 'en-proceso') return "Potencial Exportadora"
+function getCategoryFromEmpresa(empresa: Empresa): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" {
+  // Priorizar categoria_matriz si está disponible
+  if (empresa.categoria_matriz) {
+    return empresa.categoria_matriz as "Exportadora" | "Potencial Exportadora" | "Etapa Inicial"
+  }
+  // Fallback al campo exporta (legacy)
+  if (empresa.exporta === 'si') return "Exportadora"
+  if (empresa.exporta === 'en-proceso') return "Potencial Exportadora"
   return "Etapa Inicial"
 }
 
@@ -126,7 +132,7 @@ export function CompaniesTable({
   return (
     <Card>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full min-w-[800px]">
             <thead className="bg-[#EFF6FF]">
               <tr>
@@ -166,15 +172,8 @@ export function CompaniesTable({
             </thead>
             <tbody>
               {empresas.map((empresa, index) => {
-                const category = getCategoryFromExporta(empresa.exporta)
+                const category = getCategoryFromEmpresa(empresa)
                 const isSelected = selectedEmpresas.includes(empresa.id)
-                
-                // Log para debug
-                if (index === 0) {
-                  console.log('[Companies Table] First empresa:', empresa)
-                  console.log('[Companies Table] Empresa ID:', empresa.id)
-                  console.log('[Companies Table] Empresa razon_social:', empresa.razon_social)
-                }
                 
                 return (
                   <tr key={empresa.id} className={index % 2 === 0 ? "bg-white" : "bg-muted/30"}>

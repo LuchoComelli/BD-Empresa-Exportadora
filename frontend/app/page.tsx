@@ -12,11 +12,49 @@ export default function HomePage() {
     total_empresas_registradas: 0,
     total_empresas_exportadoras: 0,
   })
+  const [configuracion, setConfiguracion] = useState({
+    institucion: "Dirección de Intercambio Comercial Internacional y Regional",
+    email_contacto: "info@desarrolloproductivo.catamarca.gob.ar",
+    telefono: "(0383) 4437390",
+    direccion: "San Martín 320, San Fernando del Valle de Catamarca",
+    paises_destino: 12,
+    valor_exportado: "$2.5M",
+    beneficio1_titulo: "Evaluación de Perfil Exportador",
+    beneficio1_descripcion: "Conoce tu nivel de preparación para exportar mediante nuestra matriz de clasificación",
+    beneficio2_titulo: "Acceso a Mercados Internacionales",
+    beneficio2_descripcion: "Conecta con oportunidades de exportación y participa en ferias internacionales",
+    beneficio3_titulo: "Capacitación y Asesoramiento",
+    beneficio3_descripcion: "Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora"
+  })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadStats()
+    loadConfiguracion()
   }, [])
+
+  const loadConfiguracion = async () => {
+    try {
+      const data = await api.getConfiguracion()
+      setConfiguracion({
+        institucion: data.institucion || "Dirección de Intercambio Comercial Internacional y Regional",
+        email_contacto: data.email_contacto || "info@desarrolloproductivo.catamarca.gob.ar",
+        telefono: data.telefono || "(0383) 4437390",
+        direccion: data.direccion || "San Martín 320, San Fernando del Valle de Catamarca",
+        paises_destino: data.paises_destino || 12,
+        valor_exportado: data.valor_exportado || "$2.5M",
+        beneficio1_titulo: data.beneficio1_titulo || "Evaluación de Perfil Exportador",
+        beneficio1_descripcion: data.beneficio1_descripcion || "Conoce tu nivel de preparación para exportar mediante nuestra matriz de clasificación",
+        beneficio2_titulo: data.beneficio2_titulo || "Acceso a Mercados Internacionales",
+        beneficio2_descripcion: data.beneficio2_descripcion || "Conecta con oportunidades de exportación y participa en ferias internacionales",
+        beneficio3_titulo: data.beneficio3_titulo || "Capacitación y Asesoramiento",
+        beneficio3_descripcion: data.beneficio3_descripcion || "Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora"
+      })
+    } catch (error) {
+      console.error("Error cargando configuración:", error)
+      // Mantener valores por defecto en caso de error
+    }
+  }
 
   const loadStats = async () => {
     try {
@@ -117,11 +155,11 @@ export default function HomePage() {
               <div className="text-xs md:text-sm text-white/80">Empresas Exportadoras</div>
             </div>
             <div>
-              <div className="text-3xl md:text-4xl font-bold mb-2">12</div>
+              <div className="text-3xl md:text-4xl font-bold mb-2">{configuracion.paises_destino}</div>
               <div className="text-xs md:text-sm text-white/80">Países de Destino</div>
             </div>
             <div>
-              <div className="text-3xl md:text-4xl font-bold mb-2">$2.5M</div>
+              <div className="text-3xl md:text-4xl font-bold mb-2">{configuracion.valor_exportado}</div>
               <div className="text-xs md:text-sm text-white/80">Valor Exportado</div>
             </div>
           </div>
@@ -141,10 +179,10 @@ export default function HomePage() {
               <BarChart3 className="w-6 h-6 text-[#C3C840]" />
             </div>
             <h4 className="text-lg md:text-xl font-semibold mb-2 md:mb-3 text-[#222A59]">
-              Evaluación de Perfil Exportador
+              {configuracion.beneficio1_titulo}
             </h4>
             <p className="text-sm md:text-base text-[#6B7280] leading-relaxed">
-              Conoce tu nivel de preparación para exportar mediante nuestra matriz de clasificación
+              {configuracion.beneficio1_descripcion}
             </p>
           </Card>
           <Card className="p-5 md:p-6 hover:shadow-lg transition-shadow border-2 hover:border-[#3259B5]/20 bg-white">
@@ -152,10 +190,10 @@ export default function HomePage() {
               <Globe className="w-6 h-6 text-[#629BD2]" />
             </div>
             <h4 className="text-lg md:text-xl font-semibold mb-2 md:mb-3 text-[#222A59]">
-              Acceso a Mercados Internacionales
+              {configuracion.beneficio2_titulo}
             </h4>
             <p className="text-sm md:text-base text-[#6B7280] leading-relaxed">
-              Conecta con oportunidades de exportación y participa en ferias internacionales
+              {configuracion.beneficio2_descripcion}
             </p>
           </Card>
           <Card className="p-5 md:p-6 hover:shadow-lg transition-shadow border-2 hover:border-[#3259B5]/20 bg-white">
@@ -163,10 +201,10 @@ export default function HomePage() {
               <Award className="w-6 h-6 text-[#807DA1]" />
             </div>
             <h4 className="text-lg md:text-xl font-semibold mb-2 md:mb-3 text-[#222A59]">
-              Capacitación y Asesoramiento
+              {configuracion.beneficio3_titulo}
             </h4>
             <p className="text-sm md:text-base text-[#6B7280] leading-relaxed">
-              Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora
+              {configuracion.beneficio3_descripcion}
             </p>
           </Card>
         </div>
@@ -234,16 +272,16 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-6 md:mb-8">
             <div>
-              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Dirección de Intercambio Comercial Internacional y Regional</h4>
+              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">{configuracion.institucion}</h4>
               <p className="text-white/80 text-sm leading-relaxed">
                 Impulsando el desarrollo económico y la competitividad de las empresas catamarqueñas
               </p>
             </div>
             <div>
               <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Contacto</h4>
-              <p className="text-white/80 text-sm mb-2">San Martín 320, San Fernando del Valle de Catamarca</p>
-              <p className="text-white/80 text-sm mb-2">(0383) 4437390</p>
-              <p className="text-white/80 text-sm">info@desarrolloproductivo.catamarca.gob.ar</p>
+              <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
+              <p className="text-white/80 text-sm mb-2">{configuracion.telefono}</p>
+              <p className="text-white/80 text-sm">{configuracion.email_contacto}</p>
             </div>
             <div>
               <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Enlaces Útiles</h4>
@@ -267,7 +305,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-white/20 pt-6 md:pt-8 text-center text-xs md:text-sm text-white/80">
-            <p>© 2025 Dirección de Intercambio Comercial Internacional y Regional - Provincia de Catamarca. Todos los derechos reservados.</p>
+            <p>© {new Date().getFullYear()} {configuracion.institucion} - Provincia de Catamarca. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>

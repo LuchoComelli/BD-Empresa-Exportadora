@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import RolUsuario, Dpto, Municipio, Localidades
+from .models import RolUsuario, Dpto, Municipio, Localidades, ConfiguracionSistema
 
 User = get_user_model()
 
@@ -217,32 +217,56 @@ class UsuarioListSerializer(serializers.ModelSerializer):
 
 class DptoSerializer(serializers.ModelSerializer):
     """Serializer para departamentos"""
+    nombre = serializers.CharField(source='nomdpto', read_only=True)
+    codigo = serializers.CharField(source='coddpto', read_only=True)
     
     class Meta:
         model = Dpto
-        fields = ['id', 'nombre', 'codigo', 'activo']
+        fields = ['id', 'nombre', 'codigo', 'nomdpto', 'coddpto', 'codprov', 'activo']
         read_only_fields = ['id']
 
 
 class MunicipioSerializer(serializers.ModelSerializer):
     """Serializer para municipios"""
-    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    nombre = serializers.CharField(source='nommun', read_only=True)
+    codigo = serializers.CharField(source='codmun', read_only=True)
+    departamento_nombre = serializers.CharField(source='dpto.nomdpto', read_only=True)
     
     class Meta:
         model = Municipio
-        fields = ['id', 'nombre', 'codigo', 'departamento', 'departamento_nombre', 'activo']
+        fields = ['id', 'nombre', 'codigo', 'nommun', 'codmun', 'dpto', 'departamento', 'departamento_nombre', 'coddpto', 'codprov', 'activo']
         read_only_fields = ['id']
 
 
 class LocalidadesSerializer(serializers.ModelSerializer):
     """Serializer para localidades"""
-    municipio_nombre = serializers.CharField(source='municipio.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='municipio.departamento.nombre', read_only=True)
+    nombre = serializers.CharField(source='nomloc', read_only=True)
+    codigo = serializers.CharField(source='codloc', read_only=True)
+    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True)
+    departamento_nombre = serializers.CharField(source='municipio.dpto.nomdpto', read_only=True)
     
     class Meta:
         model = Localidades
         fields = [
-            'id', 'nombre', 'codigo', 'municipio', 
-            'municipio_nombre', 'departamento_nombre', 'activo'
+            'id', 'nombre', 'codigo', 'nomloc', 'codloc', 'municipio', 
+            'municipio_nombre', 'departamento_nombre', 'codmun', 'coddpto', 'codprov', 'activo'
         ]
         read_only_fields = ['id']
+
+
+class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
+    """Serializer para configuración del sistema"""
+    
+    class Meta:
+        model = ConfiguracionSistema
+        fields = [
+            'id', 'nombre_sistema', 'institucion', 
+            'email_contacto', 'telefono', 'direccion',
+            'paises_destino', 'valor_exportado',
+            'beneficio1_titulo', 'beneficio1_descripcion',
+            'beneficio2_titulo', 'beneficio2_descripcion',
+            'beneficio3_titulo', 'beneficio3_descripcion',
+            'fecha_creacion', 'fecha_actualizacion',
+            'creado_por', 'actualizado_por'
+        ]
+        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion', 'creado_por', 'actualizado_por']

@@ -4,7 +4,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .serializers import CustomTokenObtainPairSerializer
 from .viewsets import (
     RolUsuarioViewSet, UsuarioViewSet,
-    DptoViewSet, MunicipioViewSet, LocalidadesViewSet
+    DptoViewSet, MunicipioViewSet, LocalidadesViewSet,
+    ConfiguracionSistemaViewSet
 )
 
 router = DefaultRouter()
@@ -13,6 +14,7 @@ router.register(r'usuarios', UsuarioViewSet, basename='usuario')
 router.register(r'departamentos', DptoViewSet, basename='departamento')
 router.register(r'municipios', MunicipioViewSet, basename='municipio')
 router.register(r'localidades', LocalidadesViewSet, basename='localidad')
+router.register(r'configuracion', ConfiguracionSistemaViewSet, basename='configuracion')
 
 # Vista personalizada para login con email
 class CustomTokenObtainPairView(TokenObtainPairView):

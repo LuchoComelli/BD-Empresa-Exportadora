@@ -41,6 +41,7 @@ LOCAL_APPS = [
     'apps.empresas',
     'apps.auditoria',
     'apps.registro',
+    'apps.geografia',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -170,7 +171,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
-CORS_ALLOW_CREDENTIALS = True
+
+# Permitir todos los orígenes en desarrollo (solo para desarrollo)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_CREDENTIALS = True
 
 # DRF Spectacular (API Documentation)
 SPECTACULAR_SETTINGS = {

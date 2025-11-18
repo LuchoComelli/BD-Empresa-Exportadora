@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
-    TipoEmpresa, Rubro, UnidadMedida, Otrorubro,
-    Empresaproducto, Empresaservicio, EmpresaMixta,
+    TipoEmpresa, Rubro, SubRubro, UnidadMedida, Otrorubro,
+    Empresa, Empresaproducto, Empresaservicio, EmpresaMixta,  # Proxies para compatibilidad
     ProductoEmpresa, ServicioEmpresa,
     ProductoEmpresaMixta, ServicioEmpresaMixta,
     PosicionArancelaria, PosicionArancelariaMixta,
@@ -18,14 +18,24 @@ class TipoEmpresaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class SubRubroSerializer(serializers.ModelSerializer):
+    """Serializer para sub-rubros"""
+    
+    class Meta:
+        model = SubRubro
+        fields = ['id', 'nombre', 'descripcion', 'activo', 'orden']
+        read_only_fields = ['id']
+
+
 class RubroSerializer(serializers.ModelSerializer):
     """Serializer para rubros"""
+    subrubros = SubRubroSerializer(many=True, read_only=True)
     
     class Meta:
         model = Rubro
         fields = [
             'id', 'nombre', 'descripcion', 'tipo',
-            'unidad_medida_estandar', 'activo', 'orden'
+            'unidad_medida_estandar', 'activo', 'orden', 'subrubros'
         ]
         read_only_fields = ['id']
 
@@ -106,6 +116,24 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    categoria_matriz = serializers.SerializerMethodField()
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            # Usar el campo empresa unificado
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                # Convertir la categoría del modelo a formato legible
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
     
     class Meta:
         model = Empresaproducto
@@ -113,7 +141,7 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
-            'exporta', 'importa', 'fecha_creacion'
+            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz'
         ]
 
 
@@ -127,6 +155,24 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
     departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
     municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
     localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
+    categoria_matriz = serializers.SerializerMethodField()
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            # Usar el campo empresa unificado
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                # Convertir la categoría del modelo a formato legible
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
     
     class Meta:
         model = Empresaproducto
@@ -139,6 +185,23 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    categoria_matriz = serializers.SerializerMethodField()
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                # Convertir la categoría del modelo a formato legible
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
     
     class Meta:
         model = Empresaservicio
@@ -146,7 +209,7 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
-            'exporta', 'importa', 'fecha_creacion'
+            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz'
         ]
 
 
@@ -160,6 +223,23 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
     departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
     municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
     localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
+    categoria_matriz = serializers.SerializerMethodField()
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                # Convertir la categoría del modelo a formato legible
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
     
     class Meta:
         model = Empresaservicio
@@ -202,6 +282,23 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    categoria_matriz = serializers.SerializerMethodField()
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                # Convertir la categoría del modelo a formato legible
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
     
     class Meta:
         model = EmpresaMixta
@@ -209,7 +306,7 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
-            'exporta', 'importa', 'fecha_creacion'
+            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz'
         ]
 
 
@@ -224,6 +321,23 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
     departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
     municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
     localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
+    categoria_matriz = serializers.SerializerMethodField()
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                # Convertir la categoría del modelo a formato legible
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
     
     class Meta:
         model = EmpresaMixta
@@ -233,11 +347,13 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
 
 class MatrizClasificacionExportadorSerializer(serializers.ModelSerializer):
     """Serializer para matriz de clasificación de exportador"""
+    empresa_nombre = serializers.CharField(source='empresa.razon_social', read_only=True)
+    empresa_tipo = serializers.CharField(source='empresa.tipo_empresa_valor', read_only=True)
     
     class Meta:
         model = MatrizClasificacionExportador
         fields = [
-            'id', 'empresa_producto', 'empresa_servicio', 'empresa_mixta',
+            'id', 'empresa', 'empresa_nombre', 'empresa_tipo',
             'experiencia_exportadora', 'volumen_produccion', 'presencia_digital',
             'posicion_arancelaria', 'participacion_internacionalizacion',
             'estructura_interna', 'interes_exportador',
@@ -245,5 +361,12 @@ class MatrizClasificacionExportadorSerializer(serializers.ModelSerializer):
             'puntaje_total', 'categoria', 'fecha_evaluacion',
             'evaluado_por', 'observaciones'
         ]
-        read_only_fields = ['id', 'puntaje_total', 'categoria', 'fecha_evaluacion']
+        read_only_fields = ['id', 'puntaje_total', 'categoria', 'fecha_evaluacion', 'empresa_nombre', 'empresa_tipo']
+    
+    def validate(self, data):
+        """Validar que la empresa esté asignada"""
+        if not data.get('empresa'):
+            if not self.instance or not self.instance.empresa:
+                raise serializers.ValidationError('Debe asignar una empresa')
+        return data
 

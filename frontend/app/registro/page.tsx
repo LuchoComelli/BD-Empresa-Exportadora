@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -13,147 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Building2, ArrowLeft, CheckCircle2, ArrowRight, Plus, X } from "lucide-react"
 import { LocationPicker } from "@/components/map/location-picker"
-
-const provinciasArgentina = [
-  "Buenos Aires",
-  "Catamarca",
-  "Chaco",
-  "Chubut",
-  "Córdoba",
-  "Corrientes",
-  "Entre Ríos",
-  "Formosa",
-  "Jujuy",
-  "La Pampa",
-  "La Rioja",
-  "Mendoza",
-  "Misiones",
-  "Neuquén",
-  "Río Negro",
-  "Salta",
-  "San Juan",
-  "San Luis",
-  "Santa Cruz",
-  "Santa Fe",
-  "Santiago del Estero",
-  "Tierra del Fuego",
-  "Tucumán",
-]
-
-const rubrosData = {
-  agricola: {
-    nombre: "Agrícola",
-    subRubros: [
-      "Vinos",
-      "Aceite de Oliva",
-      "Frutas Frescas",
-      "Frutas Secas",
-      "Hortalizas",
-      "Cereales",
-      "Legumbres",
-      "Aromáticas",
-      "Otro",
-    ],
-  },
-  ganadero: {
-    nombre: "Ganadero",
-    subRubros: ["Caprino", "Bovino", "Ovino", "Porcino", "Avícola", "Apícola", "Otro"],
-  },
-  industrial: {
-    nombre: "Industrial",
-    subRubros: [
-      "Metalúrgica",
-      "Química",
-      "Plásticos",
-      "Maquinaria",
-      "Electrónica",
-      "Automotriz",
-      "Construcción",
-      "Otro",
-    ],
-  },
-  textil: {
-    nombre: "Textil",
-    subRubros: ["Hilados", "Tejidos", "Confección", "Indumentaria", "Calzado", "Marroquinería", "Otro"],
-  },
-  alimentos: {
-    nombre: "Alimentos y Bebidas",
-    subRubros: [
-      "Conservas",
-      "Lácteos",
-      "Panificados",
-      "Bebidas",
-      "Dulces y Mermeladas",
-      "Embutidos",
-      "Congelados",
-      "Otro",
-    ],
-  },
-  mineria: {
-    nombre: "Minería",
-    subRubros: ["Metalíferos", "No Metalíferos", "Rocas de Aplicación", "Piedras Preciosas", "Otro"],
-  },
-  tecnologia: {
-    nombre: "Tecnología",
-    subRubros: ["Software", "Hardware", "Telecomunicaciones", "Servicios IT", "Otro"],
-  },
-  servicios: {
-    nombre: "Servicios",
-    subRubros: ["Turismo", "Logística", "Consultoría", "Educación", "Salud", "Otro"],
-  },
-  artesanias: {
-    nombre: "Artesanías",
-    subRubros: ["Textiles", "Cerámica", "Madera", "Cuero", "Metal", "Otro"],
-  },
-}
-
-const departamentosData = {
-  capital: {
-    nombre: "Capital",
-    municipios: {
-      "san-fernando": {
-        nombre: "San Fernando del Valle de Catamarca",
-        localidades: ["Centro", "Villa Cubas", "Barrio Norte", "Barrio Sur"],
-      },
-    },
-  },
-  "valle-viejo": {
-    nombre: "Valle Viejo",
-    municipios: {
-      "valle-viejo": {
-        nombre: "Valle Viejo",
-        localidades: ["Valle Viejo Centro", "Colonia del Valle", "San Isidro"],
-      },
-    },
-  },
-  "fray-mamerto-esquiu": {
-    nombre: "Fray Mamerto Esquiú",
-    municipios: {
-      "san-jose": {
-        nombre: "San José",
-        localidades: ["San José Centro", "El Pantanillo", "Colonia Nueva Coneta"],
-      },
-    },
-  },
-  andalgala: {
-    nombre: "Andalgalá",
-    municipios: {
-      andalgala: {
-        nombre: "Andalgalá",
-        localidades: ["Andalgalá Centro", "Chaquiago", "Amanao"],
-      },
-    },
-  },
-  belen: {
-    nombre: "Belén",
-    municipios: {
-      belen: {
-        nombre: "Belén",
-        localidades: ["Belén Centro", "Londres", "Hualfín"],
-      },
-    },
-  },
-}
+import { api } from "@/lib/api"
 
 interface ContactoSecundario {
   id: string
@@ -198,9 +58,30 @@ export default function RegistroPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [tipoNegocio, setTipoNegocio] = useState<"productos" | "servicios" | "ambos">("productos")
+  
+  // Estados para datos geográficos
+  const [provincias, setProvincias] = useState<any[]>([])
+  const [departamentos, setDepartamentos] = useState<any[]>([])
+  const [municipios, setMunicipios] = useState<any[]>([])
+  const [localidades, setLocalidades] = useState<any[]>([])
+  const [loadingGeografia, setLoadingGeografia] = useState(false)
+  
+  // Estados para rubros y subrubros
+  const [rubros, setRubros] = useState<any[]>([])
+  const [rubrosProductos, setRubrosProductos] = useState<any[]>([])
+  const [rubrosServicios, setRubrosServicios] = useState<any[]>([])
+  const [subrubros, setSubrubros] = useState<any[]>([])
+  const [subrubrosProductos, setSubrubrosProductos] = useState<any[]>([])
+  const [subrubrosServicios, setSubrubrosServicios] = useState<any[]>([])
+  const [loadingRubros, setLoadingRubros] = useState(false)
+  
   const [formData, setFormData] = useState({
     rubro: "",
     subRubro: "",
+    rubroProducto: "",
+    subRubroProducto: "",
+    rubroServicio: "",
+    subRubroServicio: "",
     razonSocial: "",
     provincia: "",
     direccion: "",
@@ -261,6 +142,242 @@ export default function RegistroPage() {
 
   const toUpperCase = (value: string) => value.toUpperCase()
 
+  // Cargar provincias al montar el componente
+  useEffect(() => {
+    const loadProvincias = async () => {
+      try {
+        setLoadingGeografia(true)
+        const data = await api.getProvincias()
+        // Manejar respuesta paginada o directa
+        const provinciasArray = Array.isArray(data) ? data : (data.results || data)
+        setProvincias(provinciasArray || [])
+      } catch (error) {
+        console.error('Error cargando provincias:', error)
+        setProvincias([])
+      } finally {
+        setLoadingGeografia(false)
+      }
+    }
+    loadProvincias()
+  }, [])
+
+  // Cargar departamentos cuando se selecciona una provincia
+  useEffect(() => {
+    const loadDepartamentos = async () => {
+      if (!formData.provincia) {
+        setDepartamentos([])
+        setMunicipios([])
+        setLocalidades([])
+        return
+      }
+      try {
+        setLoadingGeografia(true)
+        const data = await api.getDepartamentosPorProvincia(formData.provincia)
+        // Manejar respuesta paginada o directa
+        const departamentosArray = Array.isArray(data) ? data : (data.results || data)
+        setDepartamentos(departamentosArray || [])
+        // Limpiar selecciones dependientes
+        setFormData(prev => ({ ...prev, departamento: "", municipio: "", localidad: "" }))
+        setMunicipios([])
+        setLocalidades([])
+      } catch (error) {
+        console.error('Error cargando departamentos:', error)
+        setDepartamentos([])
+      } finally {
+        setLoadingGeografia(false)
+      }
+    }
+    loadDepartamentos()
+  }, [formData.provincia])
+
+  // Cargar municipios cuando se selecciona un departamento
+  useEffect(() => {
+    const loadMunicipios = async () => {
+      if (!formData.departamento) {
+        setMunicipios([])
+        setLocalidades([])
+        return
+      }
+      try {
+        setLoadingGeografia(true)
+        const data = await api.getMunicipiosPorDepartamento(formData.departamento)
+        // Manejar respuesta paginada o directa
+        const municipiosArray = Array.isArray(data) ? data : (data.results || data)
+        setMunicipios(municipiosArray || [])
+        // Limpiar selección de localidad
+        setFormData(prev => ({ ...prev, municipio: "", localidad: "" }))
+        
+        // Si no hay municipios, cargar localidades directamente por departamento
+        if (!municipiosArray || municipiosArray.length === 0) {
+          try {
+            const localidadesData = await api.getLocalidadesPorDepartamento(formData.departamento)
+            const localidadesArray = Array.isArray(localidadesData) ? localidadesData : (localidadesData.results || localidadesData)
+            setLocalidades(localidadesArray || [])
+          } catch (error) {
+            console.error('Error cargando localidades por departamento:', error)
+            setLocalidades([])
+          }
+        } else {
+          setLocalidades([])
+        }
+      } catch (error) {
+        console.error('Error cargando municipios:', error)
+        setMunicipios([])
+        setLocalidades([])
+      } finally {
+        setLoadingGeografia(false)
+      }
+    }
+    loadMunicipios()
+  }, [formData.departamento])
+
+  // Cargar localidades cuando se selecciona un municipio
+  useEffect(() => {
+    const loadLocalidades = async () => {
+      if (!formData.municipio) {
+        setLocalidades([])
+        return
+      }
+      try {
+        setLoadingGeografia(true)
+        const data = await api.getLocalidadesPorMunicipio(formData.municipio)
+        // Manejar respuesta paginada o directa
+        const localidadesArray = Array.isArray(data) ? data : (data.results || data)
+        setLocalidades(localidadesArray || [])
+        // Limpiar selección de localidad
+        setFormData(prev => ({ ...prev, localidad: "" }))
+      } catch (error) {
+        console.error('Error cargando localidades:', error)
+        setLocalidades([])
+      } finally {
+        setLoadingGeografia(false)
+      }
+    }
+    loadLocalidades()
+  }, [formData.municipio])
+
+  // Cargar rubros según el tipo de negocio
+  useEffect(() => {
+    const loadRubros = async () => {
+      try {
+        setLoadingRubros(true)
+        if (tipoNegocio === 'productos') {
+          const data = await api.getRubrosPorTipo('producto')
+          const rubrosArray = Array.isArray(data) ? data : (data.results || data)
+          setRubrosProductos(rubrosArray || [])
+          setRubrosServicios([])
+          setRubros(rubrosArray || [])
+        } else if (tipoNegocio === 'servicios') {
+          const data = await api.getRubrosPorTipo('servicio')
+          const rubrosArray = Array.isArray(data) ? data : (data.results || data)
+          setRubrosServicios(rubrosArray || [])
+          setRubrosProductos([])
+          setRubros(rubrosArray || [])
+        } else if (tipoNegocio === 'ambos') {
+          const [productosData, serviciosData] = await Promise.all([
+            api.getRubrosPorTipo('producto'),
+            api.getRubrosPorTipo('servicio')
+          ])
+          const rubrosProdArray = Array.isArray(productosData) ? productosData : (productosData.results || productosData)
+          const rubrosServArray = Array.isArray(serviciosData) ? serviciosData : (serviciosData.results || serviciosData)
+          setRubrosProductos(rubrosProdArray || [])
+          setRubrosServicios(rubrosServArray || [])
+          setRubros([])
+        }
+        // Limpiar selecciones
+        setFormData(prev => ({ 
+          ...prev, 
+          rubro: "", 
+          subRubro: "",
+          rubroProducto: "",
+          subRubroProducto: "",
+          rubroServicio: "",
+          subRubroServicio: ""
+        }))
+        setSubrubros([])
+        setSubrubrosProductos([])
+        setSubrubrosServicios([])
+      } catch (error) {
+        console.error('Error cargando rubros:', error)
+        setRubros([])
+        setRubrosProductos([])
+        setRubrosServicios([])
+      } finally {
+        setLoadingRubros(false)
+      }
+    }
+    loadRubros()
+  }, [tipoNegocio])
+
+  // Cargar subrubros cuando se selecciona un rubro (para productos o servicios únicos)
+  useEffect(() => {
+    const loadSubrubros = async () => {
+      if (!formData.rubro || tipoNegocio === 'ambos') {
+        setSubrubros([])
+        return
+      }
+      try {
+        setLoadingRubros(true)
+        const data = await api.getSubRubrosPorRubro(formData.rubro)
+        const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
+        setSubrubros(subrubrosArray || [])
+        setFormData(prev => ({ ...prev, subRubro: "" }))
+      } catch (error) {
+        console.error('Error cargando subrubros:', error)
+        setSubrubros([])
+      } finally {
+        setLoadingRubros(false)
+      }
+    }
+    loadSubrubros()
+  }, [formData.rubro, tipoNegocio])
+
+  // Cargar subrubros de productos (para caso mixto)
+  useEffect(() => {
+    const loadSubrubrosProductos = async () => {
+      if (!formData.rubroProducto || tipoNegocio !== 'ambos') {
+        setSubrubrosProductos([])
+        return
+      }
+      try {
+        setLoadingRubros(true)
+        const data = await api.getSubRubrosPorRubro(formData.rubroProducto)
+        const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
+        setSubrubrosProductos(subrubrosArray || [])
+        setFormData(prev => ({ ...prev, subRubroProducto: "" }))
+      } catch (error) {
+        console.error('Error cargando subrubros de productos:', error)
+        setSubrubrosProductos([])
+      } finally {
+        setLoadingRubros(false)
+      }
+    }
+    loadSubrubrosProductos()
+  }, [formData.rubroProducto, tipoNegocio])
+
+  // Cargar subrubros de servicios (para caso mixto)
+  useEffect(() => {
+    const loadSubrubrosServicios = async () => {
+      if (!formData.rubroServicio || tipoNegocio !== 'ambos') {
+        setSubrubrosServicios([])
+        return
+      }
+      try {
+        setLoadingRubros(true)
+        const data = await api.getSubRubrosPorRubro(formData.rubroServicio)
+        const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
+        setSubrubrosServicios(subrubrosArray || [])
+        setFormData(prev => ({ ...prev, subRubroServicio: "" }))
+      } catch (error) {
+        console.error('Error cargando subrubros de servicios:', error)
+        setSubrubrosServicios([])
+      } finally {
+        setLoadingRubros(false)
+      }
+    }
+    loadSubrubrosServicios()
+  }, [formData.rubroServicio, tipoNegocio])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -282,6 +399,37 @@ export default function RegistroPage() {
         return
       }
       
+      // Validar rubros según el tipo de empresa
+      if (tipoNegocio === 'ambos') {
+        // Para empresas mixtas, validar que se hayan seleccionado rubros y subrubros de productos y servicios
+        if (!formData.rubroProducto) {
+          alert('Por favor, selecciona el rubro de productos')
+          return
+        }
+        if (!formData.subRubroProducto) {
+          alert('Por favor, selecciona el sub-rubro de productos')
+          return
+        }
+        if (!formData.rubroServicio) {
+          alert('Por favor, selecciona el rubro de servicios')
+          return
+        }
+        if (!formData.subRubroServicio) {
+          alert('Por favor, selecciona el sub-rubro de servicios')
+          return
+        }
+      } else {
+        // Para empresas de producto o servicio únicos
+        if (!formData.rubro) {
+          alert('Por favor, selecciona el rubro')
+          return
+        }
+        if (!formData.subRubro) {
+          alert('Por favor, selecciona el sub-rubro')
+          return
+        }
+      }
+      
       // Preparar FormData para enviar archivos
       const formDataToSend = new FormData()
       
@@ -292,9 +440,38 @@ export default function RegistroPage() {
         tipo_sociedad: formData.tipoSociedad || null,
         cuit_cuil: formData.cuit,
         tipo_empresa: tipoEmpresaMap[tipoNegocio] || 'producto',
-        rubro_principal: formData.rubro,
-        sub_rubro: formData.subRubro || null,
-        descripcion_actividad: formData.rubro ? `${formData.rubro}${formData.subRubro ? ' - ' + formData.subRubro : ''}` : '',
+        // Para empresas mixtas, enviar campos separados
+        ...(tipoNegocio === 'ambos' ? {
+          rubro_producto: rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || '',
+          sub_rubro_producto: subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || null,
+          rubro_servicio: rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || '',
+          sub_rubro_servicio: subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || null,
+          // Mantener rubro_principal y sub_rubro para compatibilidad (se generan en el backend)
+          rubro_principal: '',
+          sub_rubro: null,
+        } : {
+          rubro_principal: rubros.find(r => String(r.id) === formData.rubro)?.nombre || '',
+          sub_rubro: subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || null,
+          rubro_producto: null,
+          sub_rubro_producto: null,
+          rubro_servicio: null,
+          sub_rubro_servicio: null,
+        }),
+        descripcion_actividad: tipoNegocio === 'ambos'
+          ? (() => {
+              const rubroProd = rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || ''
+              const subProd = subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || ''
+              const rubroServ = rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || ''
+              const subServ = subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || ''
+              const prod = rubroProd ? `${rubroProd}${subProd ? ' - ' + subProd : ''}` : ''
+              const serv = rubroServ ? `${rubroServ}${subServ ? ' - ' + subServ : ''}` : ''
+              return `${prod}${prod && serv ? ' / ' : ''}${serv}`.trim()
+            })()
+          : (() => {
+              const rubro = rubros.find(r => String(r.id) === formData.rubro)?.nombre || ''
+              const subrubro = subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || ''
+              return rubro ? `${rubro}${subrubro ? ' - ' + subrubro : ''}` : ''
+            })(),
         direccion: formData.direccion ? String(formData.direccion).trim() : '',
         codigo_postal: formData.codigoPostal || null,
         provincia: formData.provincia || null,
@@ -541,19 +718,6 @@ export default function RegistroPage() {
     setActividadesPromocion(actividadesPromocion.map((a) => (a.id === id ? { ...a, [field]: value } : a)))
   }
 
-  const municipiosDisponibles = formData.departamento
-    ? Object.entries(departamentosData[formData.departamento as keyof typeof departamentosData]?.municipios || {})
-    : []
-
-  const localidadesDisponibles = formData.municipio
-    ? departamentosData[formData.departamento as keyof typeof departamentosData]?.municipios[
-        formData.municipio as keyof typeof departamentosData.capital.municipios
-      ]?.localidades || []
-    : []
-
-  const subRubrosDisponibles = formData.rubro
-    ? rubrosData[formData.rubro as keyof typeof rubrosData]?.subRubros || []
-    : []
 
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
@@ -642,46 +806,139 @@ export default function RegistroPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="rubro">Rubro *</Label>
-                      <Select
-                        value={formData.rubro}
-                        onValueChange={(value) => setFormData({ ...formData, rubro: value, subRubro: "" })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona el rubro" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(rubrosData).map(([key, data]) => (
-                            <SelectItem key={key} value={key}>
-                              {data.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  {tipoNegocio === 'ambos' ? (
+                    // Caso mixto: dos secciones separadas
+                    <>
+                      <div className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                        <h4 className="font-semibold text-[#222A59] mb-3">📦 Rubros de Productos</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="rubroProducto">Rubro de Productos *</Label>
+                            <Select
+                              value={formData.rubroProducto}
+                              onValueChange={(value) => setFormData({ ...formData, rubroProducto: value, subRubroProducto: "" })}
+                              disabled={loadingRubros}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingRubros ? "Cargando..." : "Selecciona el rubro"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {rubrosProductos.map((rubro) => (
+                                  <SelectItem key={rubro.id} value={String(rubro.id)}>
+                                    {rubro.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="subRubroProducto">Sub-Rubro de Productos *</Label>
+                            <Select
+                              value={formData.subRubroProducto}
+                              onValueChange={(value) => setFormData({ ...formData, subRubroProducto: value })}
+                              disabled={!formData.rubroProducto || loadingRubros}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingRubros ? "Cargando..." : formData.rubroProducto ? "Selecciona el sub-rubro" : "Primero selecciona un rubro"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {subrubrosProductos.map((subrubro) => (
+                                  <SelectItem key={subrubro.id} value={String(subrubro.id)}>
+                                    {subrubro.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4 border border-green-200 rounded-lg bg-green-50">
+                        <h4 className="font-semibold text-[#222A59] mb-3">🔧 Rubros de Servicios</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="rubroServicio">Rubro de Servicios *</Label>
+                            <Select
+                              value={formData.rubroServicio}
+                              onValueChange={(value) => setFormData({ ...formData, rubroServicio: value, subRubroServicio: "" })}
+                              disabled={loadingRubros}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingRubros ? "Cargando..." : "Selecciona el rubro"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {rubrosServicios.map((rubro) => (
+                                  <SelectItem key={rubro.id} value={String(rubro.id)}>
+                                    {rubro.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="subRubroServicio">Sub-Rubro de Servicios *</Label>
+                            <Select
+                              value={formData.subRubroServicio}
+                              onValueChange={(value) => setFormData({ ...formData, subRubroServicio: value })}
+                              disabled={!formData.rubroServicio || loadingRubros}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingRubros ? "Cargando..." : formData.rubroServicio ? "Selecciona el sub-rubro" : "Primero selecciona un rubro"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {subrubrosServicios.map((subrubro) => (
+                                  <SelectItem key={subrubro.id} value={String(subrubro.id)}>
+                                    {subrubro.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    // Caso productos o servicios únicos
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="rubro">Rubro *</Label>
+                        <Select
+                          value={formData.rubro}
+                          onValueChange={(value) => setFormData({ ...formData, rubro: value, subRubro: "" })}
+                          disabled={loadingRubros}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={loadingRubros ? "Cargando..." : "Selecciona el rubro"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {rubros.map((rubro) => (
+                              <SelectItem key={rubro.id} value={String(rubro.id)}>
+                                {rubro.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="subRubro">Sub-Rubro *</Label>
+                        <Select
+                          value={formData.subRubro}
+                          onValueChange={(value) => setFormData({ ...formData, subRubro: value })}
+                          disabled={!formData.rubro || loadingRubros}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={loadingRubros ? "Cargando..." : formData.rubro ? "Selecciona el sub-rubro" : "Primero selecciona un rubro"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subrubros.map((subrubro) => (
+                              <SelectItem key={subrubro.id} value={String(subrubro.id)}>
+                                {subrubro.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-
-                    <div>
-                      <Label htmlFor="subRubro">Sub-Rubro *</Label>
-                      <Select
-                        value={formData.subRubro}
-                        onValueChange={(value) => setFormData({ ...formData, subRubro: value })}
-                        disabled={!formData.rubro}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona el sub-rubro" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {subRubrosDisponibles.map((subRubro) => (
-                            <SelectItem key={subRubro} value={subRubro}>
-                              {subRubro}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -730,27 +987,15 @@ export default function RegistroPage() {
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="cuit">CUIT *</Label>
-                      <Input
-                        id="cuit"
-                        required
-                        value={formData.cuit}
-                        onChange={(e) => setFormData({ ...formData, cuit: e.target.value })}
-                        placeholder="XX-XXXXXXXX-X"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="codigoPostal">Código Postal</Label>
-                      <Input
-                        id="codigoPostal"
-                        value={formData.codigoPostal}
-                        onChange={(e) => setFormData({ ...formData, codigoPostal: e.target.value })}
-                        placeholder="EJ: 4700"
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="cuit">CUIT *</Label>
+                    <Input
+                      id="cuit"
+                      required
+                      value={formData.cuit}
+                      onChange={(e) => setFormData({ ...formData, cuit: e.target.value })}
+                      placeholder="XX-XXXXXXXX-X"
+                    />
                   </div>
 
                   {(tipoNegocio === "productos" || tipoNegocio === "ambos") && (
@@ -1273,18 +1518,29 @@ export default function RegistroPage() {
                     </div>
 
                     <div>
+                      <Label htmlFor="codigoPostal">Código Postal</Label>
+                      <Input
+                        id="codigoPostal"
+                        value={formData.codigoPostal}
+                        onChange={(e) => setFormData({ ...formData, codigoPostal: e.target.value })}
+                        placeholder="EJ: 4700"
+                      />
+                    </div>
+
+                    <div>
                       <Label htmlFor="provincia">Provincia *</Label>
                       <Select
                         value={formData.provincia}
                         onValueChange={(value) => setFormData({ ...formData, provincia: value })}
+                        disabled={loadingGeografia}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona la provincia" />
+                          <SelectValue placeholder={loadingGeografia ? "Cargando..." : "Selecciona la provincia"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {provinciasArgentina.map((provincia) => (
-                            <SelectItem key={provincia} value={provincia}>
-                              {provincia}
+                          {provincias.map((provincia) => (
+                            <SelectItem key={provincia.id} value={provincia.id}>
+                              {provincia.nombre}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1299,14 +1555,15 @@ export default function RegistroPage() {
                           onValueChange={(value) =>
                             setFormData({ ...formData, departamento: value, municipio: "", localidad: "" })
                           }
+                          disabled={!formData.provincia || loadingGeografia}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecciona" />
+                            <SelectValue placeholder={loadingGeografia ? "Cargando..." : formData.provincia ? "Selecciona" : "Primero selecciona provincia"} />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(departamentosData).map(([key, data]) => (
-                              <SelectItem key={key} value={key}>
-                                {data.nombre}
+                            {departamentos.map((departamento) => (
+                              <SelectItem key={departamento.id} value={departamento.id}>
+                                {departamento.nombre}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1314,21 +1571,35 @@ export default function RegistroPage() {
                       </div>
 
                       <div>
-                        <Label htmlFor="municipio">Municipio *</Label>
+                        <Label htmlFor="municipio">Municipio {municipios.length > 0 ? '*' : '*'}</Label>
                         <Select
                           value={formData.municipio}
                           onValueChange={(value) => setFormData({ ...formData, municipio: value, localidad: "" })}
-                          disabled={!formData.departamento}
+                          disabled={!formData.departamento || loadingGeografia}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecciona" />
+                            <SelectValue placeholder={
+                              loadingGeografia 
+                                ? "Cargando..." 
+                                : !formData.departamento 
+                                  ? "Primero selecciona departamento"
+                                  : municipios.length === 0
+                                    ? "No hay municipios disponibles"
+                                    : "Selecciona"
+                            } />
                           </SelectTrigger>
                           <SelectContent>
-                            {municipiosDisponibles.map(([key, data]) => (
-                              <SelectItem key={key} value={key}>
-                                {data.nombre}
-                              </SelectItem>
-                            ))}
+                            {municipios.length > 0 ? (
+                              municipios.map((municipio) => (
+                                <SelectItem key={municipio.id} value={municipio.id}>
+                                  {municipio.nombre}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                No hay municipios disponibles
+                              </div>
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1338,15 +1609,21 @@ export default function RegistroPage() {
                         <Select
                           value={formData.localidad}
                           onValueChange={(value) => setFormData({ ...formData, localidad: value })}
-                          disabled={!formData.municipio}
+                          disabled={(!formData.departamento && !formData.municipio) || loadingGeografia || localidades.length === 0}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecciona" />
+                            <SelectValue placeholder={
+                              loadingGeografia 
+                                ? "Cargando..." 
+                                : localidades.length === 0 
+                                  ? (formData.municipio ? "No hay localidades disponibles" : formData.departamento ? "Cargando localidades..." : "Primero selecciona departamento")
+                                  : "Selecciona"
+                            } />
                           </SelectTrigger>
                           <SelectContent>
-                            {localidadesDisponibles.map((localidad) => (
-                              <SelectItem key={localidad} value={localidad}>
-                                {localidad}
+                            {localidades.map((localidad) => (
+                              <SelectItem key={localidad.id} value={localidad.id}>
+                                {localidad.nombre}
                               </SelectItem>
                             ))}
                           </SelectContent>

@@ -15,14 +15,14 @@ interface FiltersSidebarProps {
 export function FiltersSidebar({ onFilterChange, onClearFilters, filters = {} }: FiltersSidebarProps) {
   return (
     <Card className="w-full lg:w-64">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg text-[#222A59]">Filtros</CardTitle>
-        <Button variant="ghost" size="sm" onClick={onClearFilters}>
-          <X className="h-4 w-4 mr-1" />
-          Limpiar
+      <CardHeader className="flex flex-row items-center justify-between p-4 md:p-6">
+        <CardTitle className="text-base md:text-lg text-[#222A59]">Filtros</CardTitle>
+        <Button variant="ghost" size="sm" onClick={onClearFilters} className="text-xs md:text-sm">
+          <X className="h-3 w-3 md:h-4 md:w-4 mr-1" />
+          <span className="hidden sm:inline">Limpiar</span>
         </Button>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 md:space-y-4 p-4 md:p-6 pt-0">
         <div className="space-y-2">
           <Label htmlFor="categoria">Categoría</Label>
           <Select 

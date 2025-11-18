@@ -99,16 +99,8 @@ export default function UsuariosPage() {
         allUsuarios = []
       }
       
-      // Filtrar usuarios: solo mostrar Admin, Analista y Consultor (excluir Empresa)
-      const dashboardUsuarios = allUsuarios.filter((usuario: Usuario) => {
-        const rolNombre = usuario.rol_nombre || usuario.rol_detalle?.nombre || ''
-        return rolNombre === 'Administrador' || 
-               rolNombre === 'Analista' || 
-               rolNombre === 'Consultor' ||
-               rolNombre === 'Superusuario' // Por si acaso hay superusuarios
-      })
-      
-      setUsuarios(dashboardUsuarios)
+      // El backend ya filtra por rol, solo necesitamos mapear los datos
+      setUsuarios(allUsuarios)
     } catch (error) {
       console.error("Error loading usuarios:", error)
       setUsuarios([])
@@ -126,13 +118,8 @@ export default function UsuariosPage() {
       } else if (response.results) {
         allRoles = response.results
       }
-      // Filtrar solo roles Admin, Consultor y Analista (excluir Empresa)
-      const dashboardRoles = allRoles.filter((rol: Rol) => 
-        rol.nombre === 'Administrador' || 
-        rol.nombre === 'Consultor' || 
-        rol.nombre === 'Analista'
-      )
-      setRoles(dashboardRoles)
+      // El backend ya filtra los roles, solo necesitamos mapear los datos
+      setRoles(allRoles)
     } catch (error) {
       console.error("Error loading roles:", error)
     }
@@ -141,14 +128,27 @@ export default function UsuariosPage() {
   const handleCreateUsuario = async () => {
     try {
       setLoadingAction(true)
-      await api.createUsuario({
+      
+      // Validar que el rol esté seleccionado
+      if (!formData.rol) {
+        alert("Por favor, selecciona un rol para el usuario")
+        return
+      }
+      
+      const usuarioData: any = {
         email: formData.email,
         nombre: formData.nombre,
         apellido: formData.apellido,
         password: formData.password,
-        rol: formData.rol ? parseInt(formData.rol) : null,
-        telefono: formData.telefono || null,
-      })
+        rol: parseInt(formData.rol),
+      }
+      
+      // Solo agregar teléfono si tiene valor
+      if (formData.telefono) {
+        usuarioData.telefono = formData.telefono
+      }
+      
+      await api.createUsuario(usuarioData)
       setShowCreateDialog(false)
       setFormData({
         email: "",
@@ -162,7 +162,8 @@ export default function UsuariosPage() {
       alert("Usuario creado exitosamente")
     } catch (error: any) {
       console.error("Error creating usuario:", error)
-      alert(error.message || "Error al crear el usuario. Por favor, intenta nuevamente.")
+      const errorMessage = error.message || "Error al crear el usuario. Por favor, intenta nuevamente."
+      alert(errorMessage)
     } finally {
       setLoadingAction(false)
     }
@@ -175,8 +176,8 @@ export default function UsuariosPage() {
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       password: "",
-      rol: usuario.rol?.toString() || "",
-      telefono: "",
+      rol: usuario.rol?.toString() || usuario.rol_detalle?.id?.toString() || "",
+      telefono: (usuario as any).telefono || "",
     })
     setShowEditDialog(true)
   }
@@ -190,10 +191,19 @@ export default function UsuariosPage() {
         email: formData.email,
         nombre: formData.nombre,
         apellido: formData.apellido,
-        rol: formData.rol ? parseInt(formData.rol) : null,
-        telefono: formData.telefono || null,
       }
 
+      // Solo actualizar rol si se seleccionó uno
+      if (formData.rol) {
+        updateData.rol = parseInt(formData.rol)
+      }
+
+      // Solo actualizar teléfono si tiene valor
+      if (formData.telefono) {
+        updateData.telefono = formData.telefono
+      }
+
+      // Solo actualizar contraseña si se proporcionó una nueva
       if (formData.password) {
         updateData.password = formData.password
       }
@@ -201,11 +211,20 @@ export default function UsuariosPage() {
       await api.updateUsuario(selectedUsuario.id, updateData)
       setShowEditDialog(false)
       setSelectedUsuario(null)
+      setFormData({
+        email: "",
+        nombre: "",
+        apellido: "",
+        password: "",
+        rol: "",
+        telefono: "",
+      })
       loadUsuarios()
       alert("Usuario actualizado exitosamente")
     } catch (error: any) {
       console.error("Error updating usuario:", error)
-      alert(error.message || "Error al actualizar el usuario. Por favor, intenta nuevamente.")
+      const errorMessage = error.message || "Error al actualizar el usuario. Por favor, intenta nuevamente."
+      alert(errorMessage)
     } finally {
       setLoadingAction(false)
     }
@@ -245,18 +264,21 @@ export default function UsuariosPage() {
   }
 
   const handleToggleActive = async (usuario: Usuario) => {
-    if (!confirm(`¿Estás seguro de que deseas ${usuario.is_active ? 'desactivar' : 'activar'} a ${usuario.nombre} ${usuario.apellido}?`)) {
+    const action = usuario.is_active ? 'desactivar' : 'activar'
+    if (!confirm(`¿Estás seguro de que deseas ${action} a ${usuario.nombre} ${usuario.apellido}?\n\nNota: Esto realizará un soft delete (desactivación) para mantener el registro en las auditorías.`)) {
       return
     }
 
     try {
       setLoadingAction(true)
-      await api.toggleActiveUsuario(usuario.id)
+      const response = await api.toggleActiveUsuario(usuario.id)
       loadUsuarios()
-      alert(`Usuario ${usuario.is_active ? 'desactivado' : 'activado'} exitosamente`)
+      const message = response?.message || `Usuario ${action}do exitosamente`
+      alert(message)
     } catch (error: any) {
       console.error("Error toggling active:", error)
-      alert(error.message || "Error al cambiar el estado del usuario. Por favor, intenta nuevamente.")
+      const errorMessage = error.message || "Error al cambiar el estado del usuario. Por favor, intenta nuevamente."
+      alert(errorMessage)
     } finally {
       setLoadingAction(false)
     }
@@ -324,10 +346,10 @@ export default function UsuariosPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 md:gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-[#222A59]">Gestión de Usuarios</h1>
-            <p className="text-muted-foreground mt-2">Administra los usuarios del sistema y sus permisos</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Gestión de Usuarios</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">Administra los usuarios del sistema y sus permisos</p>
           </div>
           <Button 
             className="bg-[#3259B5] hover:bg-[#222A59] gap-2"
@@ -390,8 +412,8 @@ export default function UsuariosPage() {
                     key={usuario.id}
                     className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border rounded-lg hover:bg-muted/30 transition-colors"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-full bg-[#3259B5] flex items-center justify-center text-white font-semibold">
+                    <div className="flex items-start gap-3 md:gap-4">
+                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#3259B5] flex items-center justify-center text-white font-semibold text-sm md:text-base flex-shrink-0">
                         {`${usuario.nombre?.[0] || ''}${usuario.apellido?.[0] || ''}`.toUpperCase()}
                       </div>
                       <div className="space-y-1">
@@ -408,7 +430,7 @@ export default function UsuariosPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
                       <Badge className={getRolColor(usuario.rol_nombre)}>
                         <Shield className="h-3 w-3 mr-1" />
                         {usuario.rol_nombre || 'Sin rol'}

@@ -66,6 +66,30 @@ class Rubro(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.get_tipo_display()})"
 
+class SubRubro(models.Model):
+    """
+    Modelo para sub-rubros relacionados con rubros
+    """
+    nombre = models.CharField(max_length=100, verbose_name="Nombre del Sub-Rubro")
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción")
+    rubro = models.ForeignKey(
+        Rubro,
+        on_delete=models.CASCADE,
+        related_name='subrubros',
+        verbose_name="Rubro"
+    )
+    activo = models.BooleanField(default=True, verbose_name="Activo")
+    orden = models.PositiveIntegerField(default=0, verbose_name="Orden de Visualización")
+    
+    class Meta:
+        db_table = 'subrubro'
+        verbose_name = 'Sub-Rubro'
+        verbose_name_plural = 'Sub-Rubros'
+        ordering = ['rubro__orden', 'rubro__nombre', 'orden', 'nombre']
+    
+    def __str__(self):
+        return f"{self.nombre} ({self.rubro.nombre})"
+
 class UnidadMedida(models.Model):
     """
     Modelo para unidades de medida (PERTENECE A EMPRESAS)
@@ -111,10 +135,11 @@ class Otrorubro(models.Model):
     def __str__(self):
         return self.nombre
 
-# Modelo base para empresas
-class EmpresaBase(TimestampedModel):
+# Modelo unificado para todas las empresas
+class Empresa(TimestampedModel):
     """
-    Modelo base para todas las empresas (hereda de TimestampedModel)
+    Modelo unificado para todas las empresas (producto, servicio, mixta)
+    Reemplaza las tablas separadas Empresaproducto, Empresaservicio, EmpresaMixta
     """
     # Campos básicos obligatorios
     razon_social = models.CharField(max_length=150, verbose_name="Razón Social")
@@ -491,8 +516,23 @@ class EmpresaBase(TimestampedModel):
     id_rubro = models.ForeignKey(Rubro, on_delete=models.PROTECT, verbose_name="Rubro")
     tipo_empresa = models.ForeignKey(TipoEmpresa, on_delete=models.PROTECT, verbose_name="Tipo de Empresa")
     
+    # Campo para distinguir el tipo de empresa (producto, servicio, mixta)
+    tipo_empresa_valor = models.CharField(
+        max_length=20,
+        choices=[
+            ('producto', 'Solo Productos'),
+            ('servicio', 'Solo Servicios'),
+            ('mixta', 'Productos y Servicios'),
+        ],
+        verbose_name="Tipo de Empresa",
+        help_text="Tipo de empresa: solo productos, solo servicios, o mixta"
+    )
+    
     class Meta:
-        abstract = True
+        db_table = 'empresa'
+        verbose_name = 'Empresa'
+        verbose_name_plural = 'Empresas'
+        ordering = ['-fecha_creacion']
         indexes = [
             models.Index(fields=['razon_social']),
             models.Index(fields=['cuit_cuil']),
@@ -512,41 +552,71 @@ class EmpresaBase(TimestampedModel):
             models.Index(fields=['puntaje']),
             models.Index(fields=['latitud', 'longitud']),
             models.Index(fields=['tipo_empresa']),
+            models.Index(fields=['tipo_empresa_valor']),
             models.Index(fields=['id_rubro']),
         ]
     
     def __str__(self):
         return self.razon_social
 
-class Empresaproducto(EmpresaBase):
+# Clases proxy para compatibilidad durante la migración
+# Estas filtran automáticamente por tipo_empresa_valor
+class EmpresaproductoManager(models.Manager):
+    """Manager que filtra solo empresas de producto"""
+    def get_queryset(self):
+        return super().get_queryset().filter(tipo_empresa_valor='producto')
+
+class EmpresaservicioManager(models.Manager):
+    """Manager que filtra solo empresas de servicio"""
+    def get_queryset(self):
+        return super().get_queryset().filter(tipo_empresa_valor='servicio')
+
+class EmpresaMixtaManager(models.Manager):
+    """Manager que filtra solo empresas mixtas"""
+    def get_queryset(self):
+        return super().get_queryset().filter(tipo_empresa_valor='mixta')
+
+class Empresaproducto(Empresa):
     """
-    Modelo para empresas que SOLO ofrecen productos
+    Proxy para empresas de producto - usa Empresa con tipo_empresa_valor='producto'
+    Mantenido para compatibilidad durante la migración
     """
+    objects = EmpresaproductoManager()
+    
     class Meta:
-        db_table = 'empresaproducto'
+        proxy = True
         verbose_name = 'Empresa de Producto'
         verbose_name_plural = 'Empresas de Productos'
         ordering = ['-fecha_creacion']
 
-class Empresaservicio(EmpresaBase):
+class Empresaservicio(Empresa):
     """
-    Modelo para empresas que SOLO ofrecen servicios
+    Proxy para empresas de servicio - usa Empresa con tipo_empresa_valor='servicio'
+    Mantenido para compatibilidad durante la migración
     """
+    objects = EmpresaservicioManager()
+    
     class Meta:
-        db_table = 'empresaservicio'
+        proxy = True
         verbose_name = 'Empresa de Servicio'
         verbose_name_plural = 'Empresas de Servicios'
         ordering = ['-fecha_creacion']
 
-class EmpresaMixta(EmpresaBase):
+class EmpresaMixta(Empresa):
     """
-    Modelo para empresas que ofrecen TANTO productos como servicios
+    Proxy para empresas mixtas - usa Empresa con tipo_empresa_valor='mixta'
+    Mantenido para compatibilidad durante la migración
     """
+    objects = EmpresaMixtaManager()
+    
     class Meta:
-        db_table = 'empresa_mixta'
+        proxy = True
         verbose_name = 'Empresa Mixta'
         verbose_name_plural = 'Empresas Mixtas'
         ordering = ['-fecha_creacion']
+
+# Alias para compatibilidad
+EmpresaBase = Empresa
 
 # MATRIZ DE CLASIFICACIÓN DE PERFIL EXPORTADOR
 class MatrizClasificacionExportador(models.Model):
@@ -554,28 +624,13 @@ class MatrizClasificacionExportador(models.Model):
     Modelo para la matriz de clasificación de perfil exportador
     BASADO EN MATRIZ DE CLASIFICACIÓN DE PERFIL EXPORTADOR.pdf
     """
-    empresa_producto = models.ForeignKey(
-        Empresaproducto,
+    empresa = models.ForeignKey(
+        Empresa,
         on_delete=models.CASCADE,
         related_name='clasificaciones_exportador',
-        verbose_name="Empresa de Producto",
-        null=True,
-        blank=True
-    )
-    empresa_servicio = models.ForeignKey(
-        Empresaservicio,
-        on_delete=models.CASCADE,
-        related_name='clasificaciones_exportador',
-        verbose_name="Empresa de Servicio",
-        null=True,
-        blank=True
-    )
-    empresa_mixta = models.ForeignKey(
-        EmpresaMixta,
-        on_delete=models.CASCADE,
-        related_name='clasificaciones_exportador',
-        verbose_name="Empresa Mixta",
-        null=True,
+        verbose_name="Empresa",
+        help_text="Empresa a la que se aplica esta clasificación",
+        null=True,  # Temporalmente nullable para migración
         blank=True
     )
     
@@ -669,31 +724,18 @@ class MatrizClasificacionExportador(models.Model):
         verbose_name = 'Matriz de Clasificación Exportador'
         verbose_name_plural = 'Matrices de Clasificación Exportador'
         ordering = ['-fecha_evaluacion']
-        # No podemos usar unique_together con múltiples campos opcionales
-        # Se manejará a nivel de aplicación
+        constraints = [
+            models.UniqueConstraint(fields=['empresa'], name='unique_matriz_empresa')
+        ]
     
     def get_empresa(self):
         """Obtener la empresa asociada"""
-        if self.empresa_producto:
-            return self.empresa_producto
-        elif self.empresa_servicio:
-            return self.empresa_servicio
-        elif self.empresa_mixta:
-            return self.empresa_mixta
-        return None
+        return self.empresa
     
     def clean(self):
-        """Validar que solo una empresa esté asignada"""
-        empresas_asignadas = sum([
-            bool(self.empresa_producto),
-            bool(self.empresa_servicio),
-            bool(self.empresa_mixta)
-        ])
-        
-        if empresas_asignadas == 0:
-            raise ValidationError('Debe asignar al menos una empresa')
-        elif empresas_asignadas > 1:
-            raise ValidationError('Solo puede asignar una empresa por clasificación')
+        """Validar que la empresa esté asignada"""
+        if not self.empresa:
+            raise ValidationError('Debe asignar una empresa')
     
     def save(self, *args, **kwargs):
         # Validar antes de guardar
@@ -732,10 +774,12 @@ class ProductoEmpresa(models.Model):
     Modelo para productos específicos de cada empresa
     """
     empresa = models.ForeignKey(
-        Empresaproducto, 
+        Empresa, 
         on_delete=models.CASCADE, 
-        related_name='productos',
-        verbose_name="Empresa"
+        related_name='productos_empresa',
+        verbose_name="Empresa",
+        limit_choices_to={'tipo_empresa_valor__in': ['producto', 'mixta']},
+        help_text="Empresa que ofrece este producto (debe ser tipo producto o mixta)"
     )
     nombre_producto = models.CharField(
         max_length=200, 
@@ -824,10 +868,12 @@ class ServicioEmpresa(models.Model):
     BASADO EN FORMULARIO SERVICIOS - CAMPOS COMPLETOS
     """
     empresa = models.ForeignKey(
-        Empresaservicio, 
+        Empresa, 
         on_delete=models.CASCADE, 
-        related_name='servicios',
-        verbose_name="Empresa"
+        related_name='servicios_empresa',
+        verbose_name="Empresa",
+        limit_choices_to={'tipo_empresa_valor__in': ['servicio', 'mixta']},
+        help_text="Empresa que ofrece este servicio (debe ser tipo servicio o mixta)"
     )
     nombre_servicio = models.CharField(
         max_length=200, 
@@ -1035,10 +1081,12 @@ class ProductoEmpresaMixta(models.Model):
     Modelo para productos de empresas mixtas
     """
     empresa = models.ForeignKey(
-        EmpresaMixta, 
+        Empresa, 
         on_delete=models.CASCADE, 
-        related_name='productos',
-        verbose_name="Empresa Mixta"
+        related_name='productos_mixta',
+        verbose_name="Empresa",
+        limit_choices_to={'tipo_empresa_valor': 'mixta'},
+        help_text="Empresa mixta que ofrece este producto"
     )
     nombre_producto = models.CharField(
         max_length=200, 
@@ -1120,10 +1168,12 @@ class ServicioEmpresaMixta(models.Model):
     BASADO EN FORMULARIO SERVICIOS - CAMPOS COMPLETOS
     """
     empresa = models.ForeignKey(
-        EmpresaMixta, 
+        Empresa, 
         on_delete=models.CASCADE, 
-        related_name='servicios',
-        verbose_name="Empresa Mixta"
+        related_name='servicios_mixta',
+        verbose_name="Empresa",
+        limit_choices_to={'tipo_empresa_valor': 'mixta'},
+        help_text="Empresa mixta que ofrece este servicio"
     )
     nombre_servicio = models.CharField(
         max_length=200, 

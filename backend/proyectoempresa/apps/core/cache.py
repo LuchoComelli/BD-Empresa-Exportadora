@@ -10,8 +10,8 @@ class EmpresaCache:
         empresas = cache.get(cache_key)
         
         if not empresas:
-            from .models import Empresaproducto
-            empresas = Empresaproducto.objects.filter(
+            from apps.empresas.models import Empresa
+            empresas = Empresa.objects.filter(
                 departamento_id=departamento_id
             ).select_related('departamento', 'municipio')
             cache.set(cache_key, empresas, 3600)  # 1 hora

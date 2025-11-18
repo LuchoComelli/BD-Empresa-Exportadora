@@ -135,7 +135,9 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             'razon_social', 'nombre_fantasia', 'tipo_sociedad', 'cuit_cuil',
             'direccion', 'codigo_postal', 'provincia', 'departamento', 'municipio', 'localidad',
             'geolocalizacion', 'telefono', 'correo', 'sitioweb',
-            'tipo_empresa', 'rubro_principal', 'sub_rubro', 'descripcion_actividad',
+            'tipo_empresa', 'rubro_principal', 'sub_rubro', 
+            'rubro_producto', 'sub_rubro_producto', 'rubro_servicio', 'sub_rubro_servicio',
+            'descripcion_actividad',
             'productos', 'servicios', 'actividades_promocion',
             'contacto_principal', 'contactos_secundarios',
             'nombre_contacto', 'cargo_contacto', 'telefono_contacto', 'email_contacto',
@@ -275,11 +277,38 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             # Establecer correo desde contacto principal
             validated_data['correo'] = email_contacto
             
-            # Asegurar descripcion_actividad
-            if not validated_data.get('descripcion_actividad'):
-                rubro = validated_data.get('rubro_principal', '')
-                sub_rubro = validated_data.get('sub_rubro', '')
-                validated_data['descripcion_actividad'] = f"{rubro}{' - ' + sub_rubro if sub_rubro else ''}".strip()
+            # Manejar rubros según el tipo de empresa
+            tipo_empresa = validated_data.get('tipo_empresa', 'producto')
+            
+            if tipo_empresa == 'mixta':
+                # Para empresas mixtas, usar los campos específicos
+                rubro_prod = validated_data.get('rubro_producto', '')
+                sub_rubro_prod = validated_data.get('sub_rubro_producto', '')
+                rubro_serv = validated_data.get('rubro_servicio', '')
+                sub_rubro_serv = validated_data.get('sub_rubro_servicio', '')
+                
+                # Construir descripción de actividad
+                prod_desc = f"{rubro_prod}{' - ' + sub_rubro_prod if sub_rubro_prod else ''}".strip()
+                serv_desc = f"{rubro_serv}{' - ' + sub_rubro_serv if sub_rubro_serv else ''}".strip()
+                
+                if prod_desc and serv_desc:
+                    validated_data['descripcion_actividad'] = f"{prod_desc} / {serv_desc}"
+                elif prod_desc:
+                    validated_data['descripcion_actividad'] = prod_desc
+                elif serv_desc:
+                    validated_data['descripcion_actividad'] = serv_desc
+                
+                # También mantener rubro_principal y sub_rubro para compatibilidad
+                if not validated_data.get('rubro_principal'):
+                    validated_data['rubro_principal'] = f"{rubro_prod}{' / ' + rubro_serv if rubro_serv else ''}".strip()
+                if not validated_data.get('sub_rubro'):
+                    validated_data['sub_rubro'] = f"{sub_rubro_prod}{' / ' + sub_rubro_serv if sub_rubro_serv else ''}".strip() or None
+            else:
+                # Para empresas de producto o servicio únicos, usar rubro_principal y sub_rubro
+                if not validated_data.get('descripcion_actividad'):
+                    rubro = validated_data.get('rubro_principal', '')
+                    sub_rubro = validated_data.get('sub_rubro', '')
+                    validated_data['descripcion_actividad'] = f"{rubro}{' - ' + sub_rubro if sub_rubro else ''}".strip()
             
             # Guardar datos complejos en JSONFields
             validated_data['productos'] = productos

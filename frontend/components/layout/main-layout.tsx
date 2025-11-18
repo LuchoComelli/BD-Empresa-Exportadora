@@ -6,6 +6,7 @@ import { useState } from "react"
 import { Header } from "./header"
 import { Sidebar } from "./sidebar"
 import { Footer } from "./footer"
+import { Toaster } from "@/components/ui/toaster"
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -24,6 +25,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         </main>
       </div>
       <Footer />
+      <Toaster />
     </div>
   )
 }

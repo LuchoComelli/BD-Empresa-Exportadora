@@ -3,14 +3,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
 from .models import (
-    TipoEmpresa, Rubro, UnidadMedida, Otrorubro,
-    Empresaproducto, Empresaservicio, EmpresaMixta,
+    TipoEmpresa, Rubro, SubRubro, UnidadMedida, Otrorubro,
+    Empresa, Empresaproducto, Empresaservicio, EmpresaMixta,  # Proxies para compatibilidad
     ProductoEmpresa, ServicioEmpresa,
     ProductoEmpresaMixta, ServicioEmpresaMixta,
     MatrizClasificacionExportador
 )
 from .serializers import (
-    TipoEmpresaSerializer, RubroSerializer, UnidadMedidaSerializer,
+    TipoEmpresaSerializer, RubroSerializer, SubRubroSerializer, UnidadMedidaSerializer,
     OtrorubroSerializer, EmpresaproductoSerializer, EmpresaproductoListSerializer,
     EmpresaservicioSerializer, EmpresaservicioListSerializer,
     EmpresaMixtaSerializer, EmpresaMixtaListSerializer,
@@ -30,13 +30,24 @@ class TipoEmpresaViewSet(viewsets.ReadOnlyModelViewSet):
 
 class RubroViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para rubros (solo lectura)"""
-    queryset = Rubro.objects.filter(activo=True)
+    queryset = Rubro.objects.filter(activo=True).prefetch_related('subrubros')
     serializer_class = RubroSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ['tipo', 'activo']
     search_fields = ['nombre', 'descripcion']
     ordering_fields = ['orden', 'nombre']
     ordering = ['orden', 'nombre']
+
+
+class SubRubroViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet para sub-rubros (solo lectura)"""
+    queryset = SubRubro.objects.filter(activo=True).select_related('rubro')
+    serializer_class = SubRubroSerializer
+    permission_classes = [permissions.AllowAny]
+    filterset_fields = ['rubro', 'activo']
+    search_fields = ['nombre', 'descripcion']
+    ordering_fields = ['orden', 'nombre']
+    ordering = ['rubro__orden', 'rubro__nombre', 'orden', 'nombre']
 
 
 class UnidadMedidaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -213,13 +224,173 @@ class ServicioEmpresaMixtaViewSet(viewsets.ModelViewSet):
 class MatrizClasificacionExportadorViewSet(viewsets.ModelViewSet):
     """ViewSet para matriz de clasificación de exportador"""
     queryset = MatrizClasificacionExportador.objects.select_related(
-        'empresa_producto', 'empresa_servicio', 'empresa_mixta', 'evaluado_por'
+        'empresa', 'evaluado_por'
     ).all()
     serializer_class = MatrizClasificacionExportadorSerializer
     permission_classes = [permissions.IsAuthenticated, CanManageEmpresas]
-    filterset_fields = ['categoria', 'empresa_producto', 'empresa_servicio', 'empresa_mixta']
+    filterset_fields = ['categoria', 'empresa']
     ordering = ['-fecha_evaluacion']
+    
+    def get_queryset(self):
+        """Filtrar por empresa si se proporciona"""
+        queryset = super().get_queryset()
+        empresa_id = self.request.query_params.get('empresa_id')
+        
+        if empresa_id:
+            queryset = queryset.filter(empresa_id=empresa_id)
+        
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Crear o actualizar matriz de clasificación.
+        Si ya existe una matriz para la empresa, la actualiza.
+        Si no existe, crea una nueva.
+        """
+        from .models import MatrizClasificacionExportador
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Matriz] Recibiendo datos para guardar: {request.data}")
+        
+        # Obtener el ID de la empresa unificada
+        empresa_id = request.data.get('empresa')
+        
+        logger.info(f"[Matriz] ID de empresa recibido: {empresa_id}")
+        
+        if not empresa_id:
+            logger.warning("[Matriz] No se proporcionó ID de empresa")
+            return Response(
+                {'error': 'Debe proporcionar el ID de la empresa'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Buscar si ya existe una matriz para esta empresa
+        matriz_existente = MatrizClasificacionExportador.objects.filter(
+            empresa_id=empresa_id
+        ).first()
+        
+        logger.info(f"[Matriz] Buscando matriz para empresa_id={empresa_id}, encontrada: {matriz_existente is not None}")
+        
+        if matriz_existente:
+            # Actualizar matriz existente
+            logger.info(f"[Matriz] Actualizando matriz existente ID={matriz_existente.id} para empresa")
+            serializer = self.get_serializer(matriz_existente, data=request.data, partial=True)
+            if not serializer.is_valid():
+                logger.error(f"[Matriz] Errores de validación al actualizar: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            self.perform_update(serializer)
+            logger.info(f"[Matriz] Matriz actualizada exitosamente, ID={serializer.instance.id}")
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            # Crear nueva matriz
+            logger.info(f"[Matriz] Creando nueva matriz de clasificación")
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"[Matriz] Errores de validación al crear: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            self.perform_create(serializer)
+            logger.info(f"[Matriz] Matriz creada exitosamente, ID={serializer.instance.id}")
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def perform_create(self, serializer):
         serializer.save(evaluado_por=self.request.user)
+    
+    def perform_update(self, serializer):
+        serializer.save(evaluado_por=self.request.user)
+    
+    @action(detail=False, methods=['get'], url_path='empresa/(?P<empresa_id>[0-9]+)')
+    def obtener_matriz_empresa(self, request, empresa_id=None):
+        """
+        Obtener la matriz de clasificación de una empresa específica
+        """
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        try:
+            empresa_id_int = int(empresa_id)
+        except ValueError:
+            return Response(
+                {'error': 'ID de empresa inválido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Buscar matriz usando el campo empresa unificado
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa_id=empresa_id_int).first()
+            if matriz:
+                serializer = self.get_serializer(matriz)
+                return Response(serializer.data)
+            else:
+                return Response(
+                    {'error': 'No se encontró matriz de clasificación para esta empresa'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al buscar matriz: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'], url_path='calcular-puntajes/(?P<empresa_id>[0-9]+)')
+    def calcular_puntajes(self, request, empresa_id=None):
+        """
+        Calcular automáticamente los puntajes de matriz para una empresa
+        """
+        from .utils import calcular_puntajes_matriz
+        from rest_framework.response import Response
+        from rest_framework import status
+        
+        try:
+            empresa_id_int = int(empresa_id)
+        except ValueError:
+            return Response(
+                {'error': 'ID de empresa inválido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Buscar la empresa usando el modelo unificado
+        try:
+            empresa = Empresa.objects.select_related(
+                'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
+            ).prefetch_related(
+                'productos_empresa__posicion_arancelaria',
+                'productos_mixta__posiciones_arancelarias'
+            ).get(id=empresa_id_int)
+            
+            tipo_empresa = empresa.tipo_empresa_valor
+        except Empresa.DoesNotExist:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Empresa con ID {empresa_id_int} no encontrada")
+            return Response(
+                {'error': f'Empresa con ID {empresa_id_int} no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calcular puntajes
+        resultado = calcular_puntajes_matriz(empresa)
+        puntajes = resultado.get('puntajes', {})
+        opciones = resultado.get('opciones', {})
+        
+        # Calcular puntaje total y categoría
+        puntaje_total = sum(puntajes.values())
+        if puntaje_total >= 12:
+            categoria = 'exportadora'
+        elif puntaje_total >= 6:
+            categoria = 'potencial_exportadora'
+        else:
+            categoria = 'etapa_inicial'
+        
+        return Response({
+            'empresa_id': empresa_id_int,
+            'tipo_empresa': tipo_empresa,
+            'razon_social': empresa.razon_social,
+            'puntajes': puntajes,
+            'opciones': opciones,
+            'puntaje_total': puntaje_total,
+            'puntaje_maximo': 18,
+            'categoria': categoria,
+        })
 

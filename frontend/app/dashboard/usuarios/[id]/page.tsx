@@ -41,6 +41,41 @@ interface Usuario {
   localidad?: string
 }
 
+interface Provincia {
+  id: string
+  nombre: string
+  nombre_completo?: string
+}
+
+interface Departamento {
+  id: string
+  nombre: string
+  nombre_completo?: string
+  provincia: string
+  provincia_nombre?: string
+}
+
+interface Municipio {
+  id: string
+  nombre: string
+  nombre_completo?: string
+  provincia: string
+  provincia_nombre?: string
+  departamento?: string
+  departamento_nombre?: string
+}
+
+interface Localidad {
+  id: string
+  nombre: string
+  provincia: string
+  provincia_nombre?: string
+  departamento: string
+  departamento_nombre?: string
+  municipio?: string
+  municipio_nombre?: string
+}
+
 interface Rol {
   id: number
   nombre: string
@@ -56,11 +91,175 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
   const [isEditing, setIsEditing] = useState(false)
   const [editedData, setEditedData] = useState<Usuario | null>(null)
   const [saving, setSaving] = useState(false)
+  
+  // Estados para datos geográficos
+  const [provincias, setProvincias] = useState<Provincia[]>([])
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([])
+  const [municipios, setMunicipios] = useState<Municipio[]>([])
+  const [localidades, setLocalidades] = useState<Localidad[]>([])
+  const [selectedProvincia, setSelectedProvincia] = useState<string>('')
+  const [selectedDepartamento, setSelectedDepartamento] = useState<string>('')
+  const [selectedMunicipio, setSelectedMunicipio] = useState<string>('')
+  const [selectedLocalidad, setSelectedLocalidad] = useState<string>('')
+  const [loadingGeo, setLoadingGeo] = useState(false)
+  const [provinciaSearched, setProvinciaSearched] = useState(false)
 
+  // Cargar provincias al montar el componente
   useEffect(() => {
+    const loadProvincias = async () => {
+      try {
+        setLoadingGeo(true)
+        const data = await api.getProvincias()
+        const provinciasArray = Array.isArray(data) ? data : (data.results || data)
+        setProvincias(provinciasArray || [])
+        // Si solo hay una provincia, seleccionarla automáticamente
+        if (provinciasArray && provinciasArray.length === 1) {
+          setSelectedProvincia(provinciasArray[0].id)
+        }
+      } catch (error) {
+        console.error('Error cargando provincias:', error)
+        setProvincias([])
+      } finally {
+        setLoadingGeo(false)
+      }
+    }
+    loadProvincias()
     loadUsuario()
     loadRoles()
   }, [resolvedParams.id])
+  
+  // Cargar departamentos cuando se selecciona una provincia
+  useEffect(() => {
+    const loadDepartamentos = async () => {
+      if (!selectedProvincia) {
+        setDepartamentos([])
+        setMunicipios([])
+        setLocalidades([])
+        return
+      }
+      try {
+        setLoadingGeo(true)
+        const data = await api.getDepartamentosPorProvincia(selectedProvincia)
+        const departamentosArray = Array.isArray(data) ? data : (data.results || data)
+        setDepartamentos(departamentosArray || [])
+        
+        // Si el usuario tiene datos geográficos, intentar encontrar el departamento
+        if (usuario?.departamento && departamentosArray.length > 0) {
+          const depto = departamentosArray.find((d: any) => 
+            d.nombre === usuario.departamento || 
+            d.nombre_completo === usuario.departamento
+          )
+          if (depto) {
+            setSelectedDepartamento(depto.id.toString())
+          } else {
+            // Limpiar selecciones dependientes solo si no encontramos el departamento
+            setSelectedDepartamento('')
+            setSelectedMunicipio('')
+            setSelectedLocalidad('')
+            setMunicipios([])
+            setLocalidades([])
+          }
+        } else {
+          // Limpiar selecciones dependientes
+          setSelectedDepartamento('')
+          setSelectedMunicipio('')
+          setSelectedLocalidad('')
+          setMunicipios([])
+          setLocalidades([])
+        }
+      } catch (error) {
+        console.error('Error cargando departamentos:', error)
+        setDepartamentos([])
+      } finally {
+        setLoadingGeo(false)
+      }
+    }
+    loadDepartamentos()
+  }, [selectedProvincia, usuario])
+  
+  // Cargar municipios cuando se selecciona un departamento
+  useEffect(() => {
+    const loadMunicipios = async () => {
+      if (!selectedDepartamento) {
+        setMunicipios([])
+        setLocalidades([])
+        return
+      }
+      try {
+        setLoadingGeo(true)
+        const data = await api.getMunicipiosPorDepartamento(selectedDepartamento)
+        const municipiosArray = Array.isArray(data) ? data : (data.results || data)
+        setMunicipios(municipiosArray || [])
+        // Limpiar selección de localidad
+        setSelectedMunicipio('')
+        setSelectedLocalidad('')
+        
+        // Si no hay municipios, cargar localidades directamente por departamento
+        if (!municipiosArray || municipiosArray.length === 0) {
+          try {
+            const localidadesData = await api.getLocalidadesPorDepartamento(selectedDepartamento)
+            const localidadesArray = Array.isArray(localidadesData) ? localidadesData : (localidadesData.results || localidadesData)
+            setLocalidades(localidadesArray || [])
+          } catch (error) {
+            console.error('Error cargando localidades por departamento:', error)
+            setLocalidades([])
+          }
+        } else {
+          setLocalidades([])
+          
+          // Si el usuario tiene datos geográficos, intentar encontrar el municipio
+          if (usuario?.municipio && municipiosArray.length > 0) {
+            const mun = municipiosArray.find((m: any) => 
+              m.nombre === usuario.municipio || 
+              m.nombre_completo === usuario.municipio
+            )
+            if (mun) {
+              setSelectedMunicipio(mun.id.toString())
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando municipios:', error)
+        setMunicipios([])
+        setLocalidades([])
+      } finally {
+        setLoadingGeo(false)
+      }
+    }
+    loadMunicipios()
+  }, [selectedDepartamento])
+  
+  // Cargar localidades cuando se selecciona un municipio
+  useEffect(() => {
+    const loadLocalidades = async () => {
+      if (!selectedMunicipio) {
+        setLocalidades([])
+        return
+      }
+      try {
+        setLoadingGeo(true)
+        const data = await api.getLocalidadesPorMunicipio(selectedMunicipio)
+        const localidadesArray = Array.isArray(data) ? data : (data.results || data)
+        setLocalidades(localidadesArray || [])
+        // Limpiar selección de localidad
+        setSelectedLocalidad('')
+        
+        // Si el usuario tiene datos geográficos, intentar encontrar la localidad
+        if (usuario?.localidad && localidadesArray.length > 0) {
+          const loc = localidadesArray.find((l: any) => l.nombre === usuario.localidad)
+          if (loc) {
+            setSelectedLocalidad(loc.id.toString())
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando localidades:', error)
+        setLocalidades([])
+      } finally {
+        setLoadingGeo(false)
+      }
+    }
+    loadLocalidades()
+  }, [selectedMunicipio])
 
   const loadUsuario = async () => {
     try {
@@ -68,6 +267,14 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
       const data = await api.getUsuarioById(parseInt(resolvedParams.id))
       setUsuario(data)
       setEditedData(data)
+      
+      // Si el usuario tiene datos geográficos, intentar encontrar y seleccionar la provincia
+      // Esto se hará después de que las provincias se carguen
+      if (data.departamento && provincias.length > 0) {
+        // Buscar la provincia basándose en el departamento del usuario
+        // Primero necesitamos cargar los departamentos para encontrar la provincia
+        // Esto se manejará en el useEffect de departamentos
+      }
     } catch (error: any) {
       console.error("Error loading usuario:", error)
       alert("Error al cargar el usuario. Por favor, intenta nuevamente.")
@@ -76,6 +283,46 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
       setLoading(false)
     }
   }
+  
+  // Efecto para inicializar la selección geográfica cuando se carga el usuario
+  useEffect(() => {
+    const findProvinciaForUsuario = async () => {
+      // Solo ejecutar si tenemos usuario, provincias cargadas, no hay provincia seleccionada y no hemos buscado ya
+      if (!usuario || provincias.length === 0 || selectedProvincia || provinciaSearched) {
+        return
+      }
+      
+      setProvinciaSearched(true)
+      
+      // Si el usuario tiene departamento, buscar en qué provincia está
+      if (usuario.departamento) {
+        // Buscar en todas las provincias hasta encontrar el departamento
+        for (const provincia of provincias) {
+          try {
+            const deptos = await api.getDepartamentosPorProvincia(provincia.id)
+            const deptosArray = Array.isArray(deptos) ? deptos : (deptos.results || deptos)
+            const found = deptosArray.find((d: any) => 
+              d.nombre === usuario.departamento || 
+              d.nombre_completo === usuario.departamento
+            )
+            if (found) {
+              setSelectedProvincia(provincia.id)
+              return // Salir del efecto
+            }
+          } catch (error) {
+            console.error(`Error buscando departamento en provincia ${provincia.id}:`, error)
+          }
+        }
+      }
+      
+      // Si no encontramos el departamento en ninguna provincia pero solo hay una, seleccionarla
+      if (provincias.length === 1) {
+        setSelectedProvincia(provincias[0].id)
+      }
+    }
+    
+    findProvinciaForUsuario()
+  }, [usuario, provincias, selectedProvincia, provinciaSearched])
 
   const loadRoles = async () => {
     try {
@@ -97,6 +344,7 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
       console.error("Error loading roles:", error)
     }
   }
+  
 
   const handleEdit = () => {
     setIsEditing(true)
@@ -113,6 +361,18 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
 
     try {
       setSaving(true)
+      
+      // Obtener nombres de los elementos seleccionados
+      const deptoNombre = selectedDepartamento 
+        ? departamentos.find(d => d.id.toString() === selectedDepartamento)?.nombre || null
+        : null
+      const munNombre = selectedMunicipio
+        ? municipios.find(m => m.id.toString() === selectedMunicipio)?.nombre || null
+        : null
+      const locNombre = selectedLocalidad
+        ? localidades.find(l => l.id.toString() === selectedLocalidad)?.nombre || null
+        : null
+      
       const updateData: any = {
         email: editedData.email,
         nombre: editedData.nombre,
@@ -122,9 +382,9 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
         genero: editedData.genero || null,
         tipo_documento: editedData.tipo_documento || null,
         numero_documento: editedData.numero_documento || null,
-        departamento: editedData.departamento || null,
-        municipio: editedData.municipio || null,
-        localidad: editedData.localidad || null,
+        departamento: deptoNombre,
+        municipio: munNombre,
+        localidad: locNombre,
       }
 
       if (editedData.fecha_nacimiento) {
@@ -457,12 +717,58 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
                   )}
                 </div>
                 <div>
+                  <Label>Provincia</Label>
+                  {isEditing ? (
+                    <Select
+                      value={selectedProvincia}
+                      onValueChange={(value) => {
+                        setSelectedProvincia(value)
+                        setSelectedDepartamento('')
+                        setSelectedMunicipio('')
+                        setSelectedLocalidad('')
+                      }}
+                      disabled={loadingGeo}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar provincia" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {provincias.map((prov) => (
+                          <SelectItem key={prov.id} value={prov.id}>
+                            {prov.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="mt-1 font-semibold">
+                      {provincias.find(p => p.id === selectedProvincia)?.nombre || 'N/A'}
+                    </p>
+                  )}
+                </div>
+                <div>
                   <Label>Departamento</Label>
                   {isEditing ? (
-                    <Input
-                      value={displayData?.departamento || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, departamento: e.target.value } : null)}
-                    />
+                    <Select
+                      value={selectedDepartamento}
+                      onValueChange={(value) => {
+                        setSelectedDepartamento(value)
+                        setSelectedMunicipio('')
+                        setSelectedLocalidad('')
+                      }}
+                      disabled={loadingGeo || !selectedProvincia}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar departamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departamentos.map((depto) => (
+                          <SelectItem key={depto.id} value={depto.id.toString()}>
+                            {depto.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <p className="mt-1 font-semibold">{displayData?.departamento || 'N/A'}</p>
                   )}
@@ -470,10 +776,25 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
                 <div>
                   <Label>Municipio</Label>
                   {isEditing ? (
-                    <Input
-                      value={displayData?.municipio || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, municipio: e.target.value } : null)}
-                    />
+                    <Select
+                      value={selectedMunicipio}
+                      onValueChange={(value) => {
+                        setSelectedMunicipio(value)
+                        setSelectedLocalidad('')
+                      }}
+                      disabled={loadingGeo || !selectedDepartamento}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar municipio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {municipios.map((mun) => (
+                          <SelectItem key={mun.id} value={mun.id.toString()}>
+                            {mun.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <p className="mt-1 font-semibold">{displayData?.municipio || 'N/A'}</p>
                   )}
@@ -481,10 +802,22 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
                 <div>
                   <Label>Localidad</Label>
                   {isEditing ? (
-                    <Input
-                      value={displayData?.localidad || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, localidad: e.target.value } : null)}
-                    />
+                    <Select
+                      value={selectedLocalidad}
+                      onValueChange={(value) => setSelectedLocalidad(value)}
+                      disabled={loadingGeo || (!selectedMunicipio && !selectedDepartamento)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar localidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {localidades.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id.toString()}>
+                            {loc.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <p className="mt-1 font-semibold">{displayData?.localidad || 'N/A'}</p>
                   )}

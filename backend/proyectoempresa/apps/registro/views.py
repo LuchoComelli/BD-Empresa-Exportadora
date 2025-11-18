@@ -322,8 +322,7 @@ def crear_empresa_desde_solicitud(solicitud):
     """
     # Importar modelos de empresas al inicio
     from apps.empresas.models import (
-        Empresaproducto, Empresaservicio, EmpresaMixta,
-        Rubro, TipoEmpresa
+        Empresa, Rubro, TipoEmpresa
     )
     
     # Obtener o crear departamento
@@ -500,25 +499,44 @@ def crear_empresa_desde_solicitud(solicitud):
     if solicitud.catalogo_pdf:
         empresa_kwargs['brochure'] = solicitud.catalogo_pdf
     
-    # Crear empresa según tipo
+    # Crear empresa según tipo usando el modelo unificado
     tipo_empresa_value = solicitud.tipo_empresa or 'producto'
+    empresa_kwargs['tipo_empresa_valor'] = tipo_empresa_value
+    
+    # Establecer campos de auditoría (creado_por y actualizado_por)
+    # Si hay un usuario que aprobó la solicitud, usarlo; sino, usar el usuario de la empresa
+    # Recargar la solicitud para obtener el aprobado_por actualizado
+    solicitud.refresh_from_db()
+    if solicitud.aprobado_por:
+        empresa_kwargs['creado_por'] = solicitud.aprobado_por
+        empresa_kwargs['actualizado_por'] = solicitud.aprobado_por
+    else:
+        empresa_kwargs['creado_por'] = usuario_empresa
+        empresa_kwargs['actualizado_por'] = usuario_empresa
+    
     empresa = None
     
     if tipo_empresa_value == 'producto':
-        empresa = Empresaproducto.objects.create(**empresa_kwargs)
+        empresa = Empresa.objects.create(**empresa_kwargs)
         # Crear productos en la tabla ProductoEmpresa
-        from apps.empresas.models import ProductoEmpresa
+        from apps.empresas.models import ProductoEmpresa, PosicionArancelaria
         if solicitud.productos:
             for producto_data in solicitud.productos:
-                ProductoEmpresa.objects.create(
+                producto = ProductoEmpresa.objects.create(
                     empresa=empresa,
                     nombre_producto=producto_data.get('nombre', ''),
                     descripcion=producto_data.get('descripcion', ''),
                     capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
                 )
+                # Crear posición arancelaria si existe
+                if producto_data.get('posicion_arancelaria'):
+                    PosicionArancelaria.objects.create(
+                        producto=producto,
+                        codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
+                    )
                 
     elif tipo_empresa_value == 'servicio':
-        empresa = Empresaservicio.objects.create(**empresa_kwargs)
+        empresa = Empresa.objects.create(**empresa_kwargs)
         # Crear servicios en la tabla ServicioEmpresa
         from apps.empresas.models import ServicioEmpresa
         if solicitud.servicios_ofrecidos:
@@ -542,17 +560,23 @@ def crear_empresa_desde_solicitud(solicitud):
                     )
                     
     else:  # mixta
-        empresa = EmpresaMixta.objects.create(**empresa_kwargs)
+        empresa = Empresa.objects.create(**empresa_kwargs)
         # Crear productos en ProductoEmpresaMixta
-        from apps.empresas.models import ProductoEmpresaMixta, ServicioEmpresaMixta
+        from apps.empresas.models import ProductoEmpresaMixta, ServicioEmpresaMixta, PosicionArancelariaMixta
         if solicitud.productos:
             for producto_data in solicitud.productos:
-                ProductoEmpresaMixta.objects.create(
+                producto = ProductoEmpresaMixta.objects.create(
                     empresa=empresa,
                     nombre_producto=producto_data.get('nombre', ''),
                     descripcion=producto_data.get('descripcion', ''),
                     capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
                 )
+                # Crear posición arancelaria si existe
+                if producto_data.get('posicion_arancelaria'):
+                    PosicionArancelariaMixta.objects.create(
+                        producto=producto,
+                        codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
+                    )
         # Crear servicios en ServicioEmpresaMixta
         if solicitud.servicios_ofrecidos:
             servicios_data = solicitud.servicios_ofrecidos
@@ -573,5 +597,44 @@ def crear_empresa_desde_solicitud(solicitud):
                         tipo_servicio=servicio_data.get('tipo_servicio', 'otro'),
                         sector_atendido=servicio_data.get('sector_atendido', 'otro'),
                     )
+    
+    # Crear matriz de clasificación automáticamente para la empresa
+    from apps.empresas.models import MatrizClasificacionExportador
+    from apps.empresas.utils import calcular_puntajes_matriz
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Calcular puntajes automáticamente
+        resultado = calcular_puntajes_matriz(empresa)
+        puntajes = resultado.get('puntajes', {})
+        
+        # Crear matriz de clasificación
+        matriz_kwargs = {
+            'experiencia_exportadora': puntajes.get('experiencia_exportadora', 0),
+            'volumen_produccion': puntajes.get('volumen_produccion', 0),
+            'presencia_digital': puntajes.get('presencia_digital', 0),
+            'posicion_arancelaria': puntajes.get('posicion_arancelaria', 0),
+            'participacion_internacionalizacion': puntajes.get('participacion_internacionalizacion', 0),
+            'estructura_interna': puntajes.get('estructura_interna', 0),
+            'interes_exportador': puntajes.get('interes_exportador', 0),
+            'certificaciones_nacionales': puntajes.get('certificaciones_nacionales', 0),
+            'certificaciones_internacionales': puntajes.get('certificaciones_internacionales', 0),
+        }
+        
+        # Asignar la empresa usando el campo unificado
+        matriz_kwargs['empresa'] = empresa
+        
+        # Crear o actualizar matriz (en caso de que ya exista)
+        matriz, created = MatrizClasificacionExportador.objects.update_or_create(
+            empresa=empresa,
+            defaults=matriz_kwargs
+        )
+        
+        logger.info(f"Matriz de clasificación {'creada' if created else 'actualizada'} para empresa ID={empresa.id}, Tipo={tipo_empresa_value}")
+    except Exception as e:
+        logger.error(f"Error al crear matriz de clasificación para empresa ID={empresa.id}: {str(e)}", exc_info=True)
+        # No fallar la creación de la empresa si falla la matriz
     
     return empresa

@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from apps.core.models import TimestampedModel
-from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+from apps.empresas.models import Empresa
 
 User = get_user_model()
 
@@ -58,6 +58,13 @@ class SolicitudRegistro(TimestampedModel):
     )
     rubro_principal = models.CharField(max_length=100, verbose_name="Rubro Principal")
     sub_rubro = models.CharField(max_length=100, blank=True, null=True, verbose_name="Sub-Rubro")
+    
+    # Campos específicos para empresas mixtas (productos y servicios separados)
+    rubro_producto = models.CharField(max_length=100, blank=True, null=True, verbose_name="Rubro de Productos")
+    sub_rubro_producto = models.CharField(max_length=100, blank=True, null=True, verbose_name="Sub-Rubro de Productos")
+    rubro_servicio = models.CharField(max_length=100, blank=True, null=True, verbose_name="Rubro de Servicios")
+    sub_rubro_servicio = models.CharField(max_length=100, blank=True, null=True, verbose_name="Sub-Rubro de Servicios")
+    
     descripcion_actividad = models.TextField(blank=True, null=True, verbose_name="Descripción de la Actividad")
     
     # Datos complejos en JSON
@@ -212,7 +219,7 @@ class SolicitudRegistro(TimestampedModel):
     
     # Empresa creada (si fue aprobada)
     empresa_creada = models.ForeignKey(
-        'empresas.Empresaproducto',
+        'empresas.Empresa',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

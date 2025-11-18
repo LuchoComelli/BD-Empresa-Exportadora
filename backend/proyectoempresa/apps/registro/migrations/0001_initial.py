@@ -54,7 +54,7 @@ class Migration(migrations.Migration):
                 ('actualizado_por', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_actualizados', to=settings.AUTH_USER_MODEL, verbose_name='Actualizado por')),
                 ('aprobado_por', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='solicitudes_aprobadas', to=settings.AUTH_USER_MODEL, verbose_name='Aprobado por')),
                 ('creado_por', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_creados', to=settings.AUTH_USER_MODEL, verbose_name='Creado por')),
-                ('empresa_creada', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='empresas.empresaproducto', verbose_name='Empresa Creada')),
+                ('empresa_creada', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='empresas.empresa', verbose_name='Empresa Creada')),
             ],
             options={
                 'verbose_name': 'Solicitud de Registro',

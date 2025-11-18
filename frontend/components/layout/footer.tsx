@@ -1,25 +1,58 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import api from "@/lib/api"
+
+interface Configuracion {
+  institucion: string
+  email_contacto: string
+  telefono: string
+}
+
 export function Footer() {
+  const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const data = await api.getConfiguracion()
+        setConfiguracion(data)
+      } catch (error) {
+        console.error("Error cargando configuración para footer:", error)
+        // Valores por defecto si falla la carga
+        setConfiguracion({
+          institucion: "Dirección de Intercambio Comercial Internacional y Regional",
+          email_contacto: "contacto@catamarca.gob.ar",
+          telefono: "+54 383 4123456"
+        })
+      }
+    }
+    loadConfig()
+  }, [])
+
+  const institucion = configuracion?.institucion || "Dirección de Intercambio Comercial Internacional y Regional"
+
   return (
-    <footer className="bg-[#222A59] text-white py-6 mt-auto">
-      <div className="container mx-auto px-6">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+    <footer className="bg-[#222A59] text-white py-4 md:py-6 mt-auto">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-3 md:gap-4">
           <div className="text-center md:text-left">
-            <p className="text-sm font-medium">Dirección de Intercambio Comercial Internacional y Regional</p>
-            <p className="text-xs text-white/70">Provincia de Catamarca - Argentina</p>
+            <p className="text-xs md:text-sm font-medium break-words">{institucion}</p>
+            <p className="text-xs text-white/70 mt-1">Provincia de Catamarca - Argentina</p>
           </div>
-          <div className="flex gap-6 text-xs">
-            <a href="#" className="hover:text-white/80 transition-colors">
+          <div className="flex flex-wrap justify-center gap-3 md:gap-6 text-xs">
+            <a href="#" className="hover:text-white/80 transition-colors whitespace-nowrap">
               Términos y Condiciones
             </a>
-            <a href="#" className="hover:text-white/80 transition-colors">
+            <a href="#" className="hover:text-white/80 transition-colors whitespace-nowrap">
               Política de Privacidad
             </a>
-            <a href="#" className="hover:text-white/80 transition-colors">
+            <a href="#" className="hover:text-white/80 transition-colors whitespace-nowrap">
               Contacto
             </a>
           </div>
         </div>
-        <div className="mt-4 text-center text-xs text-white/60">
+        <div className="mt-3 md:mt-4 text-center text-xs text-white/60">
           © {new Date().getFullYear()} Todos los derechos reservados
         </div>
       </div>

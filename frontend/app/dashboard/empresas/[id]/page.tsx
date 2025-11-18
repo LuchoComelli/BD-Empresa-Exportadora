@@ -33,6 +33,7 @@ interface Empresa {
   correo?: string
   sitioweb?: string
   exporta?: string
+  categoria_matriz?: string
   destinoexporta?: string
   importa?: boolean
   certificadopyme?: boolean
@@ -189,9 +190,14 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
-  const getCategoryFromExporta = (exporta?: string): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" => {
-    if (exporta === 'Sí') return "Exportadora"
-    if (exporta === 'En proceso') return "Potencial Exportadora"
+  const getCategoryFromEmpresa = (empresa: Empresa): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" => {
+    // Priorizar categoria_matriz si está disponible
+    if (empresa.categoria_matriz) {
+      return empresa.categoria_matriz as "Exportadora" | "Potencial Exportadora" | "Etapa Inicial"
+    }
+    // Fallback al campo exporta (legacy)
+    if (empresa.exporta === 'Sí' || empresa.exporta === 'si') return "Exportadora"
+    if (empresa.exporta === 'En proceso' || empresa.exporta === 'en-proceso') return "Potencial Exportadora"
     return "Etapa Inicial"
   }
 
@@ -241,7 +247,7 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
     )
   }
 
-  const category = getCategoryFromExporta(empresa.exporta)
+  const category = getCategoryFromEmpresa(empresa)
   const displayData = isEditing ? editedData : empresa
 
   console.log('[Empresa Detail] Rendering with empresa:', empresa)
@@ -258,27 +264,27 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center gap-4 flex-wrap">
-          <Button variant="ghost" size="icon" asChild>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 md:gap-4 flex-wrap">
+          <Button variant="ghost" size="icon" asChild className="flex-shrink-0">
             <Link href="/dashboard/empresas">
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
             </Link>
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Perfil de Empresa</h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-[#222A59] break-words">Perfil de Empresa</h1>
+            <p className="text-xs md:text-sm lg:text-base text-muted-foreground mt-1 break-words">
               {empresa?.razon_social || 'Cargando...'}
             </p>
             {empresa?.id && (
               <p className="text-xs text-muted-foreground mt-1">ID: {empresa.id}</p>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {!isEditing ? (
               <>
-                <Button onClick={handleEdit} variant="outline" className="gap-2">
-                  <Edit className="h-4 w-4" />
-                  Editar
+                <Button onClick={handleEdit} variant="outline" className="gap-2 text-xs md:text-sm">
+                  <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                  <span className="hidden sm:inline">Editar</span>
                 </Button>
                 <div className="relative">
                   <Button 
@@ -393,7 +399,7 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
         </Card>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:w-auto lg:inline-grid">
             <TabsTrigger value="general">Información General</TabsTrigger>
             <TabsTrigger value="comercial">Actividad Comercial</TabsTrigger>
             <TabsTrigger value="productos-servicios">Productos/Servicios</TabsTrigger>

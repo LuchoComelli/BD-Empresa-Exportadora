@@ -20,12 +20,12 @@ export function SectorDistribution({ stats }: SectorDistributionProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-[#222A59]">Distribución por Sector</CardTitle>
+        <CardTitle className="text-[#222A59] text-base md:text-lg">Distribución por Sector</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="p-4 md:p-6">
+        <ResponsiveContainer width="100%" height={250} className="sm:h-[300px] md:h-[350px]">
           <PieChart>
-            <Pie data={data} cx="50%" cy="50%" labelLine={false} outerRadius={100} fill="#8884d8" dataKey="value">
+            <Pie data={data} cx="50%" cy="50%" labelLine={false} outerRadius={80} className="sm:outerRadius-[100px]" fill="#8884d8" dataKey="value">
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}

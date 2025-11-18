@@ -18,6 +18,7 @@ interface Empresa {
   estado: string
   tipo_empresa?: string
   exporta?: string
+  categoria_matriz?: string
   departamento?: string
   provincia?: string
   rubro_principal?: string

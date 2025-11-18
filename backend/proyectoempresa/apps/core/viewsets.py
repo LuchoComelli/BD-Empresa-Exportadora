@@ -2,10 +2,11 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from .models import RolUsuario, Dpto, Municipio, Localidades
+from .models import RolUsuario, Dpto, Municipio, Localidades, ConfiguracionSistema
 from .serializers import (
     RolUsuarioSerializer, UsuarioSerializer, UsuarioListSerializer,
-    DptoSerializer, MunicipioSerializer, LocalidadesSerializer
+    DptoSerializer, MunicipioSerializer, LocalidadesSerializer,
+    ConfiguracionSistemaSerializer
 )
 from .permissions import CanManageUsers
 
@@ -21,6 +22,17 @@ class RolUsuarioViewSet(viewsets.ModelViewSet):
     search_fields = ['nombre', 'descripcion']
     ordering_fields = ['nombre', 'nivel_acceso']
     ordering = ['nivel_acceso', 'nombre']
+    
+    def get_queryset(self):
+        """Filtrar roles para mostrar solo Administrador, Consultor y Analista"""
+        queryset = super().get_queryset()
+        
+        # Filtrar solo roles permitidos para el dashboard
+        queryset = queryset.filter(
+            nombre__in=['Administrador', 'Consultor', 'Analista']
+        )
+        
+        return queryset
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -32,10 +44,40 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     ordering_fields = ['email', 'nombre', 'date_joined']
     ordering = ['-date_joined']
     
+    def get_queryset(self):
+        """Filtrar usuarios para mostrar solo Administrador, Consultor y Analista"""
+        queryset = super().get_queryset()
+        
+        # Filtrar por roles permitidos: Administrador, Consultor, Analista
+        # También incluir superusuarios si tienen rol
+        from django.db.models import Q
+        queryset = queryset.filter(
+            Q(rol__nombre__in=['Administrador', 'Consultor', 'Analista']) |
+            Q(is_superuser=True, rol__isnull=False)
+        )
+        
+        return queryset
+    
     def get_serializer_class(self):
         if self.action == 'list':
             return UsuarioListSerializer
         return UsuarioSerializer
+    
+    def perform_create(self, serializer):
+        """Crear usuario y establecer campos de auditoría"""
+        user = serializer.save()
+        # Si hay un usuario autenticado, establecer creado_por
+        if self.request.user and self.request.user.is_authenticated:
+            # Nota: El modelo Usuario no tiene campos de auditoría directos,
+            # pero podemos registrar esto en logs si es necesario
+            pass
+        return user
+    
+    def perform_update(self, serializer):
+        """Actualizar usuario"""
+        serializer.save()
+        # Si hay un usuario autenticado, podríamos registrar actualizado_por
+        # pero el modelo Usuario no tiene este campo
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
@@ -45,13 +87,14 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageUsers])
     def toggle_active(self, request, pk=None):
-        """Activar/desactivar usuario"""
+        """Activar/desactivar usuario (soft delete)"""
         user = self.get_object()
         user.is_active = not user.is_active
         user.save()
         return Response({
             'status': 'success',
-            'is_active': user.is_active
+            'is_active': user.is_active,
+            'message': f'Usuario {"activado" if user.is_active else "desactivado"} exitosamente'
         })
 
 
@@ -108,4 +151,51 @@ class LocalidadesViewSet(viewsets.ReadOnlyModelViewSet):
         localidades = self.queryset.filter(municipio_id=municipio_id)
         serializer = self.get_serializer(localidades, many=True)
         return Response(serializer.data)
+
+
+class ConfiguracionSistemaViewSet(viewsets.ModelViewSet):
+    """ViewSet para configuración del sistema (singleton)"""
+    queryset = ConfiguracionSistema.objects.all()
+    serializer_class = ConfiguracionSistemaSerializer
+    
+    def get_permissions(self):
+        """Permitir lectura pública, pero solo usuarios autenticados pueden editar"""
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated(), CanManageUsers()]
+    
+    def get_object(self):
+        """Siempre retornar o crear la instancia única (singleton)"""
+        return ConfiguracionSistema.get_config()
+    
+    def list(self, request, *args, **kwargs):
+        """Retornar la configuración única"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Retornar la configuración única"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+    
+    def update(self, request, *args, **kwargs):
+        """Actualizar la configuración única"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
+        serializer.is_valid(raise_exception=True)
+        
+        # Establecer campos de auditoría
+        if hasattr(request.user, 'id'):
+            serializer.save(actualizado_por=request.user)
+        else:
+            serializer.save()
+        
+        return Response(serializer.data)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Actualización parcial de la configuración"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 

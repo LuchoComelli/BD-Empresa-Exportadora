@@ -64,12 +64,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-16 left-0 w-64 bg-white border-r border-border z-40 transition-transform duration-300 lg:translate-x-0 overflow-y-auto",
-          "h-[calc(100vh-4rem-8.5rem)]",
+          "fixed top-14 md:top-16 left-0 w-56 md:w-64 bg-white border-r border-border z-40 transition-transform duration-300 lg:translate-x-0 overflow-y-auto",
+          "h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)]",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <nav className="p-4 space-y-2">
+        <nav className="p-3 md:p-4 space-y-1 md:space-y-2">
           {menuItems.map((item) => {
             const Icon = item.icon
             // Lógica mejorada para detectar la ruta activa
@@ -87,12 +87,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 href={item.href}
                 onClick={onClose}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-lg text-xs md:text-sm font-medium transition-colors",
                   isActive ? "bg-[#222A59] text-white" : "text-foreground hover:bg-muted",
                 )}
               >
-                <Icon className="h-5 w-5" />
-                {item.title}
+                <Icon className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                <span className="truncate">{item.title}</span>
               </Link>
             )
           })}

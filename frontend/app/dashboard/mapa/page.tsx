@@ -61,10 +61,10 @@ export default function MapaPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-[#222A59]">Mapa de Empresas</h1>
-          <p className="text-muted-foreground mt-2">Visualiza la ubicación geográfica de las empresas exportadoras</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Mapa de Empresas</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">Visualiza la ubicación geográfica de las empresas exportadoras</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -74,25 +74,25 @@ export default function MapaPage() {
               <CardDescription>Haz clic en los marcadores para ver detalles de cada empresa</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-muted rounded-lg h-[500px] flex items-center justify-center relative overflow-hidden">
+              <div className="bg-muted rounded-lg h-[300px] md:h-[400px] lg:h-[500px] flex items-center justify-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#629BD2]/20 to-[#3259B5]/20" />
-                <div className="relative z-10 text-center space-y-4">
-                  <MapPin className="h-16 w-16 text-[#3259B5] mx-auto" />
+                <div className="relative z-10 text-center space-y-3 md:space-y-4 px-4">
+                  <MapPin className="h-12 w-12 md:h-16 md:w-16 text-[#3259B5] mx-auto" />
                   <div>
-                    <p className="text-lg font-semibold text-[#222A59]">Mapa de Catamarca</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base md:text-lg font-semibold text-[#222A59]">Mapa de Catamarca</p>
+                    <p className="text-xs md:text-sm text-muted-foreground">
                       Integración con Leaflet para visualización de ubicaciones
                     </p>
                   </div>
-                  <div className="flex gap-4 justify-center flex-wrap">
+                  <div className="flex gap-2 md:gap-4 justify-center flex-wrap">
                     {empresas.map((empresa) => (
                       <button
                         key={empresa.id}
                         onClick={() => setSelectedEmpresa(empresa)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                        className="flex items-center gap-2 px-3 py-2 md:px-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow text-xs md:text-sm"
                       >
-                        <MapPin className="h-4 w-4 text-[#3259B5]" />
-                        <span className="text-sm font-medium">{empresa.nombre}</span>
+                        <MapPin className="h-3 w-3 md:h-4 md:w-4 text-[#3259B5]" />
+                        <span className="font-medium">{empresa.nombre}</span>
                       </button>
                     ))}
                   </div>
@@ -106,47 +106,47 @@ export default function MapaPage() {
               <CardTitle className="text-[#222A59]">Detalles de Empresa</CardTitle>
               <CardDescription>Información de la empresa seleccionada</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 md:space-y-4">
               <div>
-                <h3 className="font-semibold text-lg text-[#222A59]">{selectedEmpresa.nombre}</h3>
-                <Badge className={`mt-2 ${getCategoriaColor(selectedEmpresa.categoria)}`}>
+                <h3 className="font-semibold text-base md:text-lg text-[#222A59]">{selectedEmpresa.nombre}</h3>
+                <Badge className={`mt-2 text-xs md:text-sm ${getCategoriaColor(selectedEmpresa.categoria)}`}>
                   {selectedEmpresa.categoria}
                 </Badge>
               </div>
 
-              <div className="space-y-3 pt-4 border-t">
-                <div className="flex items-start gap-3">
-                  <Building2 className="h-5 w-5 text-[#3259B5] mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Sector</p>
-                    <p className="text-sm text-foreground">{selectedEmpresa.sector}</p>
+              <div className="space-y-2 md:space-y-3 pt-3 md:pt-4 border-t">
+                <div className="flex items-start gap-2 md:gap-3">
+                  <Building2 className="h-4 w-4 md:h-5 md:w-5 text-[#3259B5] mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-medium text-muted-foreground">Sector</p>
+                    <p className="text-xs md:text-sm text-foreground break-words">{selectedEmpresa.sector}</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-[#3259B5] mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Ubicación</p>
-                    <p className="text-sm text-foreground">{selectedEmpresa.ubicacion}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                <div className="flex items-start gap-2 md:gap-3">
+                  <MapPin className="h-4 w-4 md:h-5 md:w-5 text-[#3259B5] mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-medium text-muted-foreground">Ubicación</p>
+                    <p className="text-xs md:text-sm text-foreground break-words">{selectedEmpresa.ubicacion}</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">
                       Lat: {selectedEmpresa.lat}, Lng: {selectedEmpresa.lng}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <Phone className="h-5 w-5 text-[#3259B5] mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Teléfono</p>
-                    <p className="text-sm text-foreground">{selectedEmpresa.telefono}</p>
+                <div className="flex items-start gap-2 md:gap-3">
+                  <Phone className="h-4 w-4 md:h-5 md:w-5 text-[#3259B5] mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-medium text-muted-foreground">Teléfono</p>
+                    <p className="text-xs md:text-sm text-foreground break-words">{selectedEmpresa.telefono}</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <Mail className="h-5 w-5 text-[#3259B5] mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-sm text-foreground">{selectedEmpresa.email}</p>
+                <div className="flex items-start gap-2 md:gap-3">
+                  <Mail className="h-4 w-4 md:h-5 md:w-5 text-[#3259B5] mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-medium text-muted-foreground">Email</p>
+                    <p className="text-xs md:text-sm text-foreground break-all">{selectedEmpresa.email}</p>
                   </div>
                 </div>
               </div>
@@ -159,25 +159,25 @@ export default function MapaPage() {
             <CardTitle className="text-[#222A59]">Leyenda del Mapa</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full bg-[#C3C840]" />
-                <div>
-                  <p className="font-semibold text-sm">Exportadora</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-[#C3C840] flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-xs md:text-sm">Exportadora</p>
                   <p className="text-xs text-muted-foreground">12-18 puntos</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full bg-[#F59E0B]" />
-                <div>
-                  <p className="font-semibold text-sm">Potencial Exportadora</p>
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-[#F59E0B] flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-xs md:text-sm">Potencial Exportadora</p>
                   <p className="text-xs text-muted-foreground">6-11 puntos</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full bg-[#629BD2]" />
-                <div>
-                  <p className="font-semibold text-sm">Etapa Inicial</p>
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-[#629BD2] flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-xs md:text-sm">Etapa Inicial</p>
                   <p className="text-xs text-muted-foreground">0-5 puntos</p>
                 </div>
               </div>

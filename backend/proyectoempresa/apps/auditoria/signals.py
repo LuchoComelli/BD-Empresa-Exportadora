@@ -4,14 +4,14 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.core.exceptions import ObjectDoesNotExist
 from .models import AuditoriaLog
 from apps.core.models import Usuario
-from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+from apps.empresas.models import Empresa
 
 @receiver(pre_save)
 def log_pre_save(sender, instance, **kwargs):
     """
     Registrar cambios antes de guardar
     """
-    if sender in [Empresaproducto, Empresaservicio, EmpresaMixta]:
+    if sender == Empresa:
         try:
             old_instance = sender.objects.get(pk=instance.pk)
             instance._old_values = {
@@ -26,7 +26,7 @@ def log_post_save(sender, instance, created, **kwargs):
     """
     Registrar cambios después de guardar
     """
-    if sender in [Empresaproducto, Empresaservicio, EmpresaMixta]:
+    if sender == Empresa:
         action = 'CREATE' if created else 'UPDATE'
         
         # Obtener usuario actual (si está disponible)
@@ -61,7 +61,7 @@ def log_post_delete(sender, instance, **kwargs):
     """
     Registrar eliminaciones
     """
-    if sender in [Empresaproducto, Empresaservicio, EmpresaMixta]:
+    if sender == Empresa:
         # Obtener usuario actual (si está disponible)
         usuario = None
         
