@@ -29,6 +29,32 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
 
   useEffect(() => {
     setMounted(true)
+    
+    // Agregar estilos CSS para limitar el z-index del mapa
+    const style = document.createElement('style')
+    style.textContent = `
+      #location-picker-map .leaflet-container {
+        z-index: 0 !important;
+      }
+      #location-picker-map .leaflet-control-container {
+        z-index: 1 !important;
+      }
+      #location-picker-map .leaflet-top,
+      #location-picker-map .leaflet-bottom {
+        z-index: 1 !important;
+      }
+      #location-picker-map .leaflet-pane {
+        z-index: 0 !important;
+      }
+      #location-picker-map .leaflet-control {
+        z-index: 1 !important;
+      }
+    `
+    document.head.appendChild(style)
+    
+    return () => {
+      document.head.removeChild(style)
+    }
   }, [])
 
   useEffect(() => {
@@ -146,7 +172,11 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
 
   return (
     <div className="space-y-3">
-      <div id="location-picker-map" className="h-[300px] md:h-[400px] rounded-lg border shadow-sm w-full" />
+      <div 
+        id="location-picker-map" 
+        className="h-[300px] md:h-[400px] rounded-lg border shadow-sm w-full relative z-0"
+        style={{ isolation: 'isolate' }}
+      />
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs md:text-sm text-muted-foreground">
         <MapPin className="h-4 w-4 text-[#3259B5] flex-shrink-0" />
         <span className="break-words">

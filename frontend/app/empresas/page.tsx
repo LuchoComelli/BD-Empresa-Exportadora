@@ -36,7 +36,7 @@ export default function EmpresasPage() {
               Exportar
             </Button>
             <Button className="gap-2 bg-[#3259B5] hover:bg-[#222A59] text-sm" asChild>
-              <Link href="/empresas/nueva">
+              <Link href="/dashboard/nueva-empresa">
                 <Plus className="h-4 w-4" />
                 Nueva Empresa
               </Link>

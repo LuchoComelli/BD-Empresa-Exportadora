@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { UserPlus, Search, MoreVertical, Mail, Shield, Eye, Edit, UserX, Loader2 } from "lucide-react"
+import { UserPlus, Search, MoreVertical, Mail, Shield, Eye, Edit, UserX, Loader2, AlertCircle } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import api from "@/lib/api"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 import {
   Dialog,
   DialogContent,
@@ -46,8 +47,29 @@ interface Rol {
 
 export default function UsuariosPage() {
   const router = useRouter()
+  const { user, isLoading: authLoading } = useAuth()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [roles, setRoles] = useState<Rol[]>([])
+  
+  // Verificar si el usuario es admin
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login")
+        return
+      }
+      
+      const isAdmin = user.is_superuser || 
+                     user.type === "admin" ||
+                     user.rol?.nombre?.toLowerCase().includes("admin") ||
+                     user.rol?.nombre?.toLowerCase().includes("administrador")
+      
+      if (!isAdmin) {
+        router.push("/dashboard")
+        return
+      }
+    }
+  }, [user, authLoading, router])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -341,6 +363,51 @@ export default function UsuariosPage() {
     administradores: usuarios.filter((u) => 
       u.rol_nombre?.toLowerCase() === 'administrador' || u.rol_nombre?.toLowerCase() === 'superusuario'
     ).length,
+  }
+
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-[#3259B5] mx-auto mb-4" />
+            <p className="text-muted-foreground">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar si el usuario es admin
+  const isAdmin = user.is_superuser || 
+                 user.type === "admin" ||
+                 user.rol?.nombre?.toLowerCase().includes("admin") ||
+                 user.rol?.nombre?.toLowerCase().includes("administrador")
+
+  if (!isAdmin) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-[400px]">
+          <Card className="max-w-md">
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+                <div>
+                  <h2 className="text-xl font-bold text-[#222A59] mb-2">Acceso Denegado</h2>
+                  <p className="text-sm text-muted-foreground">
+                    No tienes permisos para acceder a esta página. Solo los administradores pueden gestionar usuarios.
+                  </p>
+                </div>
+                <Button onClick={() => router.push("/dashboard")} className="mt-4">
+                  Volver al Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </MainLayout>
+    )
   }
 
   return (

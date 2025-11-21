@@ -5,7 +5,7 @@ from .viewsets import (
     EmpresaproductoViewSet, EmpresaservicioViewSet, EmpresaMixtaViewSet,
     ProductoEmpresaViewSet, ServicioEmpresaViewSet,
     ProductoEmpresaMixtaViewSet, ServicioEmpresaMixtaViewSet,
-    MatrizClasificacionExportadorViewSet
+    PosicionArancelariaViewSet, MatrizClasificacionExportadorViewSet
 )
 
 router = DefaultRouter()
@@ -21,6 +21,7 @@ router.register(r'productos', ProductoEmpresaViewSet, basename='producto')
 router.register(r'servicios', ServicioEmpresaViewSet, basename='servicio')
 router.register(r'productos-mixta', ProductoEmpresaMixtaViewSet, basename='producto-mixta')
 router.register(r'servicios-mixta', ServicioEmpresaMixtaViewSet, basename='servicio-mixta')
+router.register(r'posiciones-arancelarias', PosicionArancelariaViewSet, basename='posicion-arancelaria')
 router.register(r'matriz-clasificacion', MatrizClasificacionExportadorViewSet, basename='matriz-clasificacion')
 
 urlpatterns = [

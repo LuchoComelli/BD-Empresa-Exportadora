@@ -510,10 +510,10 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         fecha_limite = timezone.now() - timedelta(days=30)
         recientes_30_dias = queryset.filter(fecha_creacion__gte=fecha_limite).count()
         
-        # Estadísticas por tipo de empresa
-        tipo_producto = queryset.filter(tipo_empresa='producto').count()
-        tipo_servicio = queryset.filter(tipo_empresa='servicio').count()
-        tipo_mixta = queryset.filter(tipo_empresa='mixta').count()
+        # Estadísticas por tipo de empresa (contar desde empresas aprobadas, no solicitudes)
+        tipo_producto = empresas_aprobadas.filter(tipo_empresa_valor='producto').count()
+        tipo_servicio = empresas_aprobadas.filter(tipo_empresa_valor='servicio').count()
+        tipo_mixta = empresas_aprobadas.filter(tipo_empresa_valor='mixta').count()
         
         # Estadísticas de certificación
         con_certificado_pyme = queryset.filter(certificado_pyme='si').count()
@@ -573,17 +573,13 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         """Obtener estadísticas públicas de empresas aprobadas"""
         from apps.empresas.models import Empresa
         
-        # Contar empresas aprobadas (estado='aprobada')
-        solicitudes_aprobadas = self.get_queryset().filter(estado='aprobada')
-        total_empresas_registradas = solicitudes_aprobadas.count()
+        # Contar todas las empresas registradas usando el modelo unificado Empresa
+        # Esto incluye empresas creadas desde solicitudes aprobadas y empresas creadas directamente desde el dashboard
+        total_empresas_registradas = Empresa.objects.all().count()
         
         # Contar empresas exportadoras usando el modelo unificado
+        # Las empresas exportadoras son las que tienen exporta='Sí'
         total_empresas_exportadoras = Empresa.objects.filter(exporta='Sí').count()
-        
-        # Si no hay empresas aprobadas como empresas, usar datos de solicitudes
-        if total_empresas_exportadoras == 0:
-            empresas_exportadoras_solicitudes = solicitudes_aprobadas.filter(exporta='si').count()
-            total_empresas_exportadoras = empresas_exportadoras_solicitudes
         
         return Response({
             'total_empresas_registradas': total_empresas_registradas,

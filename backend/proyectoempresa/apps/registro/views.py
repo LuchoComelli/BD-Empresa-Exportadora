@@ -473,6 +473,12 @@ def crear_empresa_desde_solicitud(solicitud):
         )
     
     # Preparar datos comunes para la empresa
+    # Truncar valores que puedan exceder límites de campos
+    exporta_value = 'Sí' if solicitud.exporta == 'si' else ('No, solo ventas nacionales' if solicitud.exporta == 'no' else 'No, solo ventas locales')
+    # Asegurar que no exceda 50 caracteres
+    if len(exporta_value) > 50:
+        exporta_value = exporta_value[:50]
+    
     empresa_kwargs = {
         'razon_social': solicitud.razon_social,
         'cuit_cuil': solicitud.cuit_cuil,
@@ -483,13 +489,17 @@ def crear_empresa_desde_solicitud(solicitud):
         'telefono': solicitud.telefono,
         'correo': solicitud.correo,
         'sitioweb': solicitud.sitioweb,
-        'exporta': 'Sí' if solicitud.exporta == 'si' else 'No, solo ventas nacionales',
-        'destinoexporta': solicitud.destino_exportacion,
+        'exporta': exporta_value,
+        'destinoexporta': solicitud.destino_exportacion[:200] if solicitud.destino_exportacion else None,  # Truncar si excede 200
         'importa': True if solicitud.importa == 'si' else False,
         'certificadopyme': True if solicitud.certificado_pyme == 'si' else False,
-        'certificaciones': solicitud.certificaciones,
+        'certificaciones': solicitud.certificaciones[:500] if solicitud.certificaciones else None,  # Truncar si excede 500
         'promo2idiomas': True if solicitud.material_promocional_idiomas == 'si' else False,
-        'idiomas_trabaja': solicitud.idiomas_trabajo,
+        'idiomas_trabaja': (solicitud.idiomas_trabajo[:100] if solicitud.idiomas_trabajo else None),  # Truncar si excede 100
+        'contacto_principal_nombre': (solicitud.nombre_contacto[:100] if solicitud.nombre_contacto else ''),
+        'contacto_principal_cargo': (solicitud.cargo_contacto[:100] if solicitud.cargo_contacto else ''),
+        'contacto_principal_telefono': (solicitud.telefono_contacto[:20] if solicitud.telefono_contacto else ''),
+        'contacto_principal_email': (solicitud.email_contacto or solicitud.correo),
         'id_usuario': usuario_empresa,
         'id_rubro': rubro,
         'tipo_empresa': tipo_empresa,

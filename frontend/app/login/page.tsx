@@ -3,13 +3,14 @@
 import type React from "react"
 
 import { useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Building2, Mail, Lock, ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { Mail, Lock, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
@@ -42,11 +43,19 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-[#222A59] via-[#3259B5] to-[#629BD2] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6 md:mb-8">
-          <Link href="/" className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-xl flex items-center justify-center shadow-lg">
-              <Building2 className="w-8 h-8 md:w-10 md:h-10 text-[#222A59]" />
-            </div>
-          </Link>
+          <div className="mb-0">
+            <Link href="/" className="inline-flex p-0 hover:opacity-90 transition-opacity w-fit h-fit">
+              <div className="relative w-24 h-24 md:w-32 md:h-32">
+                <Image
+                  src="/logo.png"
+                  alt="Logo Catamarca"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            </Link>
+          </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Bienvenido</h1>
           <p className="text-sm md:text-base text-white/90">Dirección de Intercambio Comercial Internacional y Regional</p>
           <p className="text-xs md:text-sm text-white/80">Provincia de Catamarca</p>
@@ -146,7 +155,7 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-xs text-center text-[#6B7280]">¿Necesitas ayuda? Contacta a soporte técnico</p>
             <p className="text-xs text-center text-[#3259B5] font-medium mt-1 break-all">
-              soporte@desarrolloproductivo.catamarca.gob.ar
+            intercambiocomercial@catamarca.gov.ar
             </p>
           </div>
         </Card>

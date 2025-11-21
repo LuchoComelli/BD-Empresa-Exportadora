@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Eye } from "lucide-react"
+import Link from "next/link"
 
 interface Company {
   id: number
@@ -96,8 +97,14 @@ export function RecentCompaniesTable({ companies }: RecentCompaniesTableProps) {
                       {new Date(company.fecha).toLocaleDateString("es-AR")}
                     </td>
                     <td className="py-2 md:py-3 px-2 md:px-4 text-right">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-3 w-3 md:h-4 md:w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        asChild
+                      >
+                        <a href={`/dashboard/empresas/${company.id}`}>
+                          <Eye className="h-3 w-3 md:h-4 md:w-4" />
+                        </a>
                       </Button>
                     </td>
                   </tr>

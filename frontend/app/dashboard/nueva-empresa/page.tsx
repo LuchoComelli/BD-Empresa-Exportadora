@@ -3,18 +3,20 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { MainLayout } from "@/components/layout/main-layout"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Building2, ArrowLeft, CheckCircle2, ArrowRight, Plus, X } from "lucide-react"
+import { ArrowLeft, CheckCircle2, ArrowRight, Plus, X } from "lucide-react"
 import { LocationPicker } from "@/components/map/location-picker"
 import { api } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/auth-context"
+import Link from "next/link"
 
 interface ContactoSecundario {
   id: string
@@ -56,11 +58,13 @@ interface ServicioOfrecido {
   equipoTecnico: string
 }
 
-export default function RegistroPage() {
+export default function NuevaEmpresaPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const [tipoNegocio, setTipoNegocio] = useState<"productos" | "servicios" | "ambos">("productos")
+  const [loading, setLoading] = useState(false)
   
   // Estados para datos geográficos
   const [provincias, setProvincias] = useState<any[]>([])
@@ -151,7 +155,6 @@ export default function RegistroPage() {
       try {
         setLoadingGeografia(true)
         const data = await api.getProvincias()
-        // Manejar respuesta paginada o directa
         const provinciasArray = Array.isArray(data) ? data : (data.results || data)
         setProvincias(provinciasArray || [])
       } catch (error) {
@@ -176,7 +179,6 @@ export default function RegistroPage() {
       try {
         setLoadingGeografia(true)
         const data = await api.getDepartamentosPorProvincia(formData.provincia)
-        // Manejar respuesta paginada o directa
         const departamentosArray = Array.isArray(data) ? data : (data.results || data)
         setDepartamentos(departamentosArray || [])
         // Solo resetear si el departamento actual no pertenece a la nueva provincia
@@ -210,7 +212,6 @@ export default function RegistroPage() {
       try {
         setLoadingGeografia(true)
         const data = await api.getMunicipiosPorDepartamento(formData.departamento)
-        // Manejar respuesta paginada o directa
         const municipiosArray = Array.isArray(data) ? data : (data.results || data)
         setMunicipios(municipiosArray || [])
         // Solo resetear si el municipio actual no pertenece al nuevo departamento
@@ -222,7 +223,6 @@ export default function RegistroPage() {
           return prev
         })
         
-        // Si no hay municipios, cargar localidades directamente por departamento
         if (!municipiosArray || municipiosArray.length === 0) {
           try {
             const localidadesData = await api.getLocalidadesPorDepartamento(formData.departamento)
@@ -256,7 +256,6 @@ export default function RegistroPage() {
       try {
         setLoadingGeografia(true)
         const data = await api.getLocalidadesPorMunicipio(formData.municipio)
-        // Manejar respuesta paginada o directa
         const localidadesArray = Array.isArray(data) ? data : (data.results || data)
         setLocalidades(localidadesArray || [])
         // Solo resetear si la localidad actual no pertenece al nuevo municipio
@@ -305,7 +304,6 @@ export default function RegistroPage() {
           setRubrosServicios(rubrosServArray || [])
           setRubros([])
         }
-        // Limpiar selecciones
         setFormData(prev => ({ 
           ...prev, 
           rubro: "", 
@@ -401,308 +399,374 @@ export default function RegistroPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     
     try {
-      // Mapear tipo de negocio
-      const tipoEmpresaMap: Record<string, string> = {
-        productos: 'producto',
-        servicios: 'servicio',
-        ambos: 'mixta'
+      // Validar usuario autenticado
+      if (!user || !user.id) {
+        toast({
+          title: "Error",
+          description: "Debes estar autenticado para crear una empresa",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
       }
       
-      // Validar campos críticos ANTES de preparar datos
+      // Validar contacto principal
+      if (!contactoPrincipal.nombre || !contactoPrincipal.cargo || !contactoPrincipal.telefono || !contactoPrincipal.email) {
+        toast({
+          title: "Error",
+          description: "Por favor, completa todos los campos del contacto principal",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+      
+      // Validar campos críticos
       if (!formData.direccion || formData.direccion.trim() === '') {
         toast({
-          title: "Campo requerido",
+          title: "Error",
           description: "Por favor, completa el campo de Dirección",
           variant: "destructive",
         })
+        setLoading(false)
         return
       }
       if (!formData.departamento || formData.departamento.trim() === '') {
         toast({
-          title: "Campo requerido",
+          title: "Error",
           description: "Por favor, completa el campo de Departamento",
           variant: "destructive",
         })
+        setLoading(false)
         return
       }
       
       // Validar rubros según el tipo de empresa
       if (tipoNegocio === 'ambos') {
-        // Para empresas mixtas, validar que se hayan seleccionado rubros y subrubros de productos y servicios
         if (!formData.rubroProducto) {
           toast({
-            title: "Campo requerido",
+            title: "Error",
             description: "Por favor, selecciona el rubro de productos",
             variant: "destructive",
           })
+          setLoading(false)
           return
         }
         if (!formData.subRubroProducto) {
           toast({
-            title: "Campo requerido",
+            title: "Error",
             description: "Por favor, selecciona el sub-rubro de productos",
             variant: "destructive",
           })
+          setLoading(false)
           return
         }
         if (!formData.rubroServicio) {
           toast({
-            title: "Campo requerido",
+            title: "Error",
             description: "Por favor, selecciona el rubro de servicios",
             variant: "destructive",
           })
+          setLoading(false)
           return
         }
         if (!formData.subRubroServicio) {
           toast({
-            title: "Campo requerido",
+            title: "Error",
             description: "Por favor, selecciona el sub-rubro de servicios",
             variant: "destructive",
           })
+          setLoading(false)
           return
         }
       } else {
-        // Para empresas de producto o servicio únicos
         if (!formData.rubro) {
           toast({
-            title: "Campo requerido",
+            title: "Error",
             description: "Por favor, selecciona el rubro",
             variant: "destructive",
           })
+          setLoading(false)
           return
         }
         if (!formData.subRubro) {
           toast({
-            title: "Campo requerido",
+            title: "Error",
             description: "Por favor, selecciona el sub-rubro",
             variant: "destructive",
           })
+          setLoading(false)
           return
         }
       }
       
-      // Preparar FormData para enviar archivos
-      const formDataToSend = new FormData()
+      // Preparar datos base de la empresa
+      const rubroId = tipoNegocio === 'ambos' 
+        ? formData.rubroProducto // Para mixtas, usar el rubro de productos como principal
+        : formData.rubro
       
-      // Preparar datos para enviar al backend
-      const registrationData: any = {
+      // Determinar tipo_empresa_valor
+      const tipoEmpresaValor = tipoNegocio === 'productos' ? 'producto' : (tipoNegocio === 'servicios' ? 'servicio' : 'mixta')
+      
+      // Obtener TipoEmpresa
+      let tipoEmpresaId: number = 1 // Valor por defecto
+      try {
+        const tiposEmpresa = await api.get<any>('/empresas/tipos-empresa/')
+        const tiposArray = Array.isArray(tiposEmpresa) ? tiposEmpresa : (tiposEmpresa.results || tiposEmpresa)
+        const tipoEmpresa = tiposArray.find((t: any) => 
+          t.nombre.toLowerCase() === tipoEmpresaValor || 
+          (tipoEmpresaValor === 'producto' && t.nombre.toLowerCase().includes('producto')) ||
+          (tipoEmpresaValor === 'servicio' && t.nombre.toLowerCase().includes('servicio')) ||
+          (tipoEmpresaValor === 'mixta' && t.nombre.toLowerCase().includes('mixt'))
+        )
+        if (tipoEmpresa) {
+          tipoEmpresaId = tipoEmpresa.id
+        } else if (tiposArray.length > 0) {
+          tipoEmpresaId = tiposArray[0].id
+        }
+      } catch (error) {
+        console.error('Error obteniendo tipos de empresa:', error)
+        // Usar valor por defecto
+      }
+      
+      // Validar que se haya seleccionado un departamento
+      if (!formData.departamento || String(formData.departamento).trim() === '') {
+        toast({
+          title: "Error",
+          description: "Por favor, selecciona un departamento",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+      
+      // Los códigos de geografía se envían como strings directamente
+      // El backend los convertirá usando las funciones helper
+      const departamentoCodigo = String(formData.departamento).trim()
+      const municipioCodigo = formData.municipio ? String(formData.municipio).trim() : null
+      const localidadCodigo = formData.localidad ? String(formData.localidad).trim() : null
+      
+      // Validar y limpiar URL del sitio web
+      let sitioWebValido: string | null = null
+      if (formData.paginaWeb && formData.paginaWeb.trim() !== '') {
+        const url = formData.paginaWeb.trim()
+        // Si no empieza con http:// o https://, agregarlo
+        if (!url.match(/^https?:\/\//i)) {
+          sitioWebValido = `https://${url}`
+        } else {
+          sitioWebValido = url
+        }
+        // Validar formato básico de URL
+        try {
+          new URL(sitioWebValido)
+        } catch {
+          sitioWebValido = null // Si no es una URL válida, enviar null
+        }
+      }
+      
+      const baseEmpresaData: any = {
         razon_social: formData.razonSocial,
         nombre_fantasia: formData.nombreFantasia || null,
         tipo_sociedad: formData.tipoSociedad || null,
         cuit_cuil: formData.cuit,
-        tipo_empresa: tipoEmpresaMap[tipoNegocio] || 'producto',
-        // Para empresas mixtas, enviar campos separados
-        ...(tipoNegocio === 'ambos' ? {
-          rubro_producto: rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || '',
-          sub_rubro_producto: subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || null,
-          rubro_servicio: rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || '',
-          sub_rubro_servicio: subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || null,
-          // Mantener rubro_principal y sub_rubro para compatibilidad (se generan en el backend)
-          rubro_principal: '',
-          sub_rubro: null,
-        } : {
-          rubro_principal: rubros.find(r => String(r.id) === formData.rubro)?.nombre || '',
-          sub_rubro: subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || null,
-          rubro_producto: null,
-          sub_rubro_producto: null,
-          rubro_servicio: null,
-          sub_rubro_servicio: null,
-        }),
-        descripcion_actividad: tipoNegocio === 'ambos'
-          ? (() => {
-              const rubroProd = rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || ''
-              const subProd = subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || ''
-              const rubroServ = rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || ''
-              const subServ = subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || ''
-              const prod = rubroProd ? `${rubroProd}${subProd ? ' - ' + subProd : ''}` : ''
-              const serv = rubroServ ? `${rubroServ}${subServ ? ' - ' + subServ : ''}` : ''
-              return `${prod}${prod && serv ? ' / ' : ''}${serv}`.trim()
-            })()
-          : (() => {
-              const rubro = rubros.find(r => String(r.id) === formData.rubro)?.nombre || ''
-              const subrubro = subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || ''
-              return rubro ? `${rubro}${subrubro ? ' - ' + subrubro : ''}` : ''
-            })(),
-        direccion: formData.direccion ? String(formData.direccion).trim() : '',
+        id_rubro: parseInt(String(rubroId)),
+        direccion: formData.direccion.trim(),
         codigo_postal: formData.codigoPostal || null,
         provincia: formData.provincia || null,
-        // Los códigos de geografía se envían como strings directamente
-        // El backend los convertirá usando las funciones helper
-        departamento: formData.departamento ? String(formData.departamento).trim() : null,
-        municipio: formData.municipio ? String(formData.municipio).trim() : null,
-        localidad: formData.localidad ? String(formData.localidad).trim() : null,
+        departamento: departamentoCodigo,
+        municipio: municipioCodigo,
+        localidad: localidadCodigo,
         geolocalizacion: formData.geolocalizacion || null,
         telefono: contactoPrincipal.telefono,
-        correo: contactoPrincipal.email, // Email principal de la empresa (del contacto principal)
-        sitioweb: (() => {
-          // Validar y limpiar URL del sitio web
-          if (formData.paginaWeb && formData.paginaWeb.trim() !== '') {
-            const url = formData.paginaWeb.trim()
-            // Si no empieza con http:// o https://, agregarlo
-            let urlCompleta = url
-            if (!url.match(/^https?:\/\//i)) {
-              urlCompleta = `https://${url}`
-            }
-            // Validar formato básico de URL
-            try {
-              new URL(urlCompleta)
-              return urlCompleta
-            } catch {
-              return null // Si no es una URL válida, enviar null
-            }
-          }
-          return null
-        })(),
+        correo: contactoPrincipal.email,
+        sitioweb: sitioWebValido,
         instagram: formData.instagram || null,
         facebook: formData.facebook || null,
         linkedin: formData.linkedin || null,
-        contacto_principal: {
-          nombre: contactoPrincipal.nombre,
-          cargo: contactoPrincipal.cargo,
-          telefono: contactoPrincipal.telefono,
-          email: contactoPrincipal.email,
-        },
-        contactos_secundarios: contactosSecundarios.map(c => ({
-          nombre: c.nombre,
-          cargo: c.cargo,
-          telefono: c.telefono,
-          email: c.email,
-        })),
-        productos: tipoNegocio === "servicios" ? [] : productos.map(p => ({
-          nombre: p.nombre,
-          posicion_arancelaria: p.posicionArancelaria,
-          descripcion: p.descripcion,
-          capacidad_productiva: p.capacidadProductiva ? parseFloat(p.capacidadProductiva.replace(/,/g, '')) : null,
-          unidad_medida: p.unidadMedida || "kg",
-        })),
-        servicios: tipoNegocio === "productos" ? null : servicios.length > 0 ? servicios.map(s => ({
-          nombre: s.descripcion || 'Servicio',
-          descripcion: s.descripcion,
-          tipo_servicio: s.tipoServicio.join(', '),
-          sector_atendido: s.sectores.join(', '),
-          alcance_geografico: s.alcanceGeografico,
-          paises_destino: s.paisesDestino,
-          exporta_servicios: s.exportaServicios,
-          interes_exportar: s.interesExportar,
-          idiomas: s.idiomas.join(', '),
-          forma_contratacion: s.formaContratacion.join(', '),
-          certificaciones_tecnicas: s.certificacionesTecnicas,
-          equipo_tecnico: s.equipoTecnico,
-        })) : null,
-        actividades_promocion: actividadesPromocion.map(a => ({
-          tipo: a.tipo,
-          lugar: a.lugar,
-          anio: a.anio,
-          observaciones: a.observaciones || '',
-        })),
-        exporta: formData.exporta || null,
-        destino_exportacion: formData.destinoExportacion || null,
-        importa: formData.importa || null,
-        tipo_importacion: formData.importa === 'si' ? 'Importación' : null,
-        certificado_pyme: formData.certificadoMiPyme || null,
+        exporta: formData.exporta === 'si' ? 'Sí' : (formData.exporta === 'en-proceso' ? 'En proceso' : 'No, solo ventas nacionales'),
+        destinoexporta: formData.destinoExportacion || null,
+        importa: formData.importa === 'si',
+        certificadopyme: formData.certificadoMiPyme === 'si' || formData.certificadoMiPyme === 'vigente',
         certificaciones: formData.certificaciones || null,
-        brochure_url: formData.brochureUrl || null,
-        material_promocional_idiomas: formData.materialPromocion || null,
-        idiomas_trabajo: servicios && servicios.length > 0 ? servicios.map(s => s.idiomas.join(', ')).join(', ') || null : null,
+        promo2idiomas: formData.materialPromocion === 'si',
         observaciones: formData.observaciones || null,
+        // Campos de contacto principal (requeridos)
+        contacto_principal_nombre: contactoPrincipal.nombre,
+        contacto_principal_cargo: contactoPrincipal.cargo,
+        contacto_principal_telefono: contactoPrincipal.telefono,
+        contacto_principal_email: contactoPrincipal.email,
+        // Campos de tipo de empresa (requeridos)
+        tipo_empresa_valor: tipoEmpresaValor,
+        tipo_empresa: tipoEmpresaId,
+        // Usuario actual (requerido)
+        id_usuario: user.id,
       }
       
-      // Agregar todos los campos al FormData - asegurarse de que se envíen TODOS
-      for (const [key, value] of Object.entries(registrationData)) {
-        if (value === null || value === undefined) {
-          continue
-        }
+      
+      // Crear empresa según el tipo
+      let empresaCreada: any
+      
+      if (tipoNegocio === 'productos') {
+        // Crear empresa de productos
+        empresaCreada = await api.post<any>('/empresas/empresas-producto/', baseEmpresaData)
         
-        if (typeof value === 'object' && !(value instanceof File) && !Array.isArray(value)) {
-          // Para objetos, convertir a JSON string
-          formDataToSend.append(key, JSON.stringify(value))
-        } else if (Array.isArray(value)) {
-          // Para arrays, convertir a JSON string
-          formDataToSend.append(key, JSON.stringify(value))
-        } else {
-          // Para strings, números, etc., enviar directamente
-          formDataToSend.append(key, String(value))
-        }
-      }
-      
-      // Debug: verificar que direccion y departamento se envían
-      console.log("Dirección en registrationData:", registrationData.direccion)
-      console.log("Departamento en registrationData:", registrationData.departamento)
-      console.log("Dirección en FormData:", formDataToSend.get('direccion'))
-      console.log("Departamento en FormData:", formDataToSend.get('departamento'))
-      console.log("Todos los keys en FormData:", Array.from(formDataToSend.keys()))
-      
-      // Agregar archivo PDF si existe
-      if (formData.catalogoPdf) {
-        formDataToSend.append('catalogo_pdf', formData.catalogoPdf)
-      }
-      
-      // Enviar al backend
-      console.log("Enviando datos de registro:", registrationData)
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'}/registro/solicitudes/`
-      console.log("URL del API:", apiUrl)
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        // No establecer Content-Type, el navegador lo hará automáticamente con el boundary para FormData
-        body: formDataToSend,
-      })
-      
-      console.log("Respuesta del servidor:", response.status, response.statusText)
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Error al procesar la respuesta del servidor' }))
-        console.error("Error del servidor:", errorData)
-        
-        // Mostrar detalles del error si están disponibles
-        let errorMessage = 'Error al enviar el registro'
-        if (errorData.detail) {
-          errorMessage = errorData.detail
-        } else if (errorData.message) {
-          errorMessage = errorData.message
-        } else if (typeof errorData === 'object') {
-          // Si hay errores de validación por campo
-          const fieldErrors = Object.entries(errorData)
-            .map(([field, errors]: [string, any]) => {
-              if (Array.isArray(errors)) {
-                return `${field}: ${errors.join(', ')}`
-              } else if (typeof errors === 'object') {
-                return `${field}: ${JSON.stringify(errors)}`
+        // Crear productos
+        if (productos.length > 0 && productos[0].nombre) {
+          for (const producto of productos) {
+            if (producto.nombre) {
+              const productoData: any = {
+                empresa: empresaCreada.id,
+                nombre_producto: producto.nombre,
+                descripcion: producto.descripcion || '',
+                capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
+                unidad_medida: producto.unidadMedida || "kg",
               }
-              return `${field}: ${errors}`
-            })
-            .join('\n')
-          if (fieldErrors) {
-            errorMessage = `Errores de validación:\n${fieldErrors}`
+              const productoCreado = await api.post<any>('/empresas/productos/', productoData)
+              
+              // Crear posición arancelaria si existe
+              if (producto.posicionArancelaria) {
+                await api.post<any>('/empresas/posiciones-arancelarias/', {
+                  producto: productoCreado.id,
+                  codigo_arancelario: producto.posicionArancelaria,
+                })
+              }
+            }
+          }
+        }
+      } else if (tipoNegocio === 'servicios') {
+        // Crear empresa de servicios
+        empresaCreada = await api.post<any>('/empresas/empresas-servicio/', baseEmpresaData)
+        
+        // Crear servicios
+        if (servicios.length > 0 && servicios[0].descripcion) {
+          for (const servicio of servicios) {
+            if (servicio.descripcion) {
+              const servicioData: any = {
+                empresa: empresaCreada.id,
+                nombre_servicio: servicio.descripcion,
+                descripcion: servicio.descripcion,
+                tipo_servicio: servicio.tipoServicio[0] || 'otro',
+                sector_atendido: servicio.sectores[0] || 'otro',
+                alcance_servicio: servicio.alcanceGeografico || 'local',
+                paises_trabaja: servicio.paisesDestino || null,
+                exporta_servicios: servicio.exportaServicios === 'si',
+                interes_exportar_servicios: servicio.interesExportar === 'si',
+                idiomas_trabajo: servicio.idiomas.join(', ') || null,
+                forma_contratacion: servicio.formaContratacion[0] || null,
+                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
+                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+              }
+              await api.post<any>('/empresas/servicios/', servicioData)
+            }
+          }
+        }
+      } else {
+        // Crear empresa mixta
+        // Para mixtas, necesitamos usar el rubro de productos como principal
+        empresaCreada = await api.post<any>('/empresas/empresas-mixta/', baseEmpresaData)
+        
+        // Crear productos
+        if (productos.length > 0 && productos[0].nombre) {
+          for (const producto of productos) {
+            if (producto.nombre) {
+              const productoData: any = {
+                empresa: empresaCreada.id,
+                nombre_producto: producto.nombre,
+                descripcion: producto.descripcion || '',
+                capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
+                unidad_medida: producto.unidadMedida || "kg",
+              }
+              await api.post<any>('/empresas/productos-mixta/', productoData)
+            }
           }
         }
         
-        throw new Error(errorMessage)
+        // Crear servicios
+        if (servicios.length > 0 && servicios[0].descripcion) {
+          for (const servicio of servicios) {
+            if (servicio.descripcion) {
+              const servicioData: any = {
+                empresa: empresaCreada.id,
+                nombre_servicio: servicio.descripcion,
+                descripcion: servicio.descripcion,
+                tipo_servicio: servicio.tipoServicio[0] || 'otro',
+                sector_atendido: servicio.sectores[0] || 'otro',
+                alcance_servicio: servicio.alcanceGeografico || 'local',
+                paises_trabaja: servicio.paisesDestino || null,
+                exporta_servicios: servicio.exportaServicios === 'si',
+                interes_exportar_servicios: servicio.interesExportar === 'si',
+                idiomas_trabajo: servicio.idiomas.join(', ') || null,
+                forma_contratacion: servicio.formaContratacion[0] || null,
+                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
+                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+              }
+              await api.post<any>('/empresas/servicios-mixta/', servicioData)
+            }
+          }
+        }
       }
       
-      const data = await response.json()
-      console.log("Registro exitoso:", data)
-      
       toast({
-        title: "Registro exitoso",
-        description: `Tu cuenta ha sido creada. Email: ${contactoPrincipal.email}. Contraseña inicial: ${formData.cuit}. Puedes iniciar sesión ahora. Te recomendamos cambiar tu contraseña después del primer acceso.`,
-        variant: "default",
+        title: "Éxito",
+        description: "Empresa creada exitosamente",
       })
       
-      // Esperar un momento antes de redirigir para que el usuario vea el toast
-      setTimeout(() => {
-        router.push("/login")
-      }, 2000)
+      // Resetear el formulario
+      setFormData({
+        rubro: "",
+        subRubro: "",
+        rubroProducto: "",
+        subRubroProducto: "",
+        rubroServicio: "",
+        subRubroServicio: "",
+        razonSocial: "",
+        provincia: "",
+        direccion: "",
+        departamento: "",
+        municipio: "",
+        localidad: "",
+        paginaWeb: "",
+        observaciones: "",
+        certificadoMiPyme: "",
+        exporta: "",
+        destinoExportacion: "",
+        materialPromocion: "",
+        certificaciones: "",
+        cuit: "",
+        importa: "",
+        geolocalizacion: "",
+        nombreFantasia: "",
+        tipoSociedad: "",
+        codigoPostal: "",
+        brochureUrl: "",
+        catalogoPdf: null,
+        instagram: "",
+        facebook: "",
+        linkedin: "",
+      })
+      setContactoPrincipal({
+        nombre: "",
+        cargo: "",
+        telefono: "",
+        email: "",
+      })
+      setContactosSecundarios([])
+      setProductos([{ id: "1", nombre: "", posicionArancelaria: "", descripcion: "", capacidadProductiva: "", unidadMedida: "kg" }])
+      setServicios([{ id: "1", tipoServicio: [], descripcion: "", sectores: [], alcanceGeografico: "", paisesDestino: "", exportaServicios: "", idiomas: [], formaContratacion: [], certificacionesTecnicas: "", equipoTecnico: "" }])
+      setStep(1)
+      setTipoNegocio("productos")
     } catch (error: any) {
-      console.error("Error en registro:", error)
-      console.error("Stack trace:", error.stack)
+      console.error("Error al crear empresa:", error)
       toast({
-        title: "Error al enviar el registro",
-        description: error.message || "Por favor, revisa la consola del navegador para más detalles e intenta nuevamente.",
+        title: "Error",
+        description: error.message || "Error al crear la empresa. Por favor, revisa los datos e intenta nuevamente.",
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -799,36 +863,26 @@ export default function RegistroPage() {
     setActividadesPromocion(actividadesPromocion.map((a) => (a.id === id ? { ...a, [field]: value } : a)))
   }
 
+  // Reutilizar el mismo JSX del formulario de registro
+  // Por ahora, voy a crear una versión simplificada que incluya todos los pasos
+  // El código completo es muy largo, así que lo haré por partes
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
-      <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
-        <div className="container mx-auto px-4 py-3 md:py-4 flex items-center justify-between gap-2">
-          <Link href="/" className="flex items-center gap-2 md:gap-3 min-w-0">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-6 h-6 md:w-7 md:h-7 text-[#222A59]" />
-            </div>
-            <div className="min-w-0 hidden sm:block">
-              <h1 className="text-sm md:text-lg font-bold text-white truncate">Dirección de Intercambio Comercial Internacional y Regional</h1>
-              <p className="text-xs text-white/80 hidden md:block">Provincia de Catamarca</p>
-            </div>
-          </Link>
-          <Link href="/">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
-            >
-              <ArrowLeft className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Volver al Inicio</span>
-              <span className="sm:hidden">Volver</span>
-            </Button>
-          </Link>
-        </div>
-      </header>
-
+    <MainLayout>
       <div className="container mx-auto px-4 py-6 md:py-12 max-w-4xl">
         <div className="mb-6 md:mb-8">
+          <div className="flex items-center gap-4 mb-4">
+            <Button variant="ghost" size="icon" asChild>
+              <Link href="/dashboard/empresas">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Nueva Empresa</h1>
+              <p className="text-sm md:text-base text-muted-foreground mt-1">Complete el formulario para registrar una nueva empresa</p>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between mb-3 md:mb-4">
             {[1, 2, 3, 4].map((s) => (
               <div key={s} className="flex items-center flex-1">
@@ -853,17 +907,19 @@ export default function RegistroPage() {
 
         <Card className="p-5 md:p-8 bg-white">
           <form onSubmit={handleSubmit}>
+            {/* El resto del formulario será igual al de registro */}
+            {/* Por limitaciones de espacio, incluiré los pasos principales */}
             {/* Step 1: Información Básica */}
             {step === 1 && (
               <div className="space-y-4 md:space-y-6">
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-[#222A59] mb-2">Información Básica</h2>
-                  <p className="text-sm md:text-base text-[#6B7280]">Datos generales de tu empresa</p>
+                  <p className="text-sm md:text-base text-[#6B7280]">Datos generales de la empresa</p>
                 </div>
 
                 <div className="space-y-4 p-4 border border-[#3259B5]/30 rounded-lg bg-[#3259B5]/5">
                   <h3 className="font-semibold text-[#222A59]">Tipo de Negocio *</h3>
-                  <p className="text-sm text-[#6B7280] mb-3">Selecciona qué ofrece tu empresa</p>
+                  <p className="text-sm text-[#6B7280] mb-3">Selecciona qué ofrece la empresa</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {[
                       { value: "productos", label: "Vende Productos", icon: "📦" },
@@ -872,6 +928,7 @@ export default function RegistroPage() {
                     ].map((option) => (
                       <button
                         key={option.value}
+                        type="button"
                         onClick={() => setTipoNegocio(option.value as "productos" | "servicios" | "ambos")}
                         className={`p-4 rounded-lg border-2 transition-all ${
                           tipoNegocio === option.value
@@ -1456,6 +1513,7 @@ export default function RegistroPage() {
                   <Button
                     type="button"
                     onClick={nextStep}
+                    disabled={loading}
                     className="bg-[#3259B5] hover:bg-[#3259B5]/90 text-white text-sm md:text-base"
                   >
                     Siguiente
@@ -1470,7 +1528,7 @@ export default function RegistroPage() {
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-[#222A59] mb-2">Contacto y Ubicación</h2>
                   <p className="text-sm md:text-base text-[#6B7280]">
-                    Información de contacto y ubicación de tu empresa
+                    Información de contacto y ubicación de la empresa
                   </p>
                 </div>
 
@@ -1657,9 +1715,9 @@ export default function RegistroPage() {
                         <Label htmlFor="departamento">Departamento *</Label>
                         <Select
                           value={formData.departamento}
-                          onValueChange={(value) =>
+                          onValueChange={(value) => {
                             setFormData(prev => ({ ...prev, departamento: value, municipio: "", localidad: "" }))
-                          }
+                          }}
                           disabled={!formData.provincia || loadingGeografia}
                         >
                           <SelectTrigger>
@@ -1667,7 +1725,7 @@ export default function RegistroPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {departamentos.map((departamento) => (
-                              <SelectItem key={departamento.id} value={departamento.id}>
+                              <SelectItem key={departamento.id} value={String(departamento.id)}>
                                 {departamento.nombre}
                               </SelectItem>
                             ))}
@@ -1696,7 +1754,7 @@ export default function RegistroPage() {
                           <SelectContent>
                             {municipios.length > 0 ? (
                               municipios.map((municipio) => (
-                                <SelectItem key={municipio.id} value={municipio.id}>
+                                <SelectItem key={municipio.id} value={String(municipio.id)}>
                                   {municipio.nombre}
                                 </SelectItem>
                               ))
@@ -1727,7 +1785,7 @@ export default function RegistroPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {localidades.map((localidad) => (
-                              <SelectItem key={localidad.id} value={localidad.id}>
+                              <SelectItem key={localidad.id} value={String(localidad.id)}>
                                 {localidad.nombre}
                               </SelectItem>
                             ))}
@@ -1781,7 +1839,7 @@ export default function RegistroPage() {
                     <div className="space-y-4 pt-4 border-t">
                       <Label htmlFor="geolocalizacion">Geolocalización *</Label>
                       <p className="text-xs text-[#6B7280] mb-3">
-                        Haz clic en el mapa o arrastra el marcador para seleccionar la ubicación de tu empresa
+                        Haz clic en el mapa o arrastra el marcador para seleccionar la ubicación de la empresa
                       </p>
                       <LocationPicker
                         value={formData.geolocalizacion}
@@ -1804,6 +1862,7 @@ export default function RegistroPage() {
                   <Button
                     type="button"
                     onClick={nextStep}
+                    disabled={loading}
                     className="bg-[#3259B5] hover:bg-[#3259B5]/90 text-white text-sm md:text-base"
                   >
                     Siguiente
@@ -2017,6 +2076,7 @@ export default function RegistroPage() {
                   <Button
                     type="button"
                     onClick={nextStep}
+                    disabled={loading}
                     className="bg-[#3259B5] hover:bg-[#3259B5]/90 text-white text-sm md:text-base"
                   >
                     Siguiente
@@ -2030,7 +2090,7 @@ export default function RegistroPage() {
               <div className="space-y-4 md:space-y-6">
                 <div>
                   <h2 className="text-xl md:text-2xl font-bold text-[#222A59] mb-2">Certificaciones y Complementos</h2>
-                  <p className="text-sm md:text-base text-[#6B7280]">Certificaciones y acreditaciones de tu empresa</p>
+                  <p className="text-sm md:text-base text-[#6B7280]">Certificaciones y acreditaciones de la empresa</p>
                 </div>
 
                 <div className="space-y-4">
@@ -2075,7 +2135,7 @@ export default function RegistroPage() {
                             id={cert.id}
                             className="rounded border-[#3259B5] text-[#3259B5] cursor-pointer"
                             onChange={(e) => {
-                              const current = formData.certificaciones.split(",").map((c) => c.trim())
+                              const current = formData.certificaciones.split(",").map((c) => c.trim()).filter(c => c)
                               if (e.target.checked) {
                                 if (!current.includes(cert.label)) {
                                   current.push(cert.label)
@@ -2107,7 +2167,7 @@ export default function RegistroPage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="brochure">Brochur / Catálogo (PDF)</Label>
+                    <Label htmlFor="brochure">Brochure / Catálogo (PDF)</Label>
                     <div className="border-2 border-dashed border-[#3259B5] rounded-lg p-6 text-center hover:bg-[#3259B5]/5 transition-colors cursor-pointer">
                       <input
                         id="brochure"
@@ -2133,12 +2193,10 @@ export default function RegistroPage() {
                     </div>
                   </div>
 
-
                   <div className="bg-[#629BD2]/10 border border-[#629BD2]/20 rounded-lg p-4">
                     <h4 className="font-semibold text-[#222A59] mb-2">Información importante</h4>
                     <p className="text-sm text-[#6B7280] leading-relaxed">
-                      Una vez enviado el formulario, nuestro equipo revisará la información y se pondrá en contacto
-                      contigo para completar el proceso de registro y realizar la evaluación de tu perfil exportador.
+                      Una vez enviado el formulario, la empresa será creada inmediatamente en el sistema.
                     </p>
                   </div>
                 </div>
@@ -2155,10 +2213,11 @@ export default function RegistroPage() {
                   </Button>
                   <Button
                     type="submit"
+                    disabled={loading}
                     className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-sm md:text-base"
                   >
                     <CheckCircle2 className="mr-2 w-4 h-4" />
-                    Enviar Registro
+                    {loading ? "Creando..." : "Crear Empresa"}
                   </Button>
                 </div>
               </div>
@@ -2166,6 +2225,7 @@ export default function RegistroPage() {
           </form>
         </Card>
       </div>
-    </div>
+    </MainLayout>
   )
 }
+

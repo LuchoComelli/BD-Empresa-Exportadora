@@ -35,7 +35,7 @@ export default function EmpresasPendientesPage() {
     try {
       setLoading(true)
       const params: any = {
-        estado: 'pendiente', // Solo mostrar empresas pendientes
+        estado: 'pendiente', // Solo mostrar solicitudes pendientes
         page: 1,
         page_size: 100,
       }
@@ -44,7 +44,7 @@ export default function EmpresasPendientesPage() {
         params.search = searchTerm
       }
 
-      const response = await api.getEmpresas(params)
+      const response = await api.getSolicitudes(params)
       
       // Si la respuesta tiene paginación (DRF pagination)
       if (response.results) {

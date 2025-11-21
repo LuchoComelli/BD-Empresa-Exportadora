@@ -122,6 +122,19 @@ export function CompanyMap({ coordinates, address }: CompanyMapProps) {
     )
   }
 
+  if (!coordinates || typeof coordinates.lat !== 'number' || typeof coordinates.lng !== 'number') {
+    return (
+      <Card className="h-[350px] flex items-center justify-center bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] rounded-xl border-2 border-[#3259B5]/20">
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 bg-[#3259B5]/10 rounded-full flex items-center justify-center mx-auto">
+            <MapPin className="h-8 w-8 text-[#3259B5]" />
+          </div>
+          <p className="text-sm font-medium text-[#6B7280]">Coordenadas no disponibles</p>
+        </div>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <div 

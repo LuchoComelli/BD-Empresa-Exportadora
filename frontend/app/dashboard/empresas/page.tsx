@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
-import { FiltersSidebar } from "@/components/empresas/filters-sidebar"
+import { FiltersDropdown } from "@/components/empresas/filters-dropdown"
 import { CompaniesTable } from "@/components/empresas/companies-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { Plus, Search, Download } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/api"
 import { ExportDialog } from "@/components/empresas/export-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 interface Empresa {
   id: number
@@ -28,6 +29,7 @@ interface Empresa {
 }
 
 export default function EmpresasPage() {
+  const { toast } = useToast()
   const [filters, setFilters] = useState<any>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -45,31 +47,51 @@ export default function EmpresasPage() {
     try {
       setLoading(true)
       const params: any = {
-        estado: 'aprobada', // Solo mostrar empresas aprobadas
         page: pagination.page,
         page_size: pagination.pageSize,
       }
 
+      // Búsqueda mejorada - busca en múltiples campos
       if (searchQuery) {
         params.search = searchQuery
       }
 
-      if (filters.categoria && filters.categoria !== 'all') {
-        if (filters.categoria === 'exportadora') {
-          params.exporta = 'si'
-        } else if (filters.categoria === 'potencial') {
-          params.exporta = 'en-proceso'
-        } else if (filters.categoria === 'inicial') {
-          params.exporta = 'no'
-        }
+      // Filtros
+      if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
+        params.tipo_empresa = filters.tipo_empresa
       }
 
-      if (filters.sector && filters.sector !== 'all') {
-        params.rubro = filters.sector
+      if (filters.rubro && filters.rubro !== 'all') {
+        params.rubro = filters.rubro
+      }
+
+      if (filters.subRubro && filters.subRubro !== 'all') {
+        params.sub_rubro = filters.subRubro
       }
 
       if (filters.departamento && filters.departamento !== 'all') {
         params.departamento = filters.departamento
+      }
+
+      if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
+        params.categoria_matriz = filters.categoria_matriz
+      }
+
+      if (filters.exporta && filters.exporta !== 'all') {
+        // El backend espera 'Sí' para exportadoras
+        params.exporta = filters.exporta === 'si' ? 'Sí' : ''
+      }
+
+      if (filters.importa && filters.importa !== 'all') {
+        params.importa = filters.importa === 'si' ? 'true' : 'false'
+      }
+
+      if (filters.promo2idiomas && filters.promo2idiomas !== 'all') {
+        params.promo2idiomas = filters.promo2idiomas === 'si' ? 'true' : 'false'
+      }
+
+      if (filters.certificadopyme && filters.certificadopyme !== 'all') {
+        params.certificadopyme = filters.certificadopyme === 'si' ? 'true' : 'false'
       }
 
       const response = await api.getEmpresas(params)
@@ -141,7 +163,11 @@ export default function EmpresasPage() {
 
   const handleExport = () => {
     if (selectedEmpresas.length === 0) {
-      alert("Por favor selecciona al menos una empresa para exportar")
+      toast({
+        title: "Ninguna empresa seleccionada",
+        description: "Por favor selecciona al menos una empresa para exportar",
+        variant: "destructive",
+      })
       return
     }
     setShowExportDialog(true)
@@ -156,7 +182,11 @@ export default function EmpresasPage() {
       // Buscar la empresa para obtener su tipo
       const empresa = empresas.find(e => e.id === id)
       if (!empresa) {
-        alert('Empresa no encontrada')
+        toast({
+          title: "Empresa no encontrada",
+          description: "No se pudo encontrar la empresa especificada",
+          variant: "destructive",
+        })
         return
       }
 
@@ -164,12 +194,33 @@ export default function EmpresasPage() {
         return
       }
 
-      await api.deleteEmpresa(id, empresa.tipo_empresa)
-      alert('Empresa eliminada correctamente')
-      loadEmpresas() // Recargar la lista
+      // Determinar el tipo de empresa desde los datos
+      let tipoEmpresa = empresa.tipo_empresa
+      if (!tipoEmpresa) {
+        // Intentar obtener desde la API
+        try {
+          const empresaDetalle = await api.getEmpresaById(id)
+          tipoEmpresa = empresaDetalle.tipo_empresa_valor || empresaDetalle.tipo_empresa
+        } catch (e) {
+          console.error('Error obteniendo tipo de empresa:', e)
+        }
+      }
+
+      await api.deleteEmpresa(id, tipoEmpresa)
+      toast({
+        title: "Empresa eliminada",
+        description: `La empresa "${empresa.razon_social}" ha sido eliminada exitosamente`,
+        variant: "default",
+      })
+      // Recargar la lista
+      await loadEmpresas()
     } catch (error: any) {
       console.error("Error deleting empresa:", error)
-      alert(error.message || "Error al eliminar la empresa. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error al eliminar",
+        description: error.message || "Error al eliminar la empresa. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -188,12 +239,17 @@ export default function EmpresasPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar empresas..."
+                placeholder="Buscar por razón social, CUIT, email, teléfono, dirección, departamento, rubro..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-9"
               />
             </div>
+            <FiltersDropdown 
+              onFilterChange={handleFilterChange} 
+              onClearFilters={handleClearFilters}
+              filters={filters}
+            />
             <Button 
               variant="outline" 
               size="sm" 
@@ -204,7 +260,7 @@ export default function EmpresasPage() {
               <Download className="h-4 w-4" />
               Exportar ({selectedEmpresas.length})
             </Button>
-            <Link href="/dashboard/empresas/nueva">
+            <Link href="/dashboard/nueva-empresa">
               <Button size="sm" className="flex items-center gap-2 bg-[#3259B5] hover:bg-[#3259B5]/90">
                 <Plus className="h-4 w-4" />
                 Nueva Empresa
@@ -214,26 +270,19 @@ export default function EmpresasPage() {
         </div>
 
         {/* Content */}
-        <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
-          <FiltersSidebar 
-            onFilterChange={handleFilterChange} 
-            onClearFilters={handleClearFilters}
+        <div className="flex-1">
+          <CompaniesTable 
+            empresas={empresas}
+            loading={loading}
             filters={filters}
+            searchQuery={searchQuery}
+            selectedEmpresas={selectedEmpresas}
+            onSelectionChange={setSelectedEmpresas}
+            onDelete={handleDelete}
+            onRefresh={loadEmpresas}
+            pagination={pagination}
+            onPageChange={handlePageChange}
           />
-          <div className="flex-1">
-            <CompaniesTable 
-              empresas={empresas}
-              loading={loading}
-              filters={filters}
-              searchQuery={searchQuery}
-              selectedEmpresas={selectedEmpresas}
-              onSelectionChange={setSelectedEmpresas}
-              onDelete={handleDelete}
-              onRefresh={loadEmpresas}
-              pagination={pagination}
-              onPageChange={handlePageChange}
-            />
-          </div>
         </div>
 
         {/* Export Dialog */}

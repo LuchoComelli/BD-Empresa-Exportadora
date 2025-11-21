@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Eye, Edit, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 interface Empresa {
@@ -130,13 +130,13 @@ export function CompaniesTable({
   }
 
   return (
-    <Card>
+    <Card className="shadow-sm">
       <CardContent className="p-0">
         <div className="overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full min-w-[800px]">
-            <thead className="bg-[#EFF6FF]">
+            <thead className="bg-gradient-to-r from-[#EFF6FF] to-[#F0F9FF] border-b-2 border-[#3259B5]/20">
               <tr>
-                <th className="text-left py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   <div className="flex items-center gap-2">
                     <Checkbox
                       checked={isAllSelected}
@@ -150,22 +150,22 @@ export function CompaniesTable({
                     <span>Seleccionar</span>
                   </div>
                 </th>
-                <th className="text-left py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   Empresa
                 </th>
-                <th className="text-left py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   Sector
                 </th>
-                <th className="text-left py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   Ubicación
                 </th>
-                <th className="text-left py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   Categoría
                 </th>
-                <th className="text-left py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   Contacto
                 </th>
-                <th className="text-right py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm font-semibold text-[#222A59]">
+                <th className="text-right py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
                   Acciones
                 </th>
               </tr>
@@ -176,7 +176,7 @@ export function CompaniesTable({
                 const isSelected = selectedEmpresas.includes(empresa.id)
                 
                 return (
-                  <tr key={empresa.id} className={index % 2 === 0 ? "bg-white" : "bg-muted/30"}>
+                  <tr key={empresa.id} className={`${index % 2 === 0 ? "bg-white" : "bg-muted/20"} hover:bg-[#EFF6FF]/50 transition-colors border-b border-border/50`}>
                     <td className="py-3 md:py-4 px-3 md:px-6">
                       <Checkbox
                         checked={isSelected}
@@ -186,12 +186,20 @@ export function CompaniesTable({
                     <td className="py-3 md:py-4 px-3 md:px-6">
                       <div className="font-medium text-foreground text-sm">{empresa.razon_social}</div>
                       <div className="text-xs text-muted-foreground">CUIT: {empresa.cuit_cuil}</div>
+                      {empresa.nombre_fantasia && (
+                        <div className="text-xs text-muted-foreground italic">{empresa.nombre_fantasia}</div>
+                      )}
                     </td>
                     <td className="py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm text-muted-foreground">
-                      {empresa.rubro_principal || "N/A"}
+                      {empresa.rubro_nombre || empresa.rubro_principal || empresa.id_rubro?.nombre || "N/A"}
                     </td>
                     <td className="py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm text-muted-foreground">
-                      {[empresa.departamento, empresa.provincia].filter(Boolean).join(", ") || "N/A"}
+                      {[
+                        empresa.departamento_nombre || empresa.departamento?.nomdpto || empresa.departamento,
+                        empresa.municipio_nombre || empresa.municipio?.nommun || empresa.municipio,
+                        empresa.localidad_nombre || empresa.localidad?.nomloc || empresa.localidad,
+                        empresa.provincia
+                      ].filter(Boolean).join(", ") || "N/A"}
                     </td>
                     <td className="py-3 md:py-4 px-3 md:px-6">
                       <Badge className={`${getCategoryColor(category)} text-xs`}>{category}</Badge>
@@ -213,13 +221,11 @@ export function CompaniesTable({
                           variant="ghost" 
                           size="sm" 
                           asChild 
-                          title={`Ver detalles de ${empresa.razon_social} (ID: ${empresa.id})`}
-                          onClick={() => {
-                            console.log('[Companies Table] Clicked view for empresa:', empresa.id, empresa.razon_social)
-                          }}
+                          title={`Ver detalles de ${empresa.razon_social}`}
+                          className="hover:bg-[#3259B5]/10 hover:text-[#3259B5]"
                         >
                           <Link href={`/dashboard/empresas/${empresa.id}`}>
-                            <Eye className="h-3 w-3 md:h-4 md:w-4" />
+                            <Eye className="h-4 w-4" />
                           </Link>
                         </Button>
                         <Button 
@@ -227,25 +233,33 @@ export function CompaniesTable({
                           size="sm" 
                           asChild
                           title="Editar"
+                          className="hover:bg-[#3259B5]/10 hover:text-[#3259B5]"
                         >
                           <Link href={`/dashboard/empresas/${empresa.id}?edit=true`}>
-                            <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                            <Edit className="h-4 w-4" />
                           </Link>
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="sm"
                           onClick={() => {
-                            if (confirm(`¿Estás seguro de que deseas eliminar la empresa "${empresa.razon_social}"?`)) {
+                            if (confirm(`¿Estás seguro de que deseas eliminar la empresa "${empresa.razon_social}"? Esta acción no se puede deshacer.`)) {
                               if (onDelete) {
+                                setDeletingId(empresa.id)
                                 onDelete(empresa.id)
+                                setTimeout(() => setDeletingId(null), 2000)
                               }
                             }
                           }}
                           disabled={deletingId === empresa.id}
                           title="Eliminar"
+                          className="hover:bg-destructive/10 hover:text-destructive"
                         >
-                          <Trash2 className={`h-3 w-3 md:h-4 md:w-4 text-destructive ${deletingId === empresa.id ? 'opacity-50' : ''}`} />
+                          {deletingId === empresa.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          )}
                         </Button>
                       </div>
                     </td>

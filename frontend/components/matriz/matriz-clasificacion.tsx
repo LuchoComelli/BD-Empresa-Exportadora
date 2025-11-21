@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button"
 import { MatrizHeader } from "./matriz-header"
 import { CriterioRow } from "./criterio-row"
 import { calcularCategoria, criteriosIniciales, type CriterioEvaluacion, getPuntajeFromOpcion, opcionesPorCriterio } from "@/lib/matriz-utils"
-import { RotateCcw, Save, Loader2 } from "lucide-react"
+import { RotateCcw, Save, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react"
 import api from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 interface MatrizClasificacionProps {
   empresaId?: string
@@ -27,6 +28,7 @@ const criterioToBackendField: Record<string, string> = {
 }
 
 export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
+  const { toast } = useToast()
   const [criterios, setCriterios] = useState<CriterioEvaluacion[]>(criteriosIniciales)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -49,36 +51,58 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
     try {
       // Primero intentar cargar matriz existente
       setLoading(true)
-      const matrizExistente = await api.get<any>(`/empresas/matriz-clasificacion/empresa/${empresaId}/`)
       
-      if (matrizExistente) {
-        // Determinar tipo de empresa desde el campo empresa unificado
-        const tipo_empresa = matrizExistente.empresa_tipo || matrizExistente.empresa?.tipo_empresa_valor || 'producto'
-        const razon_social = matrizExistente.empresa_nombre || matrizExistente.empresa?.razon_social || 'Empresa'
+      // Hacer la petición directamente con fetch para manejar 404 como caso válido
+      const token = localStorage.getItem('access_token')
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'
+      const response = await fetch(
+        `${apiBaseUrl}/empresas/matriz-clasificacion/empresa/${empresaId}/`,
+        {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      
+      if (response.ok) {
+        const matrizExistente = await response.json()
         
-        // Mapear matriz existente a criterios
-        const nuevosCriterios = criteriosIniciales.map((criterio) => {
-          const backendField = criterioToBackendField[criterio.id]
-          const puntaje = matrizExistente[backendField] || 0
-          // Calcular opción basada en el puntaje
-          const opcion = obtenerOpcionDesdePuntaje(criterio.id, puntaje)
-          return { ...criterio, puntaje, opcion }
-        })
-        
-        setCriterios(nuevosCriterios)
-        setEmpresaInfo({
-          tipo_empresa: tipo_empresa,
-          razon_social: razon_social
-        })
-        setLoading(false)
-        return
+        if (matrizExistente) {
+          // Determinar tipo de empresa desde el campo empresa unificado
+          const tipo_empresa = matrizExistente.empresa_tipo || matrizExistente.empresa?.tipo_empresa_valor || 'producto'
+          const razon_social = matrizExistente.empresa_nombre || matrizExistente.empresa?.razon_social || 'Empresa'
+          
+          // Mapear matriz existente a criterios
+          const nuevosCriterios = criteriosIniciales.map((criterio) => {
+            const backendField = criterioToBackendField[criterio.id]
+            const puntaje = matrizExistente[backendField] || 0
+            // Calcular opción basada en el puntaje
+            const opcion = obtenerOpcionDesdePuntaje(criterio.id, puntaje)
+            return { ...criterio, puntaje, opcion }
+          })
+          
+          setCriterios(nuevosCriterios)
+          setEmpresaInfo({
+            tipo_empresa: tipo_empresa,
+            razon_social: razon_social
+          })
+          setLoading(false)
+          return
+        }
+      } else if (response.status === 404) {
+        // 404 es un caso válido: no hay matriz aún, calcular automáticamente
+        console.log('[Matriz] No se encontró matriz existente, calculando automáticamente')
+      } else {
+        // Otro error, intentar calcular de todas formas
+        console.warn('[Matriz] Error al cargar matriz:', response.status, response.statusText)
       }
     } catch (error: any) {
-      // Si no existe matriz, calcular automáticamente
-      console.log('[Matriz] No se encontró matriz existente, calculando automáticamente:', error?.message)
+      // Si hay un error de red u otro, calcular automáticamente
+      console.log('[Matriz] Error al cargar matriz existente, calculando automáticamente:', error?.message)
     }
     
-    // Si no existe matriz, calcular automáticamente
+    // Si no existe matriz o hubo error, calcular automáticamente
     await calcularPuntajesAutomaticos()
   }
   
@@ -116,7 +140,11 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
       console.error("Error calculando puntajes:", error)
       const errorMessage = error?.message || error?.response?.data?.error || "Error desconocido"
       console.error('[Matriz] Error completo:', error)
-      alert(`Error al calcular los puntajes automáticamente: ${errorMessage}`)
+      toast({
+        title: "Error al calcular puntajes",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -143,7 +171,11 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
 
   const handleSave = async () => {
     if (!empresaId) {
-      alert("Por favor, seleccione una empresa primero.")
+      toast({
+        title: "Empresa no seleccionada",
+        description: "Por favor, seleccione una empresa primero para guardar la evaluación.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -152,6 +184,7 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
       
       // Mapear criterios a formato del backend usando los puntajes calculados
       const data: any = {
+        empresa: parseInt(empresaId), // El backend espera el campo 'empresa' con el ID del modelo unificado
         experiencia_exportadora: criterios.find((c) => c.id === "experiencia-exportadora")?.puntaje || 0,
         volumen_produccion: criterios.find((c) => c.id === "volumen-produccion")?.puntaje || 0,
         presencia_digital: criterios.find((c) => c.id === "presencia-digital")?.puntaje || 0,
@@ -163,37 +196,23 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
         certificaciones_internacionales: criterios.find((c) => c.id === "certificaciones-internacionales")?.puntaje || 0,
       }
 
-      // Agregar el campo correcto según el tipo de empresa
-      // Si no tenemos el tipo de empresa, intentar obtenerlo del cálculo anterior
-      if (!empresaInfo.tipo_empresa) {
-        // Intentar calcular para obtener el tipo
-        try {
-          const resultado = await api.calcularPuntajesMatriz(parseInt(empresaId))
-          empresaInfo.tipo_empresa = resultado.tipo_empresa
-        } catch (error) {
-          console.error("Error obteniendo tipo de empresa:", error)
-        }
-      }
-      
-      if (empresaInfo.tipo_empresa === "producto") {
-        data.empresa_producto = parseInt(empresaId)
-      } else if (empresaInfo.tipo_empresa === "servicio") {
-        data.empresa_servicio = parseInt(empresaId)
-      } else if (empresaInfo.tipo_empresa === "mixta") {
-        data.empresa_mixta = parseInt(empresaId)
-      } else {
-        // Si no se puede determinar, intentar con producto por defecto
-        console.warn("No se pudo determinar el tipo de empresa, usando 'producto' por defecto")
-        data.empresa_producto = parseInt(empresaId)
-      }
-
       console.log('[Matriz] Guardando evaluación:', data)
       const resultado = await api.guardarEvaluacionMatriz(data)
       console.log('[Matriz] Resultado del guardado:', resultado)
-      alert("Evaluación guardada exitosamente.")
+      
+      toast({
+        title: "Evaluación guardada exitosamente",
+        description: `La matriz de clasificación para ${empresaInfo.razon_social || 'la empresa'} ha sido guardada correctamente.`,
+        variant: "default",
+      })
     } catch (error: any) {
       console.error("Error guardando evaluación:", error)
-      alert(`Error al guardar la evaluación: ${error.message || "Error desconocido"}`)
+      const errorMessage = error?.message || error?.response?.data?.error || "Error desconocido"
+      toast({
+        title: "Error al guardar evaluación",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setSaving(false)
     }

@@ -2,6 +2,39 @@ from django.db import models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
 from apps.core.models import Usuario, Dpto, Municipio, Localidades, TimestampedModel
+import re
+from datetime import datetime
+
+def generar_nombre_catalogo(instance, filename):
+    """
+    Genera un nombre personalizado para el catálogo PDF
+    Formato: catalogo-{nombre-empresa}-MM-YYYY.pdf
+    """
+    # Obtener la razón social de la empresa
+    razon_social = instance.razon_social if hasattr(instance, 'razon_social') else 'empresa'
+    
+    # Limpiar el nombre: eliminar caracteres especiales, espacios, acentos
+    nombre_limpio = razon_social.lower()
+    # Reemplazar espacios y caracteres especiales con guiones
+    nombre_limpio = re.sub(r'[^a-z0-9]+', '-', nombre_limpio)
+    # Eliminar guiones al inicio y final
+    nombre_limpio = nombre_limpio.strip('-')
+    # Limitar longitud a 50 caracteres para evitar nombres muy largos
+    nombre_limpio = nombre_limpio[:50]
+    
+    # Obtener fecha actual en formato MM-YYYY
+    fecha_actual = datetime.now()
+    fecha_formato = fecha_actual.strftime('%m-%Y')
+    
+    # Obtener extensión del archivo original
+    extension = filename.split('.')[-1] if '.' in filename else 'pdf'
+    
+    # Generar nombre final
+    nombre_final = f"catalogo-{nombre_limpio}-{fecha_formato}.{extension}"
+    
+    # Retornar ruta con estructura de carpetas por año/mes
+    return f"catalogos/{fecha_actual.year}/{fecha_actual.month:02d}/{nombre_final}"
+
 
 class TipoEmpresa(models.Model):
     """
@@ -498,7 +531,7 @@ class Empresa(TimestampedModel):
         verbose_name="Logo de la Empresa"
     )
     brochure = models.FileField(
-        upload_to='brochures/%Y/%m/',
+        upload_to=generar_nombre_catalogo,
         blank=True,
         null=True,
         verbose_name="Brochure o Catálogo",

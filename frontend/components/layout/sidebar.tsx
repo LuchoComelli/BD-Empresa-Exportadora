@@ -1,60 +1,85 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { Building2, LayoutDashboard, FileText, BarChart3, Settings, Users, MapPin, Clock } from "lucide-react"
+import { Building2, LayoutDashboard, FileText, BarChart3, Settings, Users, MapPin, Clock, FileBarChart } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
 }
 
-const menuItems = [
+const allMenuItems = [
   {
     title: "Dashboard",
     icon: LayoutDashboard,
     href: "/dashboard",
+    adminOnly: false,
   },
   {
     title: "Empresas",
     icon: Building2,
     href: "/dashboard/empresas",
+    adminOnly: false,
   },
   {
     title: "Empresas Pendientes",
     icon: Clock,
     href: "/dashboard/empresas-pendientes",
+    adminOnly: false,
   },
   {
     title: "Nueva Empresa",
     icon: FileText,
-    href: "/dashboard/empresas/nueva",
+    href: "/dashboard/nueva-empresa",
+    adminOnly: false,
   },
   {
     title: "Matriz de Clasificación",
     icon: BarChart3,
     href: "/dashboard/matriz",
+    adminOnly: false,
   },
   {
     title: "Mapa",
     icon: MapPin,
     href: "/dashboard/mapa",
+    adminOnly: false,
+  },
+  {
+    title: "Reportes",
+    icon: FileBarChart,
+    href: "/dashboard/reportes",
+    adminOnly: false,
   },
   {
     title: "Usuarios",
     icon: Users,
     href: "/dashboard/usuarios",
+    adminOnly: true,
   },
   {
     title: "Configuración",
     icon: Settings,
     href: "/dashboard/configuracion",
+    adminOnly: true,
   },
 ]
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
+  const { user } = useAuth()
+  
+  // Verificar si el usuario es admin
+  const isAdmin = user?.is_superuser || 
+                 user?.type === "admin" ||
+                 user?.rol?.nombre?.toLowerCase().includes("admin") ||
+                 user?.rol?.nombre?.toLowerCase().includes("administrador")
+  
+  // Filtrar items del menú según permisos
+  const menuItems = allMenuItems.filter(item => !item.adminOnly || isAdmin)
 
   return (
     <>
@@ -64,8 +89,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-14 md:top-16 left-0 w-56 md:w-64 bg-white border-r border-border z-40 transition-transform duration-300 lg:translate-x-0 overflow-y-auto",
-          "h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)]",
+          "fixed top-16 md:top-20 left-0 bottom-0 w-56 md:w-64 bg-white border-r border-border z-40 transition-transform duration-300 lg:translate-x-0 overflow-y-auto",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >

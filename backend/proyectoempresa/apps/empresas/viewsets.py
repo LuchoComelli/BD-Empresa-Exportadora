@@ -7,7 +7,7 @@ from .models import (
     Empresa, Empresaproducto, Empresaservicio, EmpresaMixta,  # Proxies para compatibilidad
     ProductoEmpresa, ServicioEmpresa,
     ProductoEmpresaMixta, ServicioEmpresaMixta,
-    MatrizClasificacionExportador
+    PosicionArancelaria, MatrizClasificacionExportador
 )
 from .serializers import (
     TipoEmpresaSerializer, RubroSerializer, SubRubroSerializer, UnidadMedidaSerializer,
@@ -16,7 +16,7 @@ from .serializers import (
     EmpresaMixtaSerializer, EmpresaMixtaListSerializer,
     ProductoEmpresaSerializer, ServicioEmpresaSerializer,
     ProductoEmpresaMixtaSerializer, ServicioEmpresaMixtaSerializer,
-    MatrizClasificacionExportadorSerializer
+    PosicionArancelariaSerializer, MatrizClasificacionExportadorSerializer
 )
 from apps.core.permissions import CanManageEmpresas, IsOwnerOrAdmin
 
@@ -70,10 +70,10 @@ class EmpresaproductoViewSet(viewsets.ModelViewSet):
     """ViewSet para empresas de producto"""
     queryset = Empresaproducto.objects.select_related(
         'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-    ).prefetch_related('productos')
+    ).prefetch_related('productos_empresa')
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
-    filterset_fields = ['exporta', 'importa', 'certificadopyme', 'tipo_empresa', 'id_rubro']
-    search_fields = ['razon_social', 'cuit_cuil', 'correo']
+    filterset_fields = ['exporta', 'importa', 'certificadopyme', 'tipo_empresa', 'id_rubro', 'promo2idiomas']
+    search_fields = ['razon_social', 'cuit_cuil', 'correo', 'nombre_fantasia', 'telefono', 'direccion', 'departamento__nomdpto', 'municipio__nommun', 'localidad__nomloc', 'id_rubro__nombre']
     ordering_fields = ['razon_social', 'fecha_creacion']
     ordering = ['-fecha_creacion']
     
@@ -88,6 +88,34 @@ class EmpresaproductoViewSet(viewsets.ModelViewSet):
         # Filtrar por usuario si no es admin
         if not self.request.user.is_staff and self.request.user.is_authenticated:
             queryset = queryset.filter(id_usuario=self.request.user)
+        
+        # Filtrar por categoría de matriz si se proporciona
+        categoria_matriz = self.request.query_params.get('categoria_matriz')
+        if categoria_matriz:
+            queryset = queryset.filter(clasificaciones_exportador__categoria=categoria_matriz).distinct()
+        
+        # Filtrar por sub_rubro si se proporciona (filtrar por rubro que tenga ese subrubro)
+        sub_rubro = self.request.query_params.get('sub_rubro')
+        if sub_rubro:
+            from django.db.models import Q
+            # Filtrar empresas cuyo rubro tenga el subrubro especificado
+            queryset = queryset.filter(id_rubro__subrubros__id=sub_rubro).distinct()
+        
+        # Filtrar por campos booleanos
+        importa_param = self.request.query_params.get('importa')
+        if importa_param:
+            importa_bool = importa_param.lower() == 'true'
+            queryset = queryset.filter(importa=importa_bool)
+        
+        promo2idiomas_param = self.request.query_params.get('promo2idiomas')
+        if promo2idiomas_param:
+            promo2idiomas_bool = promo2idiomas_param.lower() == 'true'
+            queryset = queryset.filter(promo2idiomas=promo2idiomas_bool)
+        
+        certificadopyme_param = self.request.query_params.get('certificadopyme')
+        if certificadopyme_param:
+            certificadopyme_bool = certificadopyme_param.lower() == 'true'
+            queryset = queryset.filter(certificadopyme=certificadopyme_bool)
         
         return queryset
     
@@ -121,10 +149,10 @@ class EmpresaservicioViewSet(viewsets.ModelViewSet):
     """ViewSet para empresas de servicio"""
     queryset = Empresaservicio.objects.select_related(
         'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-    ).prefetch_related('servicios')
+    ).prefetch_related('servicios_empresa')
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
-    filterset_fields = ['exporta', 'importa', 'certificadopyme', 'tipo_empresa', 'id_rubro']
-    search_fields = ['razon_social', 'cuit_cuil', 'correo']
+    filterset_fields = ['exporta', 'importa', 'certificadopyme', 'tipo_empresa', 'id_rubro', 'promo2idiomas']
+    search_fields = ['razon_social', 'cuit_cuil', 'correo', 'nombre_fantasia', 'telefono', 'direccion', 'departamento__nomdpto', 'municipio__nommun', 'localidad__nomloc', 'id_rubro__nombre']
     ordering_fields = ['razon_social', 'fecha_creacion']
     ordering = ['-fecha_creacion']
     
@@ -140,6 +168,34 @@ class EmpresaservicioViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_staff and self.request.user.is_authenticated:
             queryset = queryset.filter(id_usuario=self.request.user)
         
+        # Filtrar por categoría de matriz si se proporciona
+        categoria_matriz = self.request.query_params.get('categoria_matriz')
+        if categoria_matriz:
+            queryset = queryset.filter(clasificaciones_exportador__categoria=categoria_matriz).distinct()
+        
+        # Filtrar por sub_rubro si se proporciona (filtrar por rubro que tenga ese subrubro)
+        sub_rubro = self.request.query_params.get('sub_rubro')
+        if sub_rubro:
+            from django.db.models import Q
+            # Filtrar empresas cuyo rubro tenga el subrubro especificado
+            queryset = queryset.filter(id_rubro__subrubros__id=sub_rubro).distinct()
+        
+        # Filtrar por campos booleanos
+        importa_param = self.request.query_params.get('importa')
+        if importa_param:
+            importa_bool = importa_param.lower() == 'true'
+            queryset = queryset.filter(importa=importa_bool)
+        
+        promo2idiomas_param = self.request.query_params.get('promo2idiomas')
+        if promo2idiomas_param:
+            promo2idiomas_bool = promo2idiomas_param.lower() == 'true'
+            queryset = queryset.filter(promo2idiomas=promo2idiomas_bool)
+        
+        certificadopyme_param = self.request.query_params.get('certificadopyme')
+        if certificadopyme_param:
+            certificadopyme_bool = certificadopyme_param.lower() == 'true'
+            queryset = queryset.filter(certificadopyme=certificadopyme_bool)
+        
         return queryset
     
     def perform_create(self, serializer):
@@ -153,10 +209,10 @@ class EmpresaMixtaViewSet(viewsets.ModelViewSet):
     """ViewSet para empresas mixtas"""
     queryset = EmpresaMixta.objects.select_related(
         'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-    ).prefetch_related('productos', 'servicios')
+    ).prefetch_related('productos_mixta', 'servicios_mixta')
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
-    filterset_fields = ['exporta', 'importa', 'certificadopyme', 'tipo_empresa', 'id_rubro']
-    search_fields = ['razon_social', 'cuit_cuil', 'correo']
+    filterset_fields = ['exporta', 'importa', 'certificadopyme', 'tipo_empresa', 'id_rubro', 'promo2idiomas']
+    search_fields = ['razon_social', 'cuit_cuil', 'correo', 'nombre_fantasia', 'telefono', 'direccion', 'departamento__nomdpto', 'municipio__nommun', 'localidad__nomloc', 'id_rubro__nombre']
     ordering_fields = ['razon_social', 'fecha_creacion']
     ordering = ['-fecha_creacion']
     
@@ -171,6 +227,34 @@ class EmpresaMixtaViewSet(viewsets.ModelViewSet):
         # Filtrar por usuario si no es admin
         if not self.request.user.is_staff and self.request.user.is_authenticated:
             queryset = queryset.filter(id_usuario=self.request.user)
+        
+        # Filtrar por categoría de matriz si se proporciona
+        categoria_matriz = self.request.query_params.get('categoria_matriz')
+        if categoria_matriz:
+            queryset = queryset.filter(clasificaciones_exportador__categoria=categoria_matriz).distinct()
+        
+        # Filtrar por sub_rubro si se proporciona (filtrar por rubro que tenga ese subrubro)
+        sub_rubro = self.request.query_params.get('sub_rubro')
+        if sub_rubro:
+            from django.db.models import Q
+            # Filtrar empresas cuyo rubro tenga el subrubro especificado
+            queryset = queryset.filter(id_rubro__subrubros__id=sub_rubro).distinct()
+        
+        # Filtrar por campos booleanos
+        importa_param = self.request.query_params.get('importa')
+        if importa_param:
+            importa_bool = importa_param.lower() == 'true'
+            queryset = queryset.filter(importa=importa_bool)
+        
+        promo2idiomas_param = self.request.query_params.get('promo2idiomas')
+        if promo2idiomas_param:
+            promo2idiomas_bool = promo2idiomas_param.lower() == 'true'
+            queryset = queryset.filter(promo2idiomas=promo2idiomas_bool)
+        
+        certificadopyme_param = self.request.query_params.get('certificadopyme')
+        if certificadopyme_param:
+            certificadopyme_bool = certificadopyme_param.lower() == 'true'
+            queryset = queryset.filter(certificadopyme=certificadopyme_bool)
         
         return queryset
     
@@ -219,6 +303,17 @@ class ServicioEmpresaMixtaViewSet(viewsets.ModelViewSet):
     filterset_fields = ['empresa', 'es_principal', 'tipo_servicio', 'alcance_servicio']
     search_fields = ['nombre_servicio', 'descripcion']
     ordering = ['-es_principal', 'nombre_servicio']
+
+
+class PosicionArancelariaViewSet(viewsets.ModelViewSet):
+    """ViewSet para posiciones arancelarias"""
+    queryset = PosicionArancelaria.objects.select_related('producto', 'producto__empresa').all()
+    serializer_class = PosicionArancelariaSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filterset_fields = ['producto', 'codigo_arancelario']
+    search_fields = ['codigo_arancelario', 'descripcion_arancelaria', 'producto__nombre_producto']
+    ordering_fields = ['codigo_arancelario']
+    ordering = ['codigo_arancelario']
 
 
 class MatrizClasificacionExportadorViewSet(viewsets.ModelViewSet):

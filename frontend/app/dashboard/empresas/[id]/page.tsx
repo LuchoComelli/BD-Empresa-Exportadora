@@ -17,18 +17,27 @@ import api from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CompanyMap } from "@/components/map/company-map"
 import { LocationPicker } from "@/components/map/location-picker"
+import { useToast } from "@/hooks/use-toast"
 
 interface Empresa {
   id: number
   razon_social: string
   nombre_fantasia?: string
   cuit_cuil: string
+  tipo_sociedad?: string
   tipo_empresa?: string
+  tipo_empresa_valor?: string
+  tipo_empresa_detalle?: any
   estado?: string
   direccion?: string
+  codigo_postal?: string
+  provincia?: string
   departamento?: any
+  departamento_nombre?: string
   municipio?: any
+  municipio_nombre?: string
   localidad?: any
+  localidad_nombre?: string
   telefono?: string
   correo?: string
   sitioweb?: string
@@ -43,17 +52,25 @@ interface Empresa {
   observaciones?: string
   geolocalizacion?: string
   id_rubro?: any
+  rubro_nombre?: string
+  rubro_detalle?: any
   productos?: any[]
   servicios?: any[]
   instagram?: string
   facebook?: string
   linkedin?: string
+  contacto_principal_nombre?: string
+  contacto_principal_cargo?: string
+  contacto_principal_telefono?: string
+  contacto_principal_email?: string
   fecha_creacion?: string
+  fecha_actualizacion?: string
 }
 
 function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   const resolvedParams = use(params)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
   const [loading, setLoading] = useState(true)
@@ -86,7 +103,11 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
       
       if (!data || !data.id) {
         console.error('[Empresa Detail] Invalid data received:', data)
-        alert('No se encontró la empresa con el ID especificado')
+        toast({
+          title: "Empresa no encontrada",
+          description: "No se encontró la empresa con el ID especificado",
+          variant: "destructive",
+        })
         router.push('/dashboard/empresas')
         return
       }
@@ -101,7 +122,11 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
     } catch (error: any) {
       console.error("[Empresa Detail] Error loading empresa:", error)
       console.error("[Empresa Detail] Error details:", error.message, error.response)
-      alert(`Error al cargar la empresa: ${error.message || 'Error desconocido'}`)
+      toast({
+        title: "Error al cargar la empresa",
+        description: error.message || 'Error desconocido',
+        variant: "destructive",
+      })
       router.push('/dashboard/empresas')
     } finally {
       setLoading(false)
@@ -127,9 +152,18 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
       setEmpresa(updated)
       setEditedData(updated)
       setIsEditing(false)
-    } catch (error) {
+      toast({
+        title: "Cambios guardados",
+        description: "Los cambios se han guardado exitosamente",
+        variant: "default",
+      })
+    } catch (error: any) {
       console.error("Error saving empresa:", error)
-      alert("Error al guardar los cambios. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error al guardar",
+        description: error.message || "Error al guardar los cambios. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     } finally {
       setSaving(false)
     }
@@ -179,14 +213,26 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
       } else if (format === 'xlsx') {
         // Para Excel, necesitarías una librería como xlsx
         // Por ahora, exportar como CSV
-        alert('Exportación a Excel próximamente. Por ahora, usa CSV.')
+        toast({
+          title: "Exportación a Excel",
+          description: "Exportación a Excel próximamente. Por ahora, usa CSV.",
+          variant: "default",
+        })
       } else if (format === 'pdf') {
         // Para PDF, necesitarías una librería como jsPDF
-        alert('Exportación a PDF próximamente. Por ahora, usa CSV.')
+        toast({
+          title: "Exportación a PDF",
+          description: "Exportación a PDF próximamente. Por ahora, usa CSV.",
+          variant: "default",
+        })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error exporting empresa:", error)
-      alert("Error al exportar la empresa. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error al exportar",
+        description: error.message || "Error al exportar la empresa. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -446,6 +492,19 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                   )}
                 </div>
                 <div>
+                  <Label>Tipo de Sociedad</Label>
+                  <p className="mt-1 font-semibold">{displayData?.tipo_sociedad || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label>Tipo de Empresa</Label>
+                  <p className="mt-1 font-semibold">
+                    {displayData?.tipo_empresa_detalle?.nombre || 
+                     displayData?.tipo_empresa_valor || 
+                     displayData?.tipo_empresa || 
+                     'N/A'}
+                  </p>
+                </div>
+                <div>
                   <Label>Rubro</Label>
                   <p className="mt-1 font-semibold">
                     {(() => {
@@ -478,6 +537,14 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                   ) : (
                     <p className="mt-1 font-semibold">{displayData?.direccion || 'N/A'}</p>
                   )}
+                </div>
+                <div>
+                  <Label>Código Postal</Label>
+                  <p className="mt-1 font-semibold">{displayData?.codigo_postal || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label>Provincia</Label>
+                  <p className="mt-1 font-semibold">{displayData?.provincia || 'N/A'}</p>
                 </div>
                 <div>
                   <Label>Departamento</Label>
@@ -591,14 +658,93 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                     </p>
                   )}
                 </div>
-                {displayData?.geolocalizacion && (
+                {(displayData?.instagram || displayData?.facebook || displayData?.linkedin) && (
                   <div className="md:col-span-2">
-                    <Label>Ubicación en el Mapa</Label>
-                    <div className="mt-2 h-64">
-                      <CompanyMap geolocalizacion={displayData.geolocalizacion} />
+                    <Label>Redes Sociales</Label>
+                    <div className="mt-2 flex flex-wrap gap-4">
+                      {displayData.instagram && (
+                        <a href={displayData.instagram.startsWith('http') ? displayData.instagram : `https://instagram.com/${displayData.instagram}`} 
+                           target="_blank" rel="noopener noreferrer" 
+                           className="text-[#3259B5] hover:underline">
+                          Instagram: {displayData.instagram}
+                        </a>
+                      )}
+                      {displayData.facebook && (
+                        <a href={displayData.facebook.startsWith('http') ? displayData.facebook : `https://facebook.com/${displayData.facebook}`} 
+                           target="_blank" rel="noopener noreferrer" 
+                           className="text-[#3259B5] hover:underline">
+                          Facebook: {displayData.facebook}
+                        </a>
+                      )}
+                      {displayData.linkedin && (
+                        <a href={displayData.linkedin.startsWith('http') ? displayData.linkedin : `https://linkedin.com/company/${displayData.linkedin}`} 
+                           target="_blank" rel="noopener noreferrer" 
+                           className="text-[#3259B5] hover:underline">
+                          LinkedIn: {displayData.linkedin}
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}
+                {(displayData?.contacto_principal_nombre || displayData?.contacto_principal_cargo || displayData?.contacto_principal_telefono || displayData?.contacto_principal_email) && (
+                  <div className="md:col-span-2">
+                    <Label>Contacto Principal</Label>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                      {displayData.contacto_principal_nombre && (
+                        <div>
+                          <span className="text-sm text-muted-foreground">Nombre: </span>
+                          <span className="font-semibold">{displayData.contacto_principal_nombre}</span>
+                        </div>
+                      )}
+                      {displayData.contacto_principal_cargo && (
+                        <div>
+                          <span className="text-sm text-muted-foreground">Cargo: </span>
+                          <span className="font-semibold">{displayData.contacto_principal_cargo}</span>
+                        </div>
+                      )}
+                      {displayData.contacto_principal_telefono && (
+                        <div>
+                          <span className="text-sm text-muted-foreground">Teléfono: </span>
+                          <span className="font-semibold">{displayData.contacto_principal_telefono}</span>
+                        </div>
+                      )}
+                      {displayData.contacto_principal_email && (
+                        <div>
+                          <span className="text-sm text-muted-foreground">Email: </span>
+                          <span className="font-semibold">{displayData.contacto_principal_email}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {displayData?.geolocalizacion && (() => {
+                  // Parsear geolocalizacion string "lat,lng" a objeto { lat, lng }
+                  const geoString = displayData.geolocalizacion
+                  let coordinates: { lat: number; lng: number } | null = null
+                  
+                  if (typeof geoString === 'string' && geoString.trim()) {
+                    try {
+                      const parts = geoString.split(',').map(v => parseFloat(v.trim()))
+                      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                        coordinates = { lat: parts[0], lng: parts[1] }
+                      }
+                    } catch (error) {
+                      console.error('Error parsing geolocalizacion:', error)
+                    }
+                  }
+                  
+                  return coordinates ? (
+                    <div className="md:col-span-2">
+                      <Label>Ubicación en el Mapa</Label>
+                      <div className="mt-2">
+                        <CompanyMap 
+                          coordinates={coordinates} 
+                          address={displayData?.direccion || displayData?.razon_social}
+                        />
+                      </div>
+                    </div>
+                  ) : null
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
@@ -664,53 +810,119 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
             <Card>
               <CardHeader>
                 <CardTitle className="text-[#222A59]">
-                  {empresa.tipo_empresa === 'producto' ? 'Productos' : empresa.tipo_empresa === 'servicio' ? 'Servicios' : 'Productos y Servicios'}
+                  {empresa.tipo_empresa === 'producto' || empresa.tipo_empresa_valor === 'producto' ? 'Productos' : 
+                   empresa.tipo_empresa === 'servicio' || empresa.tipo_empresa_valor === 'servicio' ? 'Servicios' : 
+                   'Productos y Servicios'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {empresa.tipo_empresa === 'producto' || empresa.tipo_empresa === 'mixta' ? (
+                {(empresa.tipo_empresa === 'producto' || empresa.tipo_empresa === 'mixta' || empresa.tipo_empresa_valor === 'producto' || empresa.tipo_empresa_valor === 'mixta') ? (
                   <div className="space-y-4">
-                    <h3 className="font-semibold">Productos</h3>
+                    <h3 className="font-semibold text-lg">Productos</h3>
                     {displayData?.productos && displayData.productos.length > 0 ? (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {displayData.productos.map((producto: any, index: number) => (
-                          <div key={index} className="p-4 border rounded-lg">
-                            <p className="font-semibold">{producto.nombre_producto || producto.nombre}</p>
-                            <p className="text-sm text-muted-foreground mt-1">{producto.descripcion || 'Sin descripción'}</p>
-                            {producto.capacidad_productiva && (
-                              <p className="text-sm mt-1">Capacidad: {producto.capacidad_productiva}</p>
-                            )}
-                            {producto.posicion_arancelaria && (
-                              <p className="text-sm mt-1">Posición Arancelaria: {producto.posicion_arancelaria}</p>
-                            )}
+                          <div key={producto.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-semibold text-lg">{producto.nombre_producto || producto.nombre}</p>
+                                {producto.descripcion && (
+                                  <p className="text-sm text-muted-foreground mt-2">{producto.descripcion}</p>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                  {producto.capacidad_productiva && (
+                                    <div>
+                                      <span className="text-sm font-medium">Capacidad Productiva: </span>
+                                      <span className="text-sm">{producto.capacidad_productiva} {producto.unidad_medida || ''}</span>
+                                    </div>
+                                  )}
+                                  {producto.posicion_arancelaria && (
+                                    <div>
+                                      <span className="text-sm font-medium">Posición Arancelaria: </span>
+                                      <span className="text-sm">{typeof producto.posicion_arancelaria === 'object' ? producto.posicion_arancelaria.codigo_arancelario : producto.posicion_arancelaria}</span>
+                                    </div>
+                                  )}
+                                  {producto.periodo_capacidad && (
+                                    <div>
+                                      <span className="text-sm font-medium">Período: </span>
+                                      <span className="text-sm">{producto.periodo_capacidad}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">No hay productos registrados</p>
+                      <p className="text-muted-foreground py-4">No hay productos registrados</p>
                     )}
                   </div>
                 ) : null}
-                {empresa.tipo_empresa === 'servicio' || empresa.tipo_empresa === 'mixta' ? (
+                {(empresa.tipo_empresa === 'servicio' || empresa.tipo_empresa === 'mixta' || empresa.tipo_empresa_valor === 'servicio' || empresa.tipo_empresa_valor === 'mixta') ? (
                   <div className="space-y-4 mt-6">
-                    <h3 className="font-semibold">Servicios</h3>
+                    <h3 className="font-semibold text-lg">Servicios</h3>
                     {displayData?.servicios && displayData.servicios.length > 0 ? (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {displayData.servicios.map((servicio: any, index: number) => (
-                          <div key={index} className="p-4 border rounded-lg">
-                            <p className="font-semibold">{servicio.nombre_servicio || servicio.nombre}</p>
-                            <p className="text-sm text-muted-foreground mt-1">{servicio.descripcion || 'Sin descripción'}</p>
-                            {servicio.tipo_servicio && (
-                              <p className="text-sm mt-1">Tipo: {servicio.tipo_servicio}</p>
-                            )}
-                            {servicio.sector_atendido && (
-                              <p className="text-sm mt-1">Sector: {servicio.sector_atendido}</p>
-                            )}
+                          <div key={servicio.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-semibold text-lg">{servicio.nombre_servicio || servicio.descripcion || servicio.nombre}</p>
+                                {servicio.descripcion && servicio.nombre_servicio && (
+                                  <p className="text-sm text-muted-foreground mt-2">{servicio.descripcion}</p>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                                  {servicio.tipo_servicio && (
+                                    <div>
+                                      <span className="text-sm font-medium">Tipo: </span>
+                                      <span className="text-sm">{Array.isArray(servicio.tipo_servicio) ? servicio.tipo_servicio.join(', ') : servicio.tipo_servicio}</span>
+                                    </div>
+                                  )}
+                                  {servicio.sectores && servicio.sectores.length > 0 && (
+                                    <div>
+                                      <span className="text-sm font-medium">Sectores: </span>
+                                      <span className="text-sm">{Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores}</span>
+                                    </div>
+                                  )}
+                                  {servicio.alcance_geografico && (
+                                    <div>
+                                      <span className="text-sm font-medium">Alcance Geográfico: </span>
+                                      <span className="text-sm">{servicio.alcance_geografico}</span>
+                                    </div>
+                                  )}
+                                  {servicio.paises_destino && (
+                                    <div>
+                                      <span className="text-sm font-medium">Países Destino: </span>
+                                      <span className="text-sm">{servicio.paises_destino}</span>
+                                    </div>
+                                  )}
+                                  {servicio.idiomas && servicio.idiomas.length > 0 && (
+                                    <div>
+                                      <span className="text-sm font-medium">Idiomas: </span>
+                                      <span className="text-sm">{Array.isArray(servicio.idiomas) ? servicio.idiomas.join(', ') : servicio.idiomas}</span>
+                                    </div>
+                                  )}
+                                  {servicio.forma_contratacion && (
+                                    <div>
+                                      <span className="text-sm font-medium">Forma de Contratación: </span>
+                                      <span className="text-sm">{Array.isArray(servicio.forma_contratacion) ? servicio.forma_contratacion.join(', ') : servicio.forma_contratacion}</span>
+                                    </div>
+                                  )}
+                                  {servicio.certificaciones_tecnicas && (
+                                    <div className="md:col-span-2">
+                                      <span className="text-sm font-medium">Certificaciones Técnicas: </span>
+                                      <span className="text-sm">{servicio.certificaciones_tecnicas}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">No hay servicios registrados</p>
+                      <p className="text-muted-foreground py-4">No hay servicios registrados</p>
                     )}
                   </div>
                 ) : null}

@@ -24,6 +24,10 @@ xhtml2pdf==0.2.15
 # Validaciones y utilidades
 phonenumbers==8.13.46
 python-dateutil==2.9.0.post0
+requests>=2.31.0
+
+# Procesamiento de imágenes (requerido para ImageField)
+Pillow>=10.0.0
 
 # Desarrollo
 django-debug-toolbar==4.4.6

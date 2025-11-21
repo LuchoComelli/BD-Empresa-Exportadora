@@ -2,8 +2,41 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from apps.core.models import TimestampedModel
 from apps.empresas.models import Empresa
+import re
+from datetime import datetime
 
 User = get_user_model()
+
+
+def generar_nombre_catalogo_solicitud(instance, filename):
+    """
+    Genera un nombre personalizado para el catálogo PDF en solicitudes
+    Formato: catalogo-{nombre-empresa}-MM-YYYY.pdf
+    """
+    # Obtener la razón social de la solicitud
+    razon_social = instance.razon_social if hasattr(instance, 'razon_social') else 'empresa'
+    
+    # Limpiar el nombre: eliminar caracteres especiales, espacios, acentos
+    nombre_limpio = razon_social.lower()
+    # Reemplazar espacios y caracteres especiales con guiones
+    nombre_limpio = re.sub(r'[^a-z0-9]+', '-', nombre_limpio)
+    # Eliminar guiones al inicio y final
+    nombre_limpio = nombre_limpio.strip('-')
+    # Limitar longitud a 50 caracteres para evitar nombres muy largos
+    nombre_limpio = nombre_limpio[:50]
+    
+    # Obtener fecha actual en formato MM-YYYY
+    fecha_actual = datetime.now()
+    fecha_formato = fecha_actual.strftime('%m-%Y')
+    
+    # Obtener extensión del archivo original
+    extension = filename.split('.')[-1] if '.' in filename else 'pdf'
+    
+    # Generar nombre final
+    nombre_final = f"catalogo-{nombre_limpio}-{fecha_formato}.{extension}"
+    
+    # Retornar ruta con estructura de carpetas por año/mes
+    return f"catalogos/{fecha_actual.year}/{fecha_actual.month:02d}/{nombre_final}"
 
 class SolicitudRegistro(TimestampedModel):
     """
@@ -132,7 +165,7 @@ class SolicitudRegistro(TimestampedModel):
     )
     brochure_url = models.CharField(max_length=255, blank=True, null=True, verbose_name="URL del Brochure")
     catalogo_pdf = models.FileField(
-        upload_to='catalogos/%Y/%m/',
+        upload_to=generar_nombre_catalogo_solicitud,
         blank=True,
         null=True,
         verbose_name="Catálogo en PDF",

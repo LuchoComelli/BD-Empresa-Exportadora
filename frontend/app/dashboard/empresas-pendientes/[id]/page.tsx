@@ -14,6 +14,7 @@ import { ArrowLeft, CheckCircle, XCircle, Edit2, Save, Loader2 } from "lucide-re
 import Link from "next/link"
 import api from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/hooks/use-toast"
 
 interface EmpresaPendiente {
   id: number
@@ -60,6 +61,7 @@ interface EmpresaPendiente {
 
 export default function EmpresaPendientePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
+  const { toast } = useToast()
   const resolvedParams = use(params)
   const [empresa, setEmpresa] = useState<EmpresaPendiente | null>(null)
   const [loading, setLoading] = useState(true)
@@ -89,10 +91,19 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
       await api.post(`/registro/solicitudes/${resolvedParams.id}/aprobar/`, {
         observaciones: observaciones
       })
+      toast({
+        title: "Empresa aprobada",
+        description: `La empresa "${empresa?.razon_social}" ha sido aprobada exitosamente y se ha creado su cuenta.`,
+        variant: "default",
+      })
       router.push("/dashboard/empresas-pendientes")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error aprobando empresa:", error)
-      alert("Error al aprobar la empresa. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error al aprobar",
+        description: error.message || "Error al aprobar la empresa. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     } finally {
       setLoadingAction(false)
     }
@@ -108,10 +119,19 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
       await api.post(`/registro/solicitudes/${resolvedParams.id}/rechazar/`, {
         observaciones: observaciones
       })
+      toast({
+        title: "Solicitud rechazada",
+        description: `La solicitud de "${empresa?.razon_social}" ha sido rechazada.`,
+        variant: "default",
+      })
       router.push("/dashboard/empresas-pendientes")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error rechazando empresa:", error)
-      alert("Error al rechazar la empresa. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error al rechazar",
+        description: error.message || "Error al rechazar la empresa. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     } finally {
       setLoadingAction(false)
     }

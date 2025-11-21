@@ -1,13 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Building2, Globe, Award, ArrowRight, BarChart3 } from "lucide-react"
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel"
+import { Globe, Award, ArrowRight, BarChart3 } from "lucide-react"
 import api from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 
 export default function HomePage() {
+  const { user } = useAuth()
   const [stats, setStats] = useState({
     total_empresas_registradas: 0,
     total_empresas_exportadoras: 0,
@@ -27,6 +31,31 @@ export default function HomePage() {
     beneficio3_descripcion: "Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora"
   })
   const [loading, setLoading] = useState(true)
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>()
+  const [current, setCurrent] = useState(0)
+
+  useEffect(() => {
+    if (!carouselApi) {
+      return
+    }
+
+    setCurrent(carouselApi.selectedScrollSnap())
+
+    carouselApi.on("select", () => {
+      setCurrent(carouselApi.selectedScrollSnap())
+    })
+  }, [carouselApi])
+
+  // Autoplay del carrusel
+  useEffect(() => {
+    if (!carouselApi) return
+
+    const interval = setInterval(() => {
+      carouselApi.scrollNext()
+    }, 5000) // Cambiar cada 5 segundos
+
+    return () => clearInterval(interval)
+  }, [carouselApi])
 
   useEffect(() => {
     loadStats()
@@ -73,68 +102,144 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
-        <div className="container mx-auto px-4 py-3 md:py-4 flex items-center justify-between gap-2">
+        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-6 h-6 md:w-7 md:h-7 text-[#222A59]" />
-            </div>
+            <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
+              <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
+                <Image
+                  src="/logo.png"
+                  alt="Logo Catamarca"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            </Link>
             <div className="min-w-0">
               <h1 className="text-sm md:text-lg font-bold text-white truncate">Dirección de Intercambio Comercial Internacional y Regional</h1>
-              <p className="text-xs text-white/80 hidden sm:block">Provincia de Catamarca</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-            <Link href="/login">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
-              >
-                <span className="hidden sm:inline">Iniciar Sesión</span>
-                <span className="sm:hidden">Login</span>
-              </Button>
-            </Link>
-            <Link href="/registro">
-              <Button
-                size="sm"
-                className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
-              >
-                <span className="hidden sm:inline">Registrar Empresa</span>
-                <span className="sm:hidden">Registro</span>
-              </Button>
-            </Link>
-          </div>
+          {!user && (
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+              <Link href="/login">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
+                >
+                  <span className="hidden sm:inline">Iniciar Sesión</span>
+                  <span className="sm:hidden">Login</span>
+                </Button>
+              </Link>
+              <Link href="/registro">
+                <Button
+                  size="sm"
+                  className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
+                >
+                  <span className="hidden sm:inline">Registrar Empresa</span>
+                  <span className="sm:hidden">Registro</span>
+                </Button>
+              </Link>
+            </div>
+          )}
+          {user && (
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+              <Link href="/dashboard">
+                <Button
+                  size="sm"
+                  className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
+                >
+                  <span className="hidden sm:inline">Ir al Dashboard</span>
+                  <span className="sm:hidden">Dashboard</span>
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       </header>
 
-      <section className="container mx-auto px-4 py-12 md:py-20 text-center">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-[#222A59] mb-4 md:mb-6 text-balance">
-            Impulsa tu Empresa hacia el Mercado Internacional
-          </h2>
-          <p className="text-base md:text-xl text-[#6B7280] mb-6 md:mb-8 text-pretty leading-relaxed px-2">
-            Registra tu empresa en nuestro sistema y accede a herramientas de evaluación, capacitación y apoyo para
-            convertirte en exportador
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4">
-            <Link href="/registro" className="w-full sm:w-auto">
-              <Button
-                size="lg"
-                className="w-full sm:w-auto bg-[#3259B5] hover:bg-[#3259B5]/90 text-white text-base md:text-lg px-6 md:px-8"
-              >
-                Comenzar Ahora
-                <ArrowRight className="ml-2 w-4 h-4 md:w-5 md:h-5" />
-              </Button>
-            </Link>
-            <Link href="#beneficios" className="w-full sm:w-auto">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full sm:w-auto text-base md:text-lg px-6 md:px-8 border-2 border-[#3259B5] text-[#3259B5] hover:bg-[#3259B5]/5 bg-transparent"
-              >
-                Conocer Más
-              </Button>
-            </Link>
+      <section className="relative w-full h-[350px] md:h-[400px] lg:h-[450px] overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <Carousel
+            setApi={setCarouselApi}
+            opts={{
+              align: "start",
+              loop: true,
+            }}
+            className="w-full h-full"
+          >
+            <CarouselContent className="h-full">
+              <CarouselItem className="h-full pl-0">
+                <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
+                  <Image
+                    src="/foto1.jpg"
+                    alt="Catamarca - Uvas"
+                    fill
+                    className="object-cover"
+                    priority
+                    sizes="100vw"
+                  />
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+                </div>
+              </CarouselItem>
+              <CarouselItem className="h-full pl-0">
+                <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
+                  <Image
+                    src="/foto2.jpeg"
+                    alt="Catamarca - Aceitunas"
+                    fill
+                    className="object-cover"
+                    sizes="100vw"
+                  />
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+                </div>
+              </CarouselItem>
+              <CarouselItem className="h-full pl-0">
+                <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
+                  <Image
+                    src="/foto3.jpeg"
+                    alt="Catamarca - Artesanía"
+                    fill
+                    className="object-cover"
+                    sizes="100vw"
+                  />
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+                </div>
+              </CarouselItem>
+            </CarouselContent>
+          </Carousel>
+        </div>
+
+        {/* Contenido del hero sobre el carrusel */}
+        <div className="relative z-10 container mx-auto px-4 h-full flex items-center justify-center">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 md:mb-6 text-balance drop-shadow-lg">
+              Impulsa tu Empresa hacia el Mercado Internacional
+            </h2>
+            <p className="text-base md:text-xl text-white/95 mb-6 md:mb-8 text-pretty leading-relaxed px-2 drop-shadow-md">
+              Registra tu empresa en nuestro sistema y accede a herramientas de evaluación, capacitación y apoyo para
+              convertirte en exportador
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4">
+              <Link href="/registro" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto bg-[#3259B5] hover:bg-[#3259B5]/90 text-white text-base md:text-lg px-6 md:px-8 shadow-lg"
+                >
+                  Comenzar Ahora
+                  <ArrowRight className="ml-2 w-4 h-4 md:w-5 md:h-5" />
+                </Button>
+              </Link>
+              <Link href="#beneficios" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto text-base md:text-lg px-6 md:px-8 border-2 border-white text-white hover:bg-white/10 bg-white/5 backdrop-blur-sm"
+                >
+                  Conocer Más
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -270,6 +375,18 @@ export default function HomePage() {
 
       <footer className="bg-[#222A59] text-white py-8 md:py-12">
         <div className="container mx-auto px-4">
+          <div className="flex flex-col items-center gap-4 md:gap-6 mb-6 md:mb-8">
+            <div className="relative w-full max-w-4xl h-auto">
+              <Image
+                src="/footer.png"
+                alt="Footer Catamarca"
+                width={1200}
+                height={300}
+                className="w-full h-auto object-contain"
+                priority
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-6 md:mb-8">
             <div>
               <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">{configuracion.institucion}</h4>

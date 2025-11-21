@@ -3,12 +3,13 @@
 import type React from "react"
 
 import { useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Building2, Mail, ArrowLeft, CheckCircle2 } from "lucide-react"
+import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react"
 
 export default function RecuperarContrasenaPage() {
   const [email, setEmail] = useState("")
@@ -32,8 +33,14 @@ export default function RecuperarContrasenaPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6 md:mb-8">
           <Link href="/" className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-xl flex items-center justify-center shadow-lg">
-              <Building2 className="w-8 h-8 md:w-10 md:h-10 text-[#222A59]" />
+            <div className="relative w-12 h-12 md:w-16 md:h-16 bg-white rounded-xl flex items-center justify-center shadow-lg p-2">
+              <Image
+                src="/logo.png"
+                alt="Logo Catamarca"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
           </Link>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Recuperar Contraseña</h1>

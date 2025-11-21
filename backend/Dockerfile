@@ -14,6 +14,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client-17 \
     libpq-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements
