@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import RolUsuario, Dpto, Municipio, Localidades, ConfiguracionSistema
+from .models import RolUsuario, ConfiguracionSistema
+from apps.geografia.models import Departamento, Municipio, Localidad
+
 
 User = get_user_model()
 
@@ -216,40 +218,42 @@ class UsuarioListSerializer(serializers.ModelSerializer):
 
 
 class DptoSerializer(serializers.ModelSerializer):
-    """Serializer para departamentos"""
-    nombre = serializers.CharField(source='nomdpto', read_only=True)
-    codigo = serializers.CharField(source='coddpto', read_only=True)
+    """Serializer para departamentos (usando modelo nuevo)"""
     
     class Meta:
-        model = Dpto
-        fields = ['id', 'nombre', 'codigo', 'nomdpto', 'coddpto', 'codprov', 'activo']
+        model = Departamento  # ✅ Ahora usa Departamento de geografia
+        fields = ['id', 'nombre', 'nombre_completo', 'categoria', 'provincia']
         read_only_fields = ['id']
 
 
 class MunicipioSerializer(serializers.ModelSerializer):
-    """Serializer para municipios"""
-    nombre = serializers.CharField(source='nommun', read_only=True)
-    codigo = serializers.CharField(source='codmun', read_only=True)
-    departamento_nombre = serializers.CharField(source='dpto.nomdpto', read_only=True)
+    """Serializer para municipios (usando modelo nuevo)"""
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    provincia_nombre = serializers.CharField(source='provincia.nombre', read_only=True)
     
     class Meta:
-        model = Municipio
-        fields = ['id', 'nombre', 'codigo', 'nommun', 'codmun', 'dpto', 'departamento', 'departamento_nombre', 'coddpto', 'codprov', 'activo']
+        model = Municipio  # ✅ Ahora usa Municipio de geografia
+        fields = [
+            'id', 'nombre', 'nombre_completo', 'categoria',
+            'provincia', 'provincia_nombre', 
+            'departamento', 'departamento_nombre'
+        ]
         read_only_fields = ['id']
 
 
 class LocalidadesSerializer(serializers.ModelSerializer):
-    """Serializer para localidades"""
-    nombre = serializers.CharField(source='nomloc', read_only=True)
-    codigo = serializers.CharField(source='codloc', read_only=True)
-    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True)
-    departamento_nombre = serializers.CharField(source='municipio.dpto.nomdpto', read_only=True)
+    """Serializer para localidades (usando modelo nuevo)"""
+    municipio_nombre = serializers.CharField(source='municipio.nombre', read_only=True, allow_null=True)
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    provincia_nombre = serializers.CharField(source='provincia.nombre', read_only=True)
     
     class Meta:
-        model = Localidades
+        model = Localidad  # ✅ Ahora usa Localidad de geografia
         fields = [
-            'id', 'nombre', 'codigo', 'nomloc', 'codloc', 'municipio', 
-            'municipio_nombre', 'departamento_nombre', 'codmun', 'coddpto', 'codprov', 'activo'
+            'id', 'nombre', 'categoria', 'tipo_asentamiento',
+            'provincia', 'provincia_nombre',
+            'departamento', 'departamento_nombre',
+            'municipio', 'municipio_nombre'
         ]
         read_only_fields = ['id']
 

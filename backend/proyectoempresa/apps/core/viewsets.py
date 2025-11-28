@@ -2,7 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from .models import RolUsuario, Dpto, Municipio, Localidades, ConfiguracionSistema
+from .models import RolUsuario, ConfiguracionSistema
+from apps.geografia.models import Departamento, Municipio, Localidad
 from .serializers import (
     RolUsuarioSerializer, UsuarioSerializer, UsuarioListSerializer,
     DptoSerializer, MunicipioSerializer, LocalidadesSerializer,
@@ -100,7 +101,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
 class DptoViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para departamentos (solo lectura)"""
-    queryset = Dpto.objects.filter(activo=True)
+    queryset = Departamento.objects.all()
     serializer_class = DptoSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ['activo', 'codprov']
@@ -111,7 +112,7 @@ class DptoViewSet(viewsets.ReadOnlyModelViewSet):
 
 class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para municipios (solo lectura)"""
-    queryset = Municipio.objects.select_related('dpto').filter(activo=True)
+    queryset = Municipio.objects.select_related('departamento', 'provincia').all()
     serializer_class = MunicipioSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ['activo', 'dpto', 'codprov']
@@ -133,7 +134,7 @@ class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
 
 class LocalidadesViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para localidades (solo lectura)"""
-    queryset = Localidades.objects.select_related('municipio', 'municipio__dpto').filter(activo=True)
+    queryset = Localidad.objects.select_related('departamento', 'provincia', 'municipio').all()
     serializer_class = LocalidadesSerializer
     permission_classes = [permissions.AllowAny]
     filterset_fields = ['activo', 'municipio', 'codprov']

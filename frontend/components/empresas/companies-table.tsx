@@ -17,7 +17,6 @@ interface Empresa {
   exporta?: string
   categoria_matriz?: string
   departamento?: string
-  provincia?: string
   rubro_principal?: string
   correo?: string
   telefono?: string
@@ -197,8 +196,7 @@ export function CompaniesTable({
                       {[
                         empresa.departamento_nombre || empresa.departamento?.nomdpto || empresa.departamento,
                         empresa.municipio_nombre || empresa.municipio?.nommun || empresa.municipio,
-                        empresa.localidad_nombre || empresa.localidad?.nomloc || empresa.localidad,
-                        empresa.provincia
+                        empresa.localidad_nombre || empresa.localidad?.nomloc || empresa.localidad
                       ].filter(Boolean).join(", ") || "N/A"}
                     </td>
                     <td className="py-3 md:py-4 px-3 md:px-6">

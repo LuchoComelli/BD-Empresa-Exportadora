@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel"
-import { Globe, Award, ArrowRight, BarChart3 } from "lucide-react"
+import { Globe, Award, ArrowRight, BarChart3, Instagram, Linkedin } from "lucide-react"
 import api from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 
@@ -115,9 +115,6 @@ export default function HomePage() {
                 />
               </div>
             </Link>
-            <div className="min-w-0">
-              <h1 className="text-sm md:text-lg font-bold text-white truncate">Dirección de Intercambio Comercial Internacional y Regional</h1>
-            </div>
           </div>
           {!user && (
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
@@ -159,56 +156,56 @@ export default function HomePage() {
       </header>
 
       <section className="relative w-full h-[350px] md:h-[400px] lg:h-[450px] overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <Carousel
-            setApi={setCarouselApi}
-            opts={{
-              align: "start",
-              loop: true,
-            }}
-            className="w-full h-full"
-          >
-            <CarouselContent className="h-full">
-              <CarouselItem className="h-full pl-0">
-                <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
-                  <Image
-                    src="/foto1.jpg"
-                    alt="Catamarca - Uvas"
-                    fill
-                    className="object-cover"
-                    priority
-                    sizes="100vw"
-                  />
-                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
-                </div>
-              </CarouselItem>
-              <CarouselItem className="h-full pl-0">
-                <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
-                  <Image
-                    src="/foto2.jpeg"
-                    alt="Catamarca - Aceitunas"
-                    fill
-                    className="object-cover"
-                    sizes="100vw"
-                  />
-                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
-                </div>
-              </CarouselItem>
-              <CarouselItem className="h-full pl-0">
-                <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
-                  <Image
-                    src="/foto3.jpeg"
-                    alt="Catamarca - Artesanía"
-                    fill
-                    className="object-cover"
-                    sizes="100vw"
-                  />
-                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
-                </div>
-              </CarouselItem>
-            </CarouselContent>
-          </Carousel>
-        </div>
+  <div className="absolute inset-0 z-0">
+    <Carousel
+      setApi={setCarouselApi}
+      opts={{
+        align: "start",
+        loop: true,
+      }}
+      className="w-full h-full"
+    >
+      <CarouselContent className="h-full">
+        <CarouselItem className="h-full pl-0">
+          <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
+            <Image
+              src="/foto1.jpg"
+              alt="Catamarca - Uvas"
+              fill
+              className="object-cover"
+              priority
+              sizes="100vw"
+            />
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-[3px]"></div>
+          </div>
+        </CarouselItem>
+        <CarouselItem className="h-full pl-0">
+          <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
+            <Image
+              src="/foto2.jpeg"
+              alt="Catamarca - Aceitunas"
+              fill
+              className="object-cover"
+              sizes="100vw"
+            />
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-[3px]"></div>
+          </div>
+        </CarouselItem>
+        <CarouselItem className="h-full pl-0">
+          <div className="relative w-full h-[350px] md:h-[400px] lg:h-[450px]">
+            <Image
+              src="/foto3.jpeg"
+              alt="Catamarca - Artesanía"
+              fill
+              className="object-cover"
+              sizes="100vw"
+            />
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-[3px]"></div>
+          </div>
+        </CarouselItem>
+      </CarouselContent>
+    </Carousel>
+  </div>
 
         {/* Contenido del hero sobre el carrusel */}
         <div className="relative z-10 container mx-auto px-4 h-full flex items-center justify-center">
@@ -374,58 +371,72 @@ export default function HomePage() {
       </section>
 
       <footer className="bg-[#222A59] text-white py-8 md:py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col items-center gap-4 md:gap-6 mb-6 md:mb-8">
-            <div className="relative w-full max-w-4xl h-auto">
-              <Image
-                src="/footer.png"
-                alt="Footer Catamarca"
-                width={1200}
-                height={300}
-                className="w-full h-auto object-contain"
-                priority
-              />
-            </div>
+      <div className="container mx-auto px-4">
+        {/* Grid de contenido */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
+          <div>
+            <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Contacto</h4>
+            <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
+            <p className="text-white/80 text-sm mb-2">{configuracion.telefono}</p>
+            <p className="text-white/80 text-sm">{configuracion.email_contacto}</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-6 md:mb-8">
-            <div>
-              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">{configuracion.institucion}</h4>
-              <p className="text-white/80 text-sm leading-relaxed">
-                Impulsando el desarrollo económico y la competitividad de las empresas catamarqueñas
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Contacto</h4>
-              <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
-              <p className="text-white/80 text-sm mb-2">{configuracion.telefono}</p>
-              <p className="text-white/80 text-sm">{configuracion.email_contacto}</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Enlaces Útiles</h4>
-              <ul className="space-y-2 text-sm text-white/80">
-                <li>
-                  <Link href="/login" className="hover:text-white transition-colors">
-                    Iniciar Sesión
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/registro" className="hover:text-white transition-colors">
-                    Registrar Empresa
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#beneficios" className="hover:text-white transition-colors">
-                    Beneficios
-                  </Link>
-                </li>
-              </ul>
-            </div>
+          <div>
+            <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Enlaces Útiles</h4>
+            <ul className="space-y-2 text-sm text-white/80">
+              <li>
+                <Link href="/login" className="hover:text-white transition-colors">
+                  Iniciar Sesión
+                </Link>
+              </li>
+              <li>
+                <Link href="/registro" className="hover:text-white transition-colors">
+                  Registrar Empresa
+                </Link>
+              </li>
+              <li>
+                <Link href="#beneficios" className="hover:text-white transition-colors">
+                  Beneficios
+                </Link>
+              </li>
+            </ul>
           </div>
-          <div className="border-t border-white/20 pt-6 md:pt-8 text-center text-xs md:text-sm text-white/80">
-            <p>© {new Date().getFullYear()} {configuracion.institucion} - Provincia de Catamarca. Todos los derechos reservados.</p>
+          <div>
+            <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Redes Sociales</h4>
+            <div className="flex gap-4">
+              <a 
+                href="https://www.instagram.com/min.integracionregional.cat?igsh=MTIzdTZkczVpZ2o4bQ=="
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                aria-label="Instagram"
+              >
+                <Instagram className="w-5 h-5" />
+              </a>
+              <a 
+                href="https://www.linkedin.com/company/sec-relaciones-internacionales-catamarca/posts/?feedView=all"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                aria-label="LinkedIn"
+              >
+                <Linkedin className="w-5 h-5" />
+              </a>
+            </div>
           </div>
         </div>
-      </footer>
+
+        {/* Imagen del footer al final */}
+        <div className="flex flex-col items-center">
+          <div className="relative w-full max-w-2xl h-auto">
+            <img
+              src="/footer.png"
+              alt="Footer Catamarca"
+              className="w-full h-auto object-contain"
+            />
+          </div>
+        </div>
+      </div>
+    </footer>
     </div>
   )
 }

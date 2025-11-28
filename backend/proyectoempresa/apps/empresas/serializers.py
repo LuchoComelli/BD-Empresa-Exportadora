@@ -7,192 +7,7 @@ from .models import (
     PosicionArancelaria, PosicionArancelariaMixta,
     MatrizClasificacionExportador
 )
-from apps.core.models import Dpto, Municipio, Localidades
-from apps.geografia.models import Departamento as GeoDepartamento, Municipio as GeoMunicipio, Localidad as GeoLocalidad
-
-
-def obtener_departamento_core_por_codigo_geografia(codigo_geografia):
-    """
-    Busca un departamento en core.dpto usando el código de geografía.
-    Primero busca en geografia, luego busca o crea en core usando el código.
-    """
-    if codigo_geografia is None:
-        return None
-    
-    codigo_str = str(codigo_geografia)
-    
-    # Primero intentar como ID numérico directo en core
-    try:
-        codigo_int = int(codigo_str)
-        dpto = Dpto.objects.filter(id=codigo_int, activo=True).first()
-        if dpto:
-            return dpto
-    except (ValueError, TypeError):
-        pass
-    
-    # Buscar en geografia para obtener el nombre
-    try:
-        geo_dpto = GeoDepartamento.objects.get(id=codigo_str)
-        # Buscar en core por código (coddpto)
-        dpto = Dpto.objects.filter(coddpto=codigo_str, activo=True).first()
-        if dpto:
-            return dpto
-        # Si no existe, crear uno nuevo en core usando el código de geografía
-        dpto = Dpto.objects.create(
-            coddpto=codigo_str,
-            nomdpto=geo_dpto.nombre,
-            codprov=geo_dpto.provincia.id if geo_dpto.provincia else '',
-            activo=True
-        )
-        return dpto
-    except GeoDepartamento.DoesNotExist:
-        # Si no existe en geografia, buscar por código en core
-        dpto = Dpto.objects.filter(coddpto=codigo_str, activo=True).first()
-        if dpto:
-            return dpto
-        # Intentar buscar por ID numérico si el código es numérico
-        try:
-            codigo_int = int(codigo_str)
-            dpto = Dpto.objects.filter(id=codigo_int, activo=True).first()
-            if dpto:
-                return dpto
-        except (ValueError, TypeError):
-            pass
-        raise serializers.ValidationError(f"Departamento con código '{codigo_str}' no encontrado en geografía ni en core")
-
-
-def obtener_municipio_core_por_codigo_geografia(codigo_geografia, codigo_departamento=None):
-    """
-    Busca un municipio en core.municipio usando el código de geografía.
-    """
-    if codigo_geografia is None:
-        return None
-    
-    codigo_str = str(codigo_geografia)
-    
-    # Intentar como ID numérico directo
-    try:
-        codigo_int = int(codigo_str)
-        municipio = Municipio.objects.filter(id=codigo_int, activo=True).first()
-        if municipio:
-            return municipio
-    except (ValueError, TypeError):
-        pass
-    
-    # Buscar en geografia
-    try:
-        geo_mun = GeoMunicipio.objects.get(id=codigo_str)
-        # Obtener el departamento de core
-        dpto_core = None
-        if codigo_departamento:
-            dpto_core = obtener_departamento_core_por_codigo_geografia(codigo_departamento)
-        elif geo_mun.departamento:
-            dpto_core = obtener_departamento_core_por_codigo_geografia(geo_mun.departamento.id)
-        
-        # Buscar en core por código
-        municipio = Municipio.objects.filter(codmun=codigo_str, activo=True).first()
-        if municipio:
-            return municipio
-        
-        # Si no existe y tenemos departamento, crear uno nuevo
-        if dpto_core:
-            municipio = Municipio.objects.create(
-                codmun=codigo_str,
-                nommun=geo_mun.nombre,
-                coddpto=dpto_core.coddpto,
-                codprov=geo_mun.provincia.id if geo_mun.provincia else '',
-                dpto=dpto_core,
-                activo=True
-            )
-            return municipio
-    except GeoMunicipio.DoesNotExist:
-        pass
-    
-    # Buscar por código en core como último recurso
-    municipio = Municipio.objects.filter(codmun=codigo_str, activo=True).first()
-    if municipio:
-        return municipio
-    
-    # Intentar buscar por ID numérico si el código es numérico
-    try:
-        codigo_int = int(codigo_str)
-        municipio = Municipio.objects.filter(id=codigo_int, activo=True).first()
-        if municipio:
-            return municipio
-    except (ValueError, TypeError):
-        pass
-    
-    return None  # Permitir None para municipios opcionales
-
-
-def obtener_localidad_core_por_codigo_geografia(codigo_geografia, codigo_municipio=None):
-    """
-    Busca una localidad en core.localidades usando el código de geografía.
-    """
-    if codigo_geografia is None:
-        return None
-    
-    codigo_str = str(codigo_geografia)
-    
-    # Intentar como ID numérico directo
-    try:
-        codigo_int = int(codigo_str)
-        localidad = Localidades.objects.filter(id=codigo_int, activo=True).first()
-        if localidad:
-            return localidad
-    except (ValueError, TypeError):
-        pass
-    
-    # Buscar en geografia
-    try:
-        geo_loc = GeoLocalidad.objects.get(id=codigo_str)
-        # Obtener el municipio de core
-        mun_core = None
-        if codigo_municipio:
-            mun_core = obtener_municipio_core_por_codigo_geografia(codigo_municipio)
-        elif geo_loc.municipio:
-            mun_core = obtener_municipio_core_por_codigo_geografia(geo_loc.municipio.id, geo_loc.departamento.id if geo_loc.departamento else None)
-        
-        # Buscar en core por código
-        localidad = Localidades.objects.filter(codloc=codigo_str, activo=True).first()
-        if localidad:
-            return localidad
-        
-        # Si no existe y tenemos municipio, crear uno nuevo
-        if mun_core:
-            localidad = Localidades.objects.create(
-                codloc=codigo_str,
-                codlocsv=codigo_str[:10] if len(codigo_str) > 10 else codigo_str,
-                nomloc=geo_loc.nombre,
-                codmun=mun_core.codmun,
-                coddpto=mun_core.dpto.coddpto,
-                codprov=geo_loc.provincia.id if geo_loc.provincia else '',
-                codpais='AR',
-                latitud=float(geo_loc.centroide_lat) if geo_loc.centroide_lat else None,
-                longitud=float(geo_loc.centroide_lon) if geo_loc.centroide_lon else None,
-                codpos='',
-                municipio=mun_core,
-                activo=True
-            )
-            return localidad
-    except GeoLocalidad.DoesNotExist:
-        pass
-    
-    # Buscar por código en core como último recurso
-    localidad = Localidades.objects.filter(codloc=codigo_str, activo=True).first()
-    if localidad:
-        return localidad
-    
-    # Intentar buscar por ID numérico si el código es numérico
-    try:
-        codigo_int = int(codigo_str)
-        localidad = Localidades.objects.filter(id=codigo_int, activo=True).first()
-        if localidad:
-            return localidad
-    except (ValueError, TypeError):
-        pass
-    
-    return None  # Permitir None para localidades opcionales
+from apps.geografia.models import Departamento, Municipio, Localidad
 
 
 class TipoEmpresaSerializer(serializers.ModelSerializer):
@@ -282,7 +97,14 @@ class ProductoEmpresaSerializer(serializers.ModelSerializer):
 
 class ServicioEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para servicios de empresa"""
-    
+    # Campos alias para facilitar el consumo desde el frontend
+    sectores = serializers.SerializerMethodField()
+    alcance_geografico = serializers.CharField(source='alcance_servicio', read_only=True)
+    paises_destino = serializers.CharField(source='paises_trabaja', read_only=True)
+    idiomas = serializers.SerializerMethodField()
+    exporta_servicios_alias = serializers.BooleanField(source='exporta_servicios', read_only=True)
+    interes_exportar = serializers.BooleanField(source='interes_exportar_servicios', read_only=True)
+
     class Meta:
         model = ServicioEmpresa
         fields = [
@@ -292,25 +114,49 @@ class ServicioEmpresaSerializer(serializers.ModelSerializer):
             'exporta_servicios', 'interes_exportar_servicios',
             'idiomas_trabajo', 'idioma_otro', 'forma_contratacion',
             'forma_contratacion_otro', 'certificaciones_tecnicas',
-            'tiene_equipo_tecnico', 'equipo_tecnico_formacion', 'es_principal'
+            'tiene_equipo_tecnico', 'equipo_tecnico_formacion', 'es_principal',
+            # Aliases (read-only extras) para compatibilidad con frontend
+            'sectores', 'alcance_geografico', 'paises_destino', 'idiomas', 'exporta_servicios_alias', 'interes_exportar'
         ]
         read_only_fields = ['id']
+
+    def get_sectores(self, obj):
+        parts = []
+        try:
+            if getattr(obj, 'sector_atendido', None):
+                parts.append(obj.sector_atendido)
+            if getattr(obj, 'sector_otro', None):
+                parts.append(obj.sector_otro)
+        except Exception:
+            pass
+        return parts
+
+    def get_idiomas(self, obj):
+        raw = getattr(obj, 'idiomas_trabajo', None)
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return raw
+        # intentar separar por comas
+        try:
+            parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+            return parts
+        except Exception:
+            return [str(raw)]
 
 
 class EmpresaproductoListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de empresas de producto"""
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)  # ✅ Cambio aquí
     categoria_matriz = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
         try:
-            # Usar el campo empresa unificado
             matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
             if matriz:
-                # Convertir la categoría del modelo a formato legible
                 categoria_map = {
                     'exportadora': 'Exportadora',
                     'potencial_exportadora': 'Potencial Exportadora',
@@ -333,20 +179,23 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
 
 class EmpresaproductoSerializer(serializers.ModelSerializer):
     """Serializer completo para empresas de producto"""
-    productos = ProductoEmpresaSerializer(many=True, read_only=True)
+    productos = ProductoEmpresaSerializer(source='productos_empresa', many=True, read_only=True)
+    # Incluir también servicios si existen para esta empresa (no rompe los campos actuales)
+    # El related_name en el modelo es `servicios_empresa`, por eso usamos `source`.
+    servicios = ServicioEmpresaSerializer(source='servicios_empresa', many=True, read_only=True)
     tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
     rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
-    # Agregar nombres de campos relacionados
+
+    actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
-    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
-    localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
+    sub_rubro_nombre = serializers.SerializerMethodField()
+    departamento_nombre = serializers.SerializerMethodField()
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
+    instagram = serializers.SerializerMethodField()
+    facebook = serializers.SerializerMethodField()
+    linkedin = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
-    
-    # Campos para recibir códigos de geografía como strings
-    departamento = serializers.CharField(write_only=True, required=False, allow_null=True)
-    municipio = serializers.CharField(write_only=True, required=False, allow_null=True)
-    localidad = serializers.CharField(write_only=True, required=False, allow_null=True)
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
@@ -364,63 +213,186 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
-    
-    def validate_departamento(self, value):
-        """Convertir código de geografía a objeto Dpto de core"""
-        if value is None:
-            return None
-        if isinstance(value, Dpto):
-            return value
-        return obtener_departamento_core_por_codigo_geografia(value)
-    
-    def validate_municipio(self, value):
-        """Convertir código de geografía a objeto Municipio de core"""
-        if value is None or value == '':
-            return None
-        if isinstance(value, Municipio):
-            return value
-        # Obtener código de departamento del contexto si está disponible
-        departamento_codigo = None
-        if hasattr(self, 'initial_data') and 'departamento' in self.initial_data:
-            departamento_codigo = self.initial_data['departamento']
+
+    def _parse_redes(self, obj):
+        """Intentar parsear el campo `redes_sociales` que puede ser JSON o texto simple."""
+        import json
+        raw = getattr(obj, 'redes_sociales', None)
+        if not raw:
+            return {}
+        # Si ya es dict
+        if isinstance(raw, dict):
+            return raw
+        # Intentar JSON
         try:
-            return obtener_municipio_core_por_codigo_geografia(value, departamento_codigo)
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        # Si no es JSON, intentar parsear pares separados por comas o devolver como texto
+        parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+        redes = {}
+        for part in parts:
+            if ':' in part or '=' in part:
+                sep = ':' if ':' in part else '='
+                k, v = part.split(sep, 1)
+                redes[k.strip()] = v.strip()
+        return redes
+
+    def get_instagram(self, obj):
+        try:
+            return self._parse_redes(obj).get('instagram') or None
+        except Exception:
+            return None
+
+    def get_facebook(self, obj):
+        try:
+            return self._parse_redes(obj).get('facebook') or None
+        except Exception:
+            return None
+
+    def get_linkedin(self, obj):
+        try:
+            return self._parse_redes(obj).get('linkedin') or None
+        except Exception:
+            return None
+
+    def update(self, instance, validated_data):
+        import json
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+
+        existing = {}
+        raw = getattr(instance, 'redes_sociales', None)
+        if raw:
+            try:
+                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+            except Exception:
+                existing = {}
+
+        existing.update(redes_updated)
+        if existing:
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+
+        return super().update(instance, validated_data)
+
+    def update(self, instance, validated_data):
+        import json
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+
+        existing = {}
+        raw = getattr(instance, 'redes_sociales', None)
+        if raw:
+            try:
+                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+            except Exception:
+                existing = {}
+
+        existing.update(redes_updated)
+        if existing:
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+
+        return super().update(instance, validated_data)
+
+    def update(self, instance, validated_data):
+        """Permitir actualizar instagram/facebook/linkedin mapeándolos a `redes_sociales`."""
+        import json
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+
+        # Merge con las redes existentes
+        existing = {}
+        raw = getattr(instance, 'redes_sociales', None)
+        if raw:
+            try:
+                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+            except Exception:
+                existing = {}
+
+        existing.update(redes_updated)
+        if existing:
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+
+        return super().update(instance, validated_data)
+    
+    def get_departamento_nombre(self, obj):
+        """Obtener nombre del departamento"""
+        return obj.departamento.nombre if obj.departamento else None
+
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        import logging
+        logger = logging.getLogger(__name__)
+    
+        logger.info(f"[Localidad Debug] Empresa ID: {obj.id}")
+        logger.info(f"[Localidad Debug] Localidad field value: {obj.localidad}")
+        logger.info(f"[Localidad Debug] Localidad type: {type(obj.localidad)}")
+    
+        if obj.localidad:
+            logger.info(f"[Localidad Debug] Localidad ID: {obj.localidad.id if hasattr(obj.localidad, 'id') else 'No ID'}")
+            logger.info(f"[Localidad Debug] Localidad nombre: {obj.localidad.nombre if hasattr(obj.localidad, 'nombre') else 'No nombre'}")
+            return obj.localidad.nombre if obj.localidad else None
+        else:
+            logger.info("[Localidad Debug] Localidad is None/empty")
+            return None
+    
+    def get_sub_rubro_nombre(self, obj):
+        """Obtener nombre del subrubro desde la solicitud relacionada o descripción"""
+        try:
+            # Buscar en solicitudes relacionadas por CUIT (normalizar para comparación)
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                # Para empresas mixtas, retornar ambos subrubros
+                if obj.tipo_empresa_valor == 'mixta':
+                    sub_prod = solicitud.sub_rubro_producto or ''
+                    sub_serv = solicitud.sub_rubro_servicio or ''
+                    if sub_prod and sub_serv:
+                        return f"{sub_prod} / {sub_serv}"
+                    return sub_prod or sub_serv or None
+                else:
+                    # Para empresas de producto o servicio únicos
+                    return solicitud.sub_rubro or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error validando municipio '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar municipio '{value}': {str(e)}")
-    
-    def validate_localidad(self, value):
-        """Convertir código de geografía a objeto Localidades de core"""
-        if value is None or value == '':
-            return None
-        if isinstance(value, Localidades):
-            return value
-        # Obtener código de municipio del contexto si está disponible
-        municipio_codigo = None
-        if hasattr(self, 'initial_data') and 'municipio' in self.initial_data:
-            municipio_codigo = self.initial_data['municipio']
-        try:
-            return obtener_localidad_core_por_codigo_geografia(value, municipio_codigo)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error validando localidad '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar localidad '{value}': {str(e)}")
+            logger.error(f"Error obteniendo sub_rubro_nombre: {str(e)}", exc_info=True)
+        return None
     
     def create(self, validated_data):
         """Crear empresa con conversión de códigos geográficos y creación automática de usuario"""
         from apps.core.models import Usuario, RolUsuario
         from django.db import transaction
-        
-        # Convertir códigos de geografía a objetos de core
-        if 'departamento' in validated_data and validated_data['departamento']:
-            validated_data['departamento'] = self.validate_departamento(validated_data['departamento'])
-        if 'municipio' in validated_data and validated_data['municipio']:
-            validated_data['municipio'] = self.validate_municipio(validated_data['municipio'])
-        if 'localidad' in validated_data and validated_data['localidad']:
-            validated_data['localidad'] = self.validate_localidad(validated_data['localidad'])
+    
         
         # Si no hay id_usuario o el usuario actual es admin/staff, crear usuario automáticamente
         id_usuario = validated_data.get('id_usuario')
@@ -474,16 +446,7 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         
         return super().create(validated_data)
     
-    def update(self, instance, validated_data):
-        """Actualizar empresa con conversión de códigos geográficos"""
-        # Convertir códigos de geografía a objetos de core
-        if 'departamento' in validated_data and validated_data['departamento']:
-            validated_data['departamento'] = self.validate_departamento(validated_data['departamento'])
-        if 'municipio' in validated_data and validated_data['municipio']:
-            validated_data['municipio'] = self.validate_municipio(validated_data['municipio'])
-        if 'localidad' in validated_data and validated_data['localidad']:
-            validated_data['localidad'] = self.validate_localidad(validated_data['localidad'])
-        return super().update(instance, validated_data)
+    
     
     class Meta:
         model = Empresaproducto
@@ -495,7 +458,7 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de empresas de servicio"""
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
     categoria_matriz = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
@@ -526,14 +489,20 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
 
 class EmpresaservicioSerializer(serializers.ModelSerializer):
     """Serializer completo para empresas de servicio"""
-    servicios = ServicioEmpresaSerializer(many=True, read_only=True)
+    # El related_name en el modelo ServicioEmpresa es `servicios_empresa`.
+    servicios = ServicioEmpresaSerializer(source='servicios_empresa', many=True, read_only=True)
     tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
     rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
+    actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
     # Agregar nombres de campos relacionados
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
-    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
-    localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
+    sub_rubro_nombre = serializers.SerializerMethodField()
+    departamento_nombre = serializers.SerializerMethodField()
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
+    instagram = serializers.SerializerMethodField()
+    facebook = serializers.SerializerMethodField()
+    linkedin = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
@@ -551,67 +520,88 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
-    
-    def validate_departamento(self, value):
-        """Convertir código de geografía a objeto Dpto de core"""
-        if value is None:
-            return None
-        if isinstance(value, Dpto):
-            return value
+
+    def _parse_redes(self, obj):
+        import json
+        raw = getattr(obj, 'redes_sociales', None)
+        if not raw:
+            return {}
+        if isinstance(raw, dict):
+            return raw
         try:
-            return obtener_departamento_core_por_codigo_geografia(value)
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+        redes = {}
+        for part in parts:
+            if ':' in part or '=' in part:
+                sep = ':' if ':' in part else '='
+                k, v = part.split(sep, 1)
+                redes[k.strip()] = v.strip()
+        return redes
+
+    def get_instagram(self, obj):
+        try:
+            return self._parse_redes(obj).get('instagram') or None
+        except Exception:
+            return None
+
+    def get_facebook(self, obj):
+        try:
+            return self._parse_redes(obj).get('facebook') or None
+        except Exception:
+            return None
+
+    def get_linkedin(self, obj):
+        try:
+            return self._parse_redes(obj).get('linkedin') or None
+        except Exception:
+            return None
+    
+    def get_departamento_nombre(self, obj):
+        """Obtener nombre del departamento"""
+        return obj.departamento.nombre if obj.departamento else None
+    
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+    
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
+    def get_sub_rubro_nombre(self, obj):
+        """Obtener nombre del subrubro desde la solicitud relacionada"""
+        try:
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                return solicitud.sub_rubro or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error validando departamento '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar departamento '{value}': {str(e)}")
-    
-    def validate_municipio(self, value):
-        """Convertir código de geografía a objeto Municipio de core"""
-        if value is None:
-            return None
-        if isinstance(value, Municipio):
-            return value
-        departamento_codigo = None
-        if hasattr(self, 'initial_data') and 'departamento' in self.initial_data:
-            departamento_codigo = self.initial_data['departamento']
-        try:
-            return obtener_municipio_core_por_codigo_geografia(value, departamento_codigo)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error validando municipio '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar municipio '{value}': {str(e)}")
-    
-    def validate_localidad(self, value):
-        """Convertir código de geografía a objeto Localidades de core"""
-        if value is None:
-            return None
-        if isinstance(value, Localidades):
-            return value
-        municipio_codigo = None
-        if hasattr(self, 'initial_data') and 'municipio' in self.initial_data:
-            municipio_codigo = self.initial_data['municipio']
-        try:
-            return obtener_localidad_core_por_codigo_geografia(value, municipio_codigo)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error validando localidad '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar localidad '{value}': {str(e)}")
+            logger.error(f"Error obteniendo sub_rubro_nombre: {str(e)}", exc_info=True)
+        return None
     
     def create(self, validated_data):
         """Crear empresa con conversión de códigos geográficos y creación automática de usuario"""
         from apps.core.models import Usuario, RolUsuario
         from django.db import transaction
         
-        # Convertir códigos de geografía a objetos de core
-        if 'departamento' in validated_data and validated_data['departamento']:
-            validated_data['departamento'] = self.validate_departamento(validated_data['departamento'])
-        if 'municipio' in validated_data and validated_data['municipio']:
-            validated_data['municipio'] = self.validate_municipio(validated_data['municipio'])
-        if 'localidad' in validated_data and validated_data['localidad']:
-            validated_data['localidad'] = self.validate_localidad(validated_data['localidad'])
         
         # Si no hay id_usuario o el usuario actual es admin/staff, crear usuario automáticamente
         id_usuario = validated_data.get('id_usuario')
@@ -686,7 +676,14 @@ class ProductoEmpresaMixtaSerializer(serializers.ModelSerializer):
 
 class ServicioEmpresaMixtaSerializer(serializers.ModelSerializer):
     """Serializer para servicios de empresa mixta"""
-    
+    # Aliases para compatibilidad con frontend
+    sectores = serializers.SerializerMethodField()
+    alcance_geografico = serializers.CharField(source='alcance_servicio', read_only=True)
+    paises_destino = serializers.CharField(source='paises_trabaja', read_only=True)
+    idiomas = serializers.SerializerMethodField()
+    exporta_servicios_alias = serializers.BooleanField(source='exporta_servicios', read_only=True)
+    interes_exportar = serializers.BooleanField(source='interes_exportar_servicios', read_only=True)
+
     class Meta:
         model = ServicioEmpresaMixta
         fields = [
@@ -696,16 +693,42 @@ class ServicioEmpresaMixtaSerializer(serializers.ModelSerializer):
             'exporta_servicios', 'interes_exportar_servicios',
             'idiomas_trabajo', 'idioma_otro', 'forma_contratacion',
             'forma_contratacion_otro', 'certificaciones_tecnicas',
-            'tiene_equipo_tecnico', 'equipo_tecnico_formacion', 'es_principal'
+            'tiene_equipo_tecnico', 'equipo_tecnico_formacion', 'es_principal',
+            # aliases
+            'sectores', 'alcance_geografico', 'paises_destino', 'idiomas', 'exporta_servicios_alias', 'interes_exportar'
         ]
         read_only_fields = ['id']
+
+    def get_sectores(self, obj):
+        parts = []
+        try:
+            if getattr(obj, 'sector_atendido', None):
+                parts.append(obj.sector_atendido)
+            if getattr(obj, 'sector_otro', None):
+                parts.append(obj.sector_otro)
+        except Exception:
+            pass
+        return parts
+
+    def get_idiomas(self, obj):
+        raw = getattr(obj, 'idiomas_trabajo', None)
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return raw
+        try:
+            parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+            return parts
+        except Exception:
+            return [str(raw)]
 
 
 class EmpresaMixtaListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de empresas mixtas"""
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
     categoria_matriz = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
@@ -730,22 +753,32 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
-            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz'
+            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
+            'actividades_promocion_internacional'
         ]
 
 
 class EmpresaMixtaSerializer(serializers.ModelSerializer):
     """Serializer completo para empresas mixtas"""
-    productos = ProductoEmpresaMixtaSerializer(many=True, read_only=True)
-    servicios = ServicioEmpresaMixtaSerializer(many=True, read_only=True)
+    productos = ProductoEmpresaMixtaSerializer(source='productos_mixta', many=True, read_only=True)
+    # El related_name en ServicioEmpresaMixta es `servicios_mixta`.
+    servicios = ServicioEmpresaMixtaSerializer(source='servicios_mixta', many=True, read_only=True)
     tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
     rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
     # Agregar nombres de campos relacionados
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
-    departamento_nombre = serializers.CharField(source='departamento.nomdpto', read_only=True)
-    municipio_nombre = serializers.CharField(source='municipio.nommun', read_only=True, allow_null=True)
-    localidad_nombre = serializers.CharField(source='localidad.nomloc', read_only=True, allow_null=True)
+    sub_rubro_nombre = serializers.SerializerMethodField()
+    sub_rubro_producto_nombre = serializers.SerializerMethodField()
+    sub_rubro_servicio_nombre = serializers.SerializerMethodField()
+    rubro_producto_nombre = serializers.SerializerMethodField()
+    rubro_servicio_nombre = serializers.SerializerMethodField()
+    departamento_nombre = serializers.SerializerMethodField()
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
+    instagram = serializers.SerializerMethodField()
+    facebook = serializers.SerializerMethodField()
+    linkedin = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
@@ -763,66 +796,188 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
             pass
         return None
     
-    def validate_departamento(self, value):
-        """Convertir código de geografía a objeto Dpto de core"""
-        if value is None:
-            return None
-        if isinstance(value, Dpto):
-            return value
-        try:
-            return obtener_departamento_core_por_codigo_geografia(value)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error validando departamento '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar departamento '{value}': {str(e)}")
+    def get_departamento_nombre(self, obj):
+        """Obtener nombre del departamento"""
+        return obj.departamento.nombre if obj.departamento else None
     
-    def validate_municipio(self, value):
-        """Convertir código de geografía a objeto Municipio de core"""
-        if value is None:
-            return None
-        if isinstance(value, Municipio):
-            return value
-        departamento_codigo = None
-        if hasattr(self, 'initial_data') and 'departamento' in self.initial_data:
-            departamento_codigo = self.initial_data['departamento']
-        try:
-            return obtener_municipio_core_por_codigo_geografia(value, departamento_codigo)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error validando municipio '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar municipio '{value}': {str(e)}")
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
     
-    def validate_localidad(self, value):
-        """Convertir código de geografía a objeto Localidades de core"""
-        if value is None:
-            return None
-        if isinstance(value, Localidades):
-            return value
-        municipio_codigo = None
-        if hasattr(self, 'initial_data') and 'municipio' in self.initial_data:
-            municipio_codigo = self.initial_data['municipio']
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
+    def get_sub_rubro_nombre(self, obj):
+        """Obtener nombre del subrubro combinado (para compatibilidad)"""
         try:
-            return obtener_localidad_core_por_codigo_geografia(value, municipio_codigo)
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                sub_prod = solicitud.sub_rubro_producto or ''
+                sub_serv = solicitud.sub_rubro_servicio or ''
+                if sub_prod and sub_serv:
+                    return f"{sub_prod} / {sub_serv}"
+                return sub_prod or sub_serv or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error validando localidad '{value}': {str(e)}")
-            raise serializers.ValidationError(f"Error al procesar localidad '{value}': {str(e)}")
+            logger.error(f"Error obteniendo sub_rubro_nombre: {str(e)}", exc_info=True)
+        return None
+    
+    def get_sub_rubro_producto_nombre(self, obj):
+        """Obtener nombre del subrubro de productos"""
+        try:
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                return solicitud.sub_rubro_producto or None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo sub_rubro_producto_nombre: {str(e)}", exc_info=True)
+        return None
+    
+    def get_sub_rubro_servicio_nombre(self, obj):
+        """Obtener nombre del subrubro de servicios"""
+        try:
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                return solicitud.sub_rubro_servicio or None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo sub_rubro_servicio_nombre: {str(e)}", exc_info=True)
+        return None
+    
+    def get_rubro_producto_nombre(self, obj):
+        """Obtener nombre del rubro de productos"""
+        try:
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                return solicitud.rubro_producto or None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo rubro_producto_nombre: {str(e)}", exc_info=True)
+        return None
+    
+    def get_rubro_servicio_nombre(self, obj):
+        """Obtener nombre del rubro de servicios"""
+        try:
+            from apps.registro.models import SolicitudRegistro
+            # Normalizar CUIT de la empresa (sin guiones ni espacios)
+            cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            
+            # Buscar solicitud aprobada con CUIT normalizado
+            solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
+            solicitud = None
+            for sol in solicitudes:
+                cuit_sol = str(sol.cuit_cuil).replace('-', '').replace(' ', '').strip()
+                if cuit_sol == cuit_empresa:
+                    solicitud = sol
+                    break
+            
+            if solicitud:
+                return solicitud.rubro_servicio or None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo rubro_servicio_nombre: {str(e)}", exc_info=True)
+        return None
+
+    def _parse_redes(self, obj):
+        import json
+        raw = getattr(obj, 'redes_sociales', None)
+        if not raw:
+            return {}
+        if isinstance(raw, dict):
+            return raw
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+        redes = {}
+        for part in parts:
+            if ':' in part or '=' in part:
+                sep = ':' if ':' in part else '='
+                k, v = part.split(sep, 1)
+                redes[k.strip()] = v.strip()
+        return redes
+
+    def get_instagram(self, obj):
+        try:
+            return self._parse_redes(obj).get('instagram') or None
+        except Exception:
+            return None
+
+    def get_facebook(self, obj):
+        try:
+            return self._parse_redes(obj).get('facebook') or None
+        except Exception:
+            return None
+
+    def get_linkedin(self, obj):
+        try:
+            return self._parse_redes(obj).get('linkedin') or None
+        except Exception:
+            return None
+    
     
     def create(self, validated_data):
         """Crear empresa con conversión de códigos geográficos y creación automática de usuario"""
         from apps.core.models import Usuario, RolUsuario
         from django.db import transaction
         
-        # Convertir códigos de geografía a objetos de core
-        if 'departamento' in validated_data and validated_data['departamento']:
-            validated_data['departamento'] = self.validate_departamento(validated_data['departamento'])
-        if 'municipio' in validated_data and validated_data['municipio']:
-            validated_data['municipio'] = self.validate_municipio(validated_data['municipio'])
-        if 'localidad' in validated_data and validated_data['localidad']:
-            validated_data['localidad'] = self.validate_localidad(validated_data['localidad'])
         
         # Si no hay id_usuario o el usuario actual es admin/staff, crear usuario automáticamente
         id_usuario = validated_data.get('id_usuario')

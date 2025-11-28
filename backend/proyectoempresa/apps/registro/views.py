@@ -319,101 +319,129 @@ def enviar_email_rechazo(solicitud):
 def crear_empresa_desde_solicitud(solicitud):
     """
     Crear empresa desde solicitud aprobada
+    SIMPLIFICADA - Usa directamente los modelos nuevos de geografia
     """
-    # Importar modelos de empresas al inicio
-    from apps.empresas.models import (
-        Empresa, Rubro, TipoEmpresa
-    )
+    from apps.empresas.models import Empresa, Rubro, TipoEmpresa
+    from apps.geografia.models import Departamento, Municipio, Localidad
+    import logging
     
-    # Obtener o crear departamento
-    from apps.core.models import Dpto, Municipio, Localidades
-    dpto, _ = Dpto.objects.get_or_create(
-        nomdpto=solicitud.departamento,
-        defaults={'coddpto': solicitud.departamento[:3].upper()}
-    )
+    logger = logging.getLogger(__name__)
     
-    # Obtener o crear municipio
+    # ✅ BUSCAR departamento directamente (modelos nuevos)
+    departamento = None
+    try:
+        departamento_valor = solicitud.departamento.strip()
+        
+        # Si es un ID numérico, buscar por ID
+        if departamento_valor.isdigit():
+            departamento = Departamento.objects.filter(id=departamento_valor).first()
+        
+        # Si no, buscar por nombre
+        if not departamento:
+            departamento = Departamento.objects.filter(nombre__iexact=departamento_valor).first()
+        
+        if not departamento:
+            raise ValueError(f"El departamento '{departamento_valor}' no existe en el sistema.")
+        
+        logger.info(f"Departamento encontrado: {departamento.nombre} (ID: {departamento.id})")
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Error al buscar departamento: {str(e)}", exc_info=True)
+        raise ValueError(f"Error al buscar el departamento: {str(e)}")
+    
+    # ✅ BUSCAR municipio directamente
     municipio = None
     if solicitud.municipio:
-        # Generar un código único para el municipio basado en el nombre y departamento
-        import uuid
-        dpto_cod = dpto.coddpto[:3] if hasattr(dpto, 'coddpto') and dpto.coddpto else ''
-        mun_nombre = solicitud.municipio[:5].upper().replace(' ', '')
-        codmun_base = mun_nombre + dpto_cod if dpto_cod else mun_nombre
-        codmun = codmun_base[:10] if codmun_base else str(uuid.uuid4())[:10]  # Si está vacío, usar UUID
-        
-        # Asegurar que el código no esté vacío
-        if not codmun or codmun.strip() == '':
-            codmun = str(uuid.uuid4())[:10]
-        
-        # Buscar si ya existe un municipio con este nombre y departamento
         try:
-            municipio = Municipio.objects.get(
-                nommun=solicitud.municipio,
-                dpto=dpto
-            )
-        except Municipio.DoesNotExist:
-            # Si no existe, crear uno nuevo con un código único
-            # Intentar crear con el código base, si falla por duplicado, agregar un sufijo único
-            codmun_final = codmun
-            counter = 1
-            while Municipio.objects.filter(codmun=codmun_final).exists() or codmun_final == '':
-                if codmun_final == '' or counter > 999:
-                    # Si está vacío o hay demasiados intentos, usar un UUID truncado
-                    codmun_final = str(uuid.uuid4())[:10]
-                    break
-                codmun_final = codmun[:7] + str(counter).zfill(3)
-                counter += 1
+            municipio_valor = solicitud.municipio.strip()
             
-            municipio = Municipio.objects.create(
-                nommun=solicitud.municipio,
-                dpto=dpto,
-                codmun=codmun_final,
-                coddpto=dpto.coddpto if hasattr(dpto, 'coddpto') and dpto.coddpto else '',
-                codprov=''
-            )
+            if municipio_valor.isdigit():
+                municipio = Municipio.objects.filter(id=municipio_valor).first()
+            
+            if not municipio:
+                municipio = Municipio.objects.filter(
+                    nombre__iexact=municipio_valor,
+                    departamento=departamento
+                ).first()
+            
+            if municipio:
+                logger.info(f"Municipio encontrado: {municipio.nombre}")
+        except Exception as e:
+            logger.warning(f"Error al buscar municipio: {str(e)}")
+            municipio = None
     
-    # Obtener o crear localidad
+    # ✅ BUSCAR localidad directamente
     localidad = None
-    if solicitud.localidad and municipio:
-        # Generar un código único para la localidad basado en el nombre y municipio
-        import uuid
-        codloc_base = solicitud.localidad[:10].upper().replace(' ', '') + municipio.codmun[:5]
-        codloc = codloc_base[:20]  # Asegurar que no exceda 20 caracteres
-        
-        # Buscar si ya existe una localidad con este nombre y municipio
+    if solicitud.localidad:
         try:
-            localidad = Localidades.objects.get(
-                nomloc=solicitud.localidad,
-                municipio=municipio
-            )
-        except Localidades.DoesNotExist:
-            # Si no existe, crear una nueva con un código único
-            # Intentar crear con el código base, si falla por duplicado, agregar un sufijo único
-            codloc_final = codloc
-            counter = 1
-            while Localidades.objects.filter(codloc=codloc_final).exists():
-                codloc_final = codloc[:15] + str(counter).zfill(5)
-                counter += 1
-            
-            localidad = Localidades.objects.create(
-                nomloc=solicitud.localidad,
-                municipio=municipio,
-                codloc=codloc_final,
-                codlocsv='',
-                codmun=municipio.codmun if hasattr(municipio, 'codmun') else '',
-                coddpto=dpto.coddpto if hasattr(dpto, 'coddpto') else '',
-                codprov='',
-                codpais='ARG',
-                latitud=-34.6037,
-                longitud=-58.3816
-            )
+            localidad_valor = solicitud.localidad.strip()
+            logger.info(f"🔍 Buscando localidad: '{localidad_valor}' (tipo: {type(localidad_valor)})")
+        
+            # Buscar directamente por ID (puede contener letras y números)
+            localidad = Localidad.objects.filter(id=localidad_valor).first()
+            logger.info(f"Búsqueda por ID: {localidad}")
+        
+            # Si no se encontró por ID, intentar por nombre
+            if not localidad:
+                localidad = Localidad.objects.filter(
+                    nombre__iexact=localidad_valor,
+                    departamento=departamento
+                ).first()
+                logger.info(f"Búsqueda por nombre: {localidad}")
+        
+            if localidad:
+                logger.info(f"✅ Localidad encontrada: {localidad.nombre} (ID: {localidad.id})")
+            else:
+                logger.warning(f"❌ No se encontró localidad con valor: '{localidad_valor}'")
+        except Exception as e:
+            logger.warning(f"Error al buscar localidad: {str(e)}")
+            # No sobreescribir localidad aquí; si hubo error se queda como None
+    else:
+        logger.info("ℹ️ La solicitud no tiene localidad asignada")
     
-    # Obtener o crear rubro (ya importado arriba)
-    rubro, _ = Rubro.objects.get_or_create(
-        nombre=solicitud.rubro_principal,
-        defaults={'descripcion': solicitud.descripcion_actividad}
-    )
+    # Obtener o crear rubro
+    # Para empresas mixtas, usar el rubro de productos como principal
+    # Para empresas de producto o servicio únicos, usar rubro_principal
+    rubro = None
+    if solicitud.tipo_empresa == 'mixta' and solicitud.rubro_producto:
+        # Buscar rubro de productos para empresas mixtas
+        try:
+            rubro = Rubro.objects.get(nombre=solicitud.rubro_producto)
+        except Rubro.DoesNotExist:
+            # Si no existe, crear uno nuevo
+            try:
+                rubro = Rubro.objects.create(
+                    nombre=solicitud.rubro_producto,
+                    descripcion=solicitud.descripcion_actividad or '',
+                    tipo='mixto'
+                )
+            except Exception as e:
+                logger.error(f"Error al crear rubro: {str(e)}", exc_info=True)
+                # Si falla la creación, intentar obtener cualquier rubro existente como fallback
+                rubro = Rubro.objects.filter(activo=True).first()
+                if not rubro:
+                    raise ValueError(f"No se pudo crear ni encontrar un rubro válido: {str(e)}")
+    else:
+        # Para empresas de producto o servicio únicos, usar rubro_principal
+        try:
+            rubro = Rubro.objects.get(nombre=solicitud.rubro_principal)
+        except Rubro.DoesNotExist:
+            # Si no existe, crear uno nuevo
+            try:
+                rubro = Rubro.objects.create(
+                    nombre=solicitud.rubro_principal,
+                    descripcion=solicitud.descripcion_actividad or ''
+                )
+            except Exception as e:
+                logger.error(f"Error al crear rubro: {str(e)}", exc_info=True)
+                # Si falla la creación, intentar obtener cualquier rubro existente como fallback
+                rubro = Rubro.objects.filter(activo=True).first()
+                if not rubro:
+                    raise ValueError(f"No se pudo crear ni encontrar un rubro válido: {str(e)}")
+    
+    if not rubro:
+        raise ValueError("No se pudo obtener o crear un rubro para la empresa")
     
     # Obtener o crear tipo de empresa
     tipo_empresa_nombre = solicitud.tipo_empresa.title() if solicitud.tipo_empresa else 'Producto'
@@ -426,7 +454,6 @@ def crear_empresa_desde_solicitud(solicitud):
     from apps.core.models import RolUsuario
     User = get_user_model()
     
-    # Crear usuario con rol de empresa
     rol_empresa, _ = RolUsuario.objects.get_or_create(
         nombre='Empresa',
         defaults={
@@ -443,11 +470,10 @@ def crear_empresa_desde_solicitud(solicitud):
         }
     )
     
-    # Verificar si ya existe un usuario con este email (creado durante el registro)
+    # Verificar si ya existe un usuario con este email
     usuario_empresa = None
     try:
         usuario_empresa = User.objects.get(email=solicitud.correo)
-        # Actualizar el usuario existente
         usuario_empresa.nombre = solicitud.nombre_contacto
         usuario_empresa.apellido = solicitud.cargo_contacto
         usuario_empresa.rol = rol_empresa
@@ -455,13 +481,13 @@ def crear_empresa_desde_solicitud(solicitud):
         usuario_empresa.departamento = solicitud.departamento
         usuario_empresa.municipio = solicitud.municipio
         usuario_empresa.localidad = solicitud.localidad
-        usuario_empresa.is_active = True  # Activar usuario al aprobar
+        usuario_empresa.is_active = True
         usuario_empresa.save()
+        logger.info(f"Usuario existente actualizado: {usuario_empresa.email}")
     except User.DoesNotExist:
-        # Si no existe, crear nuevo usuario
         usuario_empresa = User.objects.create_user(
             email=solicitud.correo,
-            password=solicitud.cuit_cuil,  # Contraseña inicial es el CUIT
+            password=solicitud.cuit_cuil,
             nombre=solicitud.nombre_contacto,
             apellido=solicitud.cargo_contacto,
             rol=rol_empresa,
@@ -469,33 +495,41 @@ def crear_empresa_desde_solicitud(solicitud):
             departamento=solicitud.departamento,
             municipio=solicitud.municipio,
             localidad=solicitud.localidad,
-            is_active=True  # Activar usuario al aprobar
+            is_active=True
         )
+        logger.info(f"Nuevo usuario creado: {usuario_empresa.email}")
     
     # Preparar datos comunes para la empresa
-    # Truncar valores que puedan exceder límites de campos
     exporta_value = 'Sí' if solicitud.exporta == 'si' else ('No, solo ventas nacionales' if solicitud.exporta == 'no' else 'No, solo ventas locales')
-    # Asegurar que no exceda 50 caracteres
     if len(exporta_value) > 50:
         exporta_value = exporta_value[:50]
     
+    # Normalizar CUIT para que coincida con el formato de la solicitud (sin guiones ni espacios)
+    cuit_normalizado = str(solicitud.cuit_cuil).replace('-', '').replace(' ', '').strip()
+    
     empresa_kwargs = {
         'razon_social': solicitud.razon_social,
-        'cuit_cuil': solicitud.cuit_cuil,
+        'nombre_fantasia': solicitud.nombre_fantasia,
+        'tipo_sociedad': solicitud.tipo_sociedad,
+        'cuit_cuil': cuit_normalizado,
         'direccion': solicitud.direccion,
-        'departamento': dpto,
-        'municipio': municipio,
-        'localidad': localidad,
+        'codigo_postal': solicitud.codigo_postal,
+        # Direccion comercial desde la solicitud
+        'direccion_comercial': getattr(solicitud, 'direccion_comercial', None) or None,
+        'codigo_postal_comercial': getattr(solicitud, 'codigo_postal_comercial', None) or None,
+        'departamento': departamento,  
+        'municipio': municipio,  
+        'localidad': localidad,  
         'telefono': solicitud.telefono,
         'correo': solicitud.correo,
         'sitioweb': solicitud.sitioweb,
         'exporta': exporta_value,
-        'destinoexporta': solicitud.destino_exportacion[:200] if solicitud.destino_exportacion else None,  # Truncar si excede 200
+        'destinoexporta': solicitud.destino_exportacion[:200] if solicitud.destino_exportacion else None,
         'importa': True if solicitud.importa == 'si' else False,
         'certificadopyme': True if solicitud.certificado_pyme == 'si' else False,
-        'certificaciones': solicitud.certificaciones[:500] if solicitud.certificaciones else None,  # Truncar si excede 500
+        'certificaciones': solicitud.certificaciones[:500] if solicitud.certificaciones else None,
         'promo2idiomas': True if solicitud.material_promocional_idiomas == 'si' else False,
-        'idiomas_trabaja': (solicitud.idiomas_trabajo[:100] if solicitud.idiomas_trabajo else None),  # Truncar si excede 100
+        'idiomas_trabaja': (solicitud.idiomas_trabajo[:100] if solicitud.idiomas_trabajo else None),
         'contacto_principal_nombre': (solicitud.nombre_contacto[:100] if solicitud.nombre_contacto else ''),
         'contacto_principal_cargo': (solicitud.cargo_contacto[:100] if solicitud.cargo_contacto else ''),
         'contacto_principal_telefono': (solicitud.telefono_contacto[:20] if solicitud.telefono_contacto else ''),
@@ -503,19 +537,74 @@ def crear_empresa_desde_solicitud(solicitud):
         'id_usuario': usuario_empresa,
         'id_rubro': rubro,
         'tipo_empresa': tipo_empresa,
+        # Registrar y mapear actividades de promoción desde la solicitud
+        'actividades_promocion_internacional': solicitud.actividades_promocion if solicitud.actividades_promocion else None,
+        # Mapear geolocalizacion (puede venir como string "lat,lng" o como objeto)
+        'geolocalizacion': None,
     }
+    # Loguear detalle de actividades para debugging
+    try:
+        logger.info(f"[Registro->Empresa] Solicitud ID={solicitud.id} actividades_promocion (raw): {repr(solicitud.actividades_promocion)}")
+        logger.info(f"[Registro->Empresa] Tipo de datos: {type(solicitud.actividades_promocion)}")
+        if solicitud.actividades_promocion:
+            logger.info(f"[Registro->Empresa] Cantidad de actividades: {len(solicitud.actividades_promocion)}")
+    except Exception:
+        logger.exception("Error al loguear actividades_promocion de la solicitud")
+
+    # Log y normalización de geolocalizacion
+    try:
+        geo_raw = solicitud.geolocalizacion
+        logger.info(f"[Registro->Empresa] Solicitud ID={solicitud.id} geolocalizacion (raw): {repr(geo_raw)} (tipo: {type(geo_raw)})")
+        geo_value = None
+        if geo_raw:
+            # Si es tipo dict con lat/lng
+            if isinstance(geo_raw, dict):
+                lat = geo_raw.get('lat') or geo_raw.get('latitude')
+                lng = geo_raw.get('lng') or geo_raw.get('lon') or geo_raw.get('longitude')
+                try:
+                    geo_value = f"{float(lat)},{float(lng)}"
+                except Exception:
+                    geo_value = None
+            elif isinstance(geo_raw, str):
+                # Normalizar espacios y comas
+                geo_value = geo_raw.strip()
+            else:
+                # Otros tipos: intentar convertir a string
+                try:
+                    geo_value = str(geo_raw)
+                except Exception:
+                    geo_value = None
+
+        if geo_value:
+            empresa_kwargs['geolocalizacion'] = geo_value
+            logger.info(f"[Registro->Empresa] Geolocalizacion normalizada para empresa: {geo_value}")
+        else:
+            logger.info(f"[Registro->Empresa] No se encontró geolocalizacion válida en la solicitud ID={solicitud.id}")
+    except Exception:
+        logger.exception("Error al procesar geolocalizacion de la solicitud")
+
+    # Mapear redes sociales desde la solicitud hacia el campo redes_sociales de la empresa
+    try:
+        social = {}
+        if getattr(solicitud, 'instagram', None):
+            social['instagram'] = solicitud.instagram
+        if getattr(solicitud, 'facebook', None):
+            social['facebook'] = solicitud.facebook
+        if getattr(solicitud, 'linkedin', None):
+            social['linkedin'] = solicitud.linkedin
+        if social:
+            import json
+            empresa_kwargs['redes_sociales'] = json.dumps(social, ensure_ascii=False)
+            logger.info(f"[Registro->Empresa] Redes sociales mapeadas: {social}")
+    except Exception:
+        logger.exception("Error al mapear redes sociales desde la solicitud")
     
-    # Agregar catálogo PDF si existe
     if solicitud.catalogo_pdf:
         empresa_kwargs['brochure'] = solicitud.catalogo_pdf
     
-    # Crear empresa según tipo usando el modelo unificado
     tipo_empresa_value = solicitud.tipo_empresa or 'producto'
     empresa_kwargs['tipo_empresa_valor'] = tipo_empresa_value
     
-    # Establecer campos de auditoría (creado_por y actualizado_por)
-    # Si hay un usuario que aprobó la solicitud, usarlo; sino, usar el usuario de la empresa
-    # Recargar la solicitud para obtener el aprobado_por actualizado
     solicitud.refresh_from_db()
     if solicitud.aprobado_por:
         empresa_kwargs['creado_por'] = solicitud.aprobado_por
@@ -527,27 +616,64 @@ def crear_empresa_desde_solicitud(solicitud):
     empresa = None
     
     if tipo_empresa_value == 'producto':
-        empresa = Empresa.objects.create(**empresa_kwargs)
-        # Crear productos en la tabla ProductoEmpresa
+        # Filtrar claves que no existan en la tabla para evitar errores si las migraciones no se aplicaron
+        from django.core.exceptions import FieldDoesNotExist
+        def column_exists(model, field_name):
+            """Return True if model has the given field name (including FK _id)."""
+            try:
+                model._meta.get_field(field_name)
+                return True
+            except Exception:
+                # try FK column form
+                try:
+                    model._meta.get_field(f"{field_name}_id")
+                    return True
+                except Exception:
+                    return False
+
+        filtered_kwargs = {}
+        for k, v in empresa_kwargs.items():
+            if isinstance(k, str) and column_exists(Empresa, k):
+                filtered_kwargs[k] = v
+        empresa = Empresa.objects.create(**filtered_kwargs)
         from apps.empresas.models import ProductoEmpresa, PosicionArancelaria
         if solicitud.productos:
             for producto_data in solicitud.productos:
                 producto = ProductoEmpresa.objects.create(
-                    empresa=empresa,
-                    nombre_producto=producto_data.get('nombre', ''),
-                    descripcion=producto_data.get('descripcion', ''),
-                    capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
-                )
-                # Crear posición arancelaria si existe
-                if producto_data.get('posicion_arancelaria'):
-                    PosicionArancelaria.objects.create(
-                        producto=producto,
-                        codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
-                    )
+            empresa=empresa,
+            nombre_producto=producto_data.get('nombre', ''),
+            descripcion=producto_data.get('descripcion', ''),
+            capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
+            unidad_medida=producto_data.get('unidad_medida', 'kg'),
+            periodo_capacidad=producto_data.get('periodo_capacidad', 'mensual'),
+        )
+        if producto_data.get('posicion_arancelaria'):
+            PosicionArancelaria.objects.create(
+                producto=producto,
+                codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
+                descripcion_arancelaria=producto_data.get('descripcion_arancelaria', ''),
+            )
                 
     elif tipo_empresa_value == 'servicio':
-        empresa = Empresa.objects.create(**empresa_kwargs)
-        # Crear servicios en la tabla ServicioEmpresa
+        # Filtrar claves por columnas existentes antes de crear
+
+        from django.core.exceptions import FieldDoesNotExist
+        def column_exists(model, field_name):
+            try:
+                model._meta.get_field(field_name)
+                return True
+            except Exception:
+                try:
+                    model._meta.get_field(f"{field_name}_id")
+                    return True
+                except Exception:
+                    return False
+
+        filtered_kwargs = {}
+        for k, v in empresa_kwargs.items():
+            if isinstance(k, str) and column_exists(Empresa, k):
+                filtered_kwargs[k] = v
+        empresa = Empresa.objects.create(**filtered_kwargs)
         from apps.empresas.models import ServicioEmpresa
         if solicitud.servicios_ofrecidos:
             servicios_data = solicitud.servicios_ofrecidos
@@ -570,24 +696,42 @@ def crear_empresa_desde_solicitud(solicitud):
                     )
                     
     else:  # mixta
-        empresa = Empresa.objects.create(**empresa_kwargs)
-        # Crear productos en ProductoEmpresaMixta
+        # Filtrar claves por columnas existentes antes de crear
+
+        from django.core.exceptions import FieldDoesNotExist
+        def column_exists(model, field_name):
+            try:
+                model._meta.get_field(field_name)
+                return True
+            except Exception:
+                try:
+                    model._meta.get_field(f"{field_name}_id")
+                    return True
+                except Exception:
+                    return False
+
+        filtered_kwargs = {}
+        for k, v in empresa_kwargs.items():
+            if isinstance(k, str) and column_exists(Empresa, k):
+                filtered_kwargs[k] = v
+        empresa = Empresa.objects.create(**filtered_kwargs)
         from apps.empresas.models import ProductoEmpresaMixta, ServicioEmpresaMixta, PosicionArancelariaMixta
         if solicitud.productos:
             for producto_data in solicitud.productos:
                 producto = ProductoEmpresaMixta.objects.create(
-                    empresa=empresa,
-                    nombre_producto=producto_data.get('nombre', ''),
-                    descripcion=producto_data.get('descripcion', ''),
-                    capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
-                )
-                # Crear posición arancelaria si existe
-                if producto_data.get('posicion_arancelaria'):
-                    PosicionArancelariaMixta.objects.create(
-                        producto=producto,
-                        codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
-                    )
-        # Crear servicios en ServicioEmpresaMixta
+            empresa=empresa,
+            nombre_producto=producto_data.get('nombre', ''),
+            descripcion=producto_data.get('descripcion', ''),
+            capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
+            unidad_medida=producto_data.get('unidad_medida', 'kg'),
+            periodo_capacidad=producto_data.get('periodo_capacidad', 'mensual'),
+        )
+        if producto_data.get('posicion_arancelaria'):
+            PosicionArancelariaMixta.objects.create(
+                producto=producto,
+                codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
+                descripcion_arancelaria=producto_data.get('descripcion_arancelaria', ''),
+            )
         if solicitud.servicios_ofrecidos:
             servicios_data = solicitud.servicios_ofrecidos
             if isinstance(servicios_data, dict):
@@ -608,19 +752,14 @@ def crear_empresa_desde_solicitud(solicitud):
                         sector_atendido=servicio_data.get('sector_atendido', 'otro'),
                     )
     
-    # Crear matriz de clasificación automáticamente para la empresa
+    # Crear matriz de clasificación
     from apps.empresas.models import MatrizClasificacionExportador
     from apps.empresas.utils import calcular_puntajes_matriz
-    import logging
-    
-    logger = logging.getLogger(__name__)
     
     try:
-        # Calcular puntajes automáticamente
         resultado = calcular_puntajes_matriz(empresa)
         puntajes = resultado.get('puntajes', {})
         
-        # Crear matriz de clasificación
         matriz_kwargs = {
             'experiencia_exportadora': puntajes.get('experiencia_exportadora', 0),
             'volumen_produccion': puntajes.get('volumen_produccion', 0),
@@ -633,18 +772,16 @@ def crear_empresa_desde_solicitud(solicitud):
             'certificaciones_internacionales': puntajes.get('certificaciones_internacionales', 0),
         }
         
-        # Asignar la empresa usando el campo unificado
         matriz_kwargs['empresa'] = empresa
         
-        # Crear o actualizar matriz (en caso de que ya exista)
         matriz, created = MatrizClasificacionExportador.objects.update_or_create(
             empresa=empresa,
             defaults=matriz_kwargs
         )
         
-        logger.info(f"Matriz de clasificación {'creada' if created else 'actualizada'} para empresa ID={empresa.id}, Tipo={tipo_empresa_value}")
+        logger.info(f"Matriz de clasificación {'creada' if created else 'actualizada'} para empresa ID={empresa.id}")
     except Exception as e:
-        logger.error(f"Error al crear matriz de clasificación para empresa ID={empresa.id}: {str(e)}", exc_info=True)
-        # No fallar la creación de la empresa si falla la matriz
+        logger.error(f"Error al crear matriz de clasificación: {str(e)}", exc_info=True)
     
+    logger.info(f"✅ Empresa creada: ID={empresa.id}, Razón Social={empresa.razon_social}, Departamento={departamento.nombre}")
     return empresa

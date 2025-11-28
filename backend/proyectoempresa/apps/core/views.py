@@ -2,7 +2,8 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import Usuario, Dpto, Municipio, Localidades
+from .models import Usuario
+from apps.geografia.models import Departamento, Municipio, Localidad
 
 @login_required
 def dashboard(request):
@@ -12,9 +13,9 @@ def dashboard(request):
     context = {
         'usuario': request.user,
         'total_usuarios': Usuario.objects.count(),
-        'total_departamentos': Dpto.objects.count(),
+        'total_departamentos': Departamento.objects.count(),
         'total_municipios': Municipio.objects.count(),
-        'total_localidades': Localidades.objects.count(),
+        'total_localidades': Localidad.objects.count(),
     }
     return render(request, 'core/dashboard.html', context)
 
@@ -45,5 +46,5 @@ def get_localidades(request):
     Vista AJAX para obtener localidades de un municipio
     """
     municipio_id = request.GET.get('municipio_id')
-    localidades = Localidades.objects.filter(municipio_id=municipio_id, activo=True).values('id', 'nomloc')
+    localidades = Localidad.objects.filter(municipio_id=municipio_id, activo=True).values('id', 'nomloc')
     return JsonResponse(list(localidades), safe=False)

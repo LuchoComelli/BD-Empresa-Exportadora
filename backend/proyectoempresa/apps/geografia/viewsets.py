@@ -9,6 +9,9 @@ from .serializers import (
     MunicipioSerializer, LocalidadSerializer
 )
 
+# Constante para Catamarca
+CATAMARCA_ID = '10'
+
 
 class ProvinciaViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para Provincias (solo lectura)"""
@@ -20,12 +23,13 @@ class ProvinciaViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['nombre', 'nombre_completo', 'iso_id']
     ordering_fields = ['nombre', 'iso_id']
     ordering = ['nombre']
-    pagination_class = None  # Deshabilitar paginación para obtener todos los datos
+    pagination_class = None
 
 
 class DepartamentoViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet para Departamentos (solo lectura)"""
-    queryset = Departamento.objects.select_related('provincia').all()
+    """ViewSet para Departamentos de Catamarca (solo lectura)"""
+    # Por defecto solo mostrar departamentos de Catamarca
+    queryset = Departamento.objects.select_related('provincia').filter(provincia_id=CATAMARCA_ID)
     serializer_class = DepartamentoSerializer
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -33,23 +37,21 @@ class DepartamentoViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['nombre', 'nombre_completo']
     ordering_fields = ['nombre']
     ordering = ['nombre']
-    pagination_class = None  # Deshabilitar paginación para obtener todos los datos
+    pagination_class = None
     
     @action(detail=False, methods=['get'])
     def por_provincia(self, request):
         """Obtener departamentos por provincia"""
-        provincia_id = request.query_params.get('provincia_id')
-        if not provincia_id:
-            return Response({'error': 'provincia_id es requerido'}, status=400)
-        
-        departamentos = self.queryset.filter(provincia_id=provincia_id)
+        provincia_id = request.query_params.get('provincia_id', CATAMARCA_ID)
+        departamentos = Departamento.objects.filter(provincia_id=provincia_id)
         serializer = self.get_serializer(departamentos, many=True)
         return Response(serializer.data)
 
 
 class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet para Municipios (solo lectura)"""
-    queryset = Municipio.objects.select_related('provincia', 'departamento').all()
+    """ViewSet para Municipios de Catamarca (solo lectura)"""
+    # Por defecto solo mostrar municipios de Catamarca
+    queryset = Municipio.objects.select_related('provincia', 'departamento').filter(provincia_id=CATAMARCA_ID)
     serializer_class = MunicipioSerializer
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -57,7 +59,7 @@ class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['nombre', 'nombre_completo']
     ordering_fields = ['nombre']
     ordering = ['nombre']
-    pagination_class = None  # Deshabilitar paginación para obtener todos los datos
+    pagination_class = None
     
     @action(detail=False, methods=['get'])
     def por_departamento(self, request):
@@ -73,18 +75,16 @@ class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def por_provincia(self, request):
         """Obtener municipios por provincia"""
-        provincia_id = request.query_params.get('provincia_id')
-        if not provincia_id:
-            return Response({'error': 'provincia_id es requerido'}, status=400)
-        
-        municipios = self.queryset.filter(provincia_id=provincia_id)
+        provincia_id = request.query_params.get('provincia_id', CATAMARCA_ID)
+        municipios = Municipio.objects.filter(provincia_id=provincia_id)
         serializer = self.get_serializer(municipios, many=True)
         return Response(serializer.data)
 
 
 class LocalidadViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet para Localidades (solo lectura)"""
-    queryset = Localidad.objects.select_related('provincia', 'departamento', 'municipio').all()
+    """ViewSet para Localidades de Catamarca (solo lectura)"""
+    # Por defecto solo mostrar localidades de Catamarca
+    queryset = Localidad.objects.select_related('provincia', 'departamento', 'municipio').filter(provincia_id=CATAMARCA_ID)
     serializer_class = LocalidadSerializer
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -92,7 +92,7 @@ class LocalidadViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['nombre']
     ordering_fields = ['nombre']
     ordering = ['nombre']
-    pagination_class = None  # Deshabilitar paginación para obtener todos los datos
+    pagination_class = None
     
     @action(detail=False, methods=['get'])
     def por_municipio(self, request):
@@ -115,4 +115,3 @@ class LocalidadViewSet(viewsets.ReadOnlyModelViewSet):
         localidades = self.queryset.filter(departamento_id=departamento_id)
         serializer = self.get_serializer(localidades, many=True)
         return Response(serializer.data)
-

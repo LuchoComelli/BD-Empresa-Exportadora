@@ -42,6 +42,9 @@ class SolicitudRegistroSerializer(serializers.ModelSerializer):
     """Serializer completo para solicitudes de registro"""
     documentos = DocumentoSolicitudSerializer(many=True, read_only=True)
     notificaciones = NotificacionRegistroSerializer(many=True, read_only=True)
+    departamento_nombre = serializers.SerializerMethodField()
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
     
     class Meta:
         model = SolicitudRegistro
@@ -51,6 +54,39 @@ class SolicitudRegistroSerializer(serializers.ModelSerializer):
             'email_confirmado', 'fecha_confirmacion',
             'fecha_aprobacion', 'aprobado_por', 'empresa_creada'
         ]
+    def get_departamento_nombre(self, obj):
+        """Obtener nombre del departamento"""
+        if obj.departamento:
+            try:
+                from apps.geografia.models import Departamento
+                depto = Departamento.objects.get(id=obj.departamento)
+                return depto.nombre
+            except Departamento.DoesNotExist:
+                return obj.departamento
+        return None
+    
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        if obj.municipio:
+            try:
+                from apps.geografia.models import Municipio
+                municipio = Municipio.objects.get(id=obj.municipio)
+                return municipio.nombre
+            except Municipio.DoesNotExist:
+                return obj.municipio
+        return None
+    
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        if obj.localidad:
+            try:
+                from apps.geografia.models import Localidad
+                localidad = Localidad.objects.get(id=obj.localidad)
+                return localidad.nombre
+            except Localidad.DoesNotExist:
+                return obj.localidad
+        return None
+        
 
 
 class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
@@ -82,6 +118,12 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
         allow_empty=True,
         allow_null=True
     )
+    actividades_promocion_internacional = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        allow_empty=True,
+        allow_null=True
+    )
     
     def to_internal_value(self, data):
         """Parsear strings JSON antes de la validación"""
@@ -102,7 +144,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
                 # Si es una cadena vacía, mantenerla (no es None)
                 if value == '':
                     parsed_data[key] = value
-                elif key in ['contacto_principal', 'contactos_secundarios', 'productos', 'servicios', 'actividades_promocion']:
+                elif key in ['contacto_principal', 'contactos_secundarios', 'productos', 'servicios', 'actividades_promocion', 'actividades_promocion_internacional']:
                     # Intentar parsear como JSON solo para estos campos
                     try:
                         parsed_data[key] = json.loads(value)
@@ -133,12 +175,13 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
         model = SolicitudRegistro
         fields = [
             'razon_social', 'nombre_fantasia', 'tipo_sociedad', 'cuit_cuil',
-            'direccion', 'codigo_postal', 'provincia', 'departamento', 'municipio', 'localidad',
+            'direccion', 'codigo_postal', 'direccion_comercial', 'codigo_postal_comercial', 'departamento', 'municipio', 'localidad',
             'geolocalizacion', 'telefono', 'correo', 'sitioweb',
             'tipo_empresa', 'rubro_principal', 'sub_rubro', 
             'rubro_producto', 'sub_rubro_producto', 'rubro_servicio', 'sub_rubro_servicio',
             'descripcion_actividad',
             'productos', 'servicios', 'actividades_promocion',
+            'actividades_promocion_internacional',
             'contacto_principal', 'contactos_secundarios',
             'nombre_contacto', 'cargo_contacto', 'telefono_contacto', 'email_contacto',
             'exporta', 'destino_exportacion', 'importa', 'tipo_importacion',
@@ -199,7 +242,12 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             contactos_secundarios_raw = validated_data.pop('contactos_secundarios', [])
             productos_raw = validated_data.pop('productos', [])
             servicios_raw = validated_data.pop('servicios', {})
-            actividades_promocion_raw = validated_data.pop('actividades_promocion', [])
+            # Aceptar alias enviado por frontend: 'actividades_promocion_internacional'
+            actividades_promocion_raw = validated_data.pop('actividades_promocion', None)
+            if not actividades_promocion_raw and 'actividades_promocion_internacional' in validated_data:
+                actividades_promocion_raw = validated_data.pop('actividades_promocion_internacional', None)
+            if actividades_promocion_raw is None:
+                actividades_promocion_raw = []
             
             # Parsear cada campo
             contacto_principal = parse_json_value(contacto_principal_raw, {})
@@ -257,6 +305,11 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
                     actividades_promocion = [parse_json_value(item, item) if isinstance(item, str) else item for item in actividades_promocion_raw]
                 else:
                     actividades_promocion = []
+            # Log para depuración: cuántas actividades se recibieron
+            try:
+                logger.info(f"Actividades promocion procesadas: {len(actividades_promocion)}")
+            except Exception:
+                logger.info("Actividades promocion procesadas: (no disponible)")
             
             # Mapear contacto principal a campos del modelo
             nombre_contacto = contacto_principal.get('nombre', '') or validated_data.pop('nombre_contacto', '')
@@ -330,7 +383,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             
             # Crear usuario con transacción atómica
             from django.db import transaction
-            from apps.core.models import Dpto, Municipio, Localidades
+            from apps.geografia.models import Departamento, Municipio, Localidad
             from apps.empresas.models import Rubro, TipoEmpresa, Empresaproducto, Empresaservicio, EmpresaMixta
             
             with transaction.atomic():
@@ -398,7 +451,7 @@ class SolicitudRegistroUpdateSerializer(serializers.ModelSerializer):
         model = SolicitudRegistro
         fields = [
             'nombre_fantasia', 'tipo_sociedad', 'direccion', 'codigo_postal',
-            'provincia', 'departamento', 'municipio', 'localidad', 'geolocalizacion',
+            'direccion_comercial', 'codigo_postal_comercial', 'departamento', 'municipio', 'localidad', 'geolocalizacion',
             'telefono', 'sitioweb', 'rubro_principal', 'sub_rubro', 'descripcion_actividad',
             'productos', 'servicios', 'contacto_principal', 'contactos_secundarios',
             'actividades_promocion', 'instagram', 'facebook', 'linkedin',

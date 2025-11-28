@@ -3,7 +3,7 @@
 import { useState, useEffect, use, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { MainLayout } from "@/components/layout/main-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,12 +31,11 @@ interface Empresa {
   estado?: string
   direccion?: string
   codigo_postal?: string
-  provincia?: string
-  departamento?: any
+  departamento: string
+  municipio?: string
+  localidad?: string
   departamento_nombre?: string
-  municipio?: any
   municipio_nombre?: string
-  localidad?: any
   localidad_nombre?: string
   telefono?: string
   correo?: string
@@ -65,6 +64,8 @@ interface Empresa {
   contacto_principal_email?: string
   fecha_creacion?: string
   fecha_actualizacion?: string
+  rubro_producto_nombre?: string 
+  rubro_servicio_nombre?: string
 }
 
 function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) {
@@ -260,6 +261,25 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
+  const formatFormaContratacion = (val: any) => {
+    if (!val && val !== 0) return null
+    const v = typeof val === 'string' ? val.toLowerCase() : String(val).toLowerCase()
+    switch (v) {
+      case 'hora':
+      case 'por hora':
+        return 'Por Hora'
+      case 'proyecto':
+      case 'por proyecto':
+        return 'Por Proyecto'
+      case 'mensual':
+        return 'Mensual'
+      case 'otro':
+        return 'Otro'
+      default:
+        return String(val)
+    }
+  }
+
   if (loading) {
     return (
       <MainLayout>
@@ -413,7 +433,7 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                         <MapPin className="h-4 w-4" />
                         <span>{displayData.direccion}</span>
                         {(displayData.departamento_nombre || displayData.departamento) && (
-                          <span>, {displayData.departamento_nombre || (typeof displayData.departamento === 'object' ? displayData.departamento.nomdpto : displayData.departamento)}</span>
+                          <span>, {displayData.departamento_nombre || (typeof displayData.departamento === 'object' ? displayData.departamento.nombre : displayData.departamento)}</span>
                         )}
                       </div>
                     )}
@@ -445,12 +465,13 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
         </Card>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="general">Información General</TabsTrigger>
-            <TabsTrigger value="comercial">Actividad Comercial</TabsTrigger>
-            <TabsTrigger value="productos-servicios">Productos/Servicios</TabsTrigger>
-            <TabsTrigger value="certificaciones">Certificaciones</TabsTrigger>
-          </TabsList>
+          <TabsList className="inline-flex w-full sm:w-auto overflow-x-auto gap-2 flex-nowrap">
+  <TabsTrigger value="general" className="flex-shrink-0">Información General</TabsTrigger>
+  <TabsTrigger value="ubicacion" className="flex-shrink-0">Ubicación</TabsTrigger>
+  <TabsTrigger value="comercial" className="flex-shrink-0">Actividad Comercial</TabsTrigger>
+  <TabsTrigger value="productos-servicios" className="flex-shrink-0">Productos/Servicios</TabsTrigger>
+  <TabsTrigger value="certificaciones" className="flex-shrink-0">Certificaciones</TabsTrigger>
+</TabsList>
 
           <TabsContent value="general" className="space-y-6">
             <Card>
@@ -527,94 +548,42 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                     })()}
                   </p>
                 </div>
-                <div>
-                  <Label>Dirección</Label>
-                  {isEditing ? (
-                    <Input
-                      value={displayData?.direccion || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, direccion: e.target.value } : null)}
-                    />
-                  ) : (
-                    <p className="mt-1 font-semibold">{displayData?.direccion || 'N/A'}</p>
-                  )}
-                </div>
-                <div>
-                  <Label>Código Postal</Label>
-                  <p className="mt-1 font-semibold">{displayData?.codigo_postal || 'N/A'}</p>
-                </div>
-                <div>
-                  <Label>Provincia</Label>
-                  <p className="mt-1 font-semibold">{displayData?.provincia || 'N/A'}</p>
-                </div>
-                <div>
-                  <Label>Departamento</Label>
-                  <p className="mt-1 font-semibold">
-                    {(() => {
-                      // Priorizar departamento_nombre si existe
-                      if (displayData?.departamento_nombre) {
-                        return displayData.departamento_nombre
-                      }
-                      // Si no, intentar obtener del objeto departamento
-                      if (displayData?.departamento) {
-                        if (typeof displayData.departamento === 'object' && displayData.departamento?.nomdpto) {
-                          return displayData.departamento.nomdpto
-                        }
-                        // Si es un número, no mostrarlo
-                        if (typeof displayData.departamento === 'number') {
-                          return 'N/A'
-                        }
-                        return displayData.departamento
-                      }
-                      return 'N/A'
-                    })()}
-                  </p>
-                </div>
-                <div>
-                  <Label>Municipio</Label>
-                  <p className="mt-1 font-semibold">
-                    {(() => {
-                      // Priorizar municipio_nombre si existe
-                      if (displayData?.municipio_nombre) {
-                        return displayData.municipio_nombre
-                      }
-                      // Si no, intentar obtener del objeto municipio
-                      if (displayData?.municipio) {
-                        if (typeof displayData.municipio === 'object' && displayData.municipio?.nommun) {
-                          return displayData.municipio.nommun
-                        }
-                        // Si es un número, no mostrarlo
-                        if (typeof displayData.municipio === 'number') {
-                          return 'N/A'
-                        }
-                        return displayData.municipio
-                      }
-                      return 'N/A'
-                    })()}
-                  </p>
-                </div>
-                <div>
-                  <Label>Localidad</Label>
-                  <p className="mt-1 font-semibold">
-                    {(() => {
-                      // Priorizar localidad_nombre si existe
-                      if (displayData?.localidad_nombre) {
-                        return displayData.localidad_nombre
-                      }
-                      // Si no, intentar obtener del objeto localidad
-                      if (displayData?.localidad) {
-                        if (typeof displayData.localidad === 'object' && displayData.localidad?.nomloc) {
-                          return displayData.localidad.nomloc
-                        }
-                        // Si es un número, no mostrarlo
-                        if (typeof displayData.localidad === 'number') {
-                          return 'N/A'
-                        }
-                        return displayData.localidad
-                      }
-                      return 'N/A'
-                    })()}
-                  </p>
-                </div>
+                
+                {/* Mostrar rubros según el tipo de empresa */}
+                {(displayData?.tipo_empresa === 'mixta' || displayData?.tipo_empresa_valor === 'mixta') ? (
+                  <>
+                    <div>
+                      <Label>Rubro (Productos)</Label>
+                      <p className="mt-1 font-semibold">{displayData?.rubro_producto_nombre || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Rubro (Servicios)</Label>
+                      <p className="mt-1 font-semibold">{displayData?.rubro_servicio_nombre || 'N/A'}</p>
+                    </div>
+                  </>
+                ) : null}
+                
+                {/* Mostrar subrubro según el tipo de empresa */}
+                {(displayData?.tipo_empresa === 'mixta' || displayData?.tipo_empresa_valor === 'mixta') ? (
+                  <>
+                    <div>
+                      <Label>Sub Rubro (Productos)</Label>
+                      <p className="mt-1 font-semibold">{displayData?.sub_rubro_producto_nombre || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Sub Rubro (Servicios)</Label>
+                      <p className="mt-1 font-semibold">{displayData?.sub_rubro_servicio_nombre || 'N/A'}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <Label>Sub Rubro</Label>
+                    <p className="mt-1 font-semibold">{displayData?.sub_rubro_nombre || 'N/A'}</p>
+                  </div>
+                )}
+
+                
+                
                 <div>
                   <Label>Teléfono</Label>
                   {isEditing ? (
@@ -661,28 +630,67 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                 {(displayData?.instagram || displayData?.facebook || displayData?.linkedin) && (
                   <div className="md:col-span-2">
                     <Label>Redes Sociales</Label>
-                    <div className="mt-2 flex flex-wrap gap-4">
-                      {displayData.instagram && (
-                        <a href={displayData.instagram.startsWith('http') ? displayData.instagram : `https://instagram.com/${displayData.instagram}`} 
-                           target="_blank" rel="noopener noreferrer" 
-                           className="text-[#3259B5] hover:underline">
-                          Instagram: {displayData.instagram}
-                        </a>
-                      )}
-                      {displayData.facebook && (
-                        <a href={displayData.facebook.startsWith('http') ? displayData.facebook : `https://facebook.com/${displayData.facebook}`} 
-                           target="_blank" rel="noopener noreferrer" 
-                           className="text-[#3259B5] hover:underline">
-                          Facebook: {displayData.facebook}
-                        </a>
-                      )}
-                      {displayData.linkedin && (
-                        <a href={displayData.linkedin.startsWith('http') ? displayData.linkedin : `https://linkedin.com/company/${displayData.linkedin}`} 
-                           target="_blank" rel="noopener noreferrer" 
-                           className="text-[#3259B5] hover:underline">
-                          LinkedIn: {displayData.linkedin}
-                        </a>
-                      )}
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-sm text-muted-foreground">Instagram</span>
+                        {isEditing ? (
+                          <Input
+                            value={displayData?.instagram || ''}
+                            onChange={(e) => setEditedData(displayData ? { ...displayData, instagram: e.target.value } : null)}
+                            placeholder="usuario o URL"
+                          />
+                        ) : (
+                          displayData.instagram ? (
+                            <a href={displayData.instagram.startsWith('http') ? displayData.instagram : `https://instagram.com/${displayData.instagram}`} 
+                               target="_blank" rel="noopener noreferrer" 
+                               className="text-[#3259B5] hover:underline block mt-1">
+                              {displayData.instagram}
+                            </a>
+                          ) : (
+                            <p className="mt-1 font-semibold">N/A</p>
+                          )
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Facebook</span>
+                        {isEditing ? (
+                          <Input
+                            value={displayData?.facebook || ''}
+                            onChange={(e) => setEditedData(displayData ? { ...displayData, facebook: e.target.value } : null)}
+                            placeholder="usuario o URL"
+                          />
+                        ) : (
+                          displayData.facebook ? (
+                            <a href={displayData.facebook.startsWith('http') ? displayData.facebook : `https://facebook.com/${displayData.facebook}`} 
+                               target="_blank" rel="noopener noreferrer" 
+                               className="text-[#3259B5] hover:underline block mt-1">
+                              {displayData.facebook}
+                            </a>
+                          ) : (
+                            <p className="mt-1 font-semibold">N/A</p>
+                          )
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">LinkedIn</span>
+                        {isEditing ? (
+                          <Input
+                            value={displayData?.linkedin || ''}
+                            onChange={(e) => setEditedData(displayData ? { ...displayData, linkedin: e.target.value } : null)}
+                            placeholder="usuario o URL"
+                          />
+                        ) : (
+                          displayData.linkedin ? (
+                            <a href={displayData.linkedin.startsWith('http') ? displayData.linkedin : `https://linkedin.com/company/${displayData.linkedin}`} 
+                               target="_blank" rel="noopener noreferrer" 
+                               className="text-[#3259B5] hover:underline block mt-1">
+                              {displayData.linkedin}
+                            </a>
+                          ) : (
+                            <p className="mt-1 font-semibold">N/A</p>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -717,94 +725,241 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                     </div>
                   </div>
                 )}
-                {displayData?.geolocalizacion && (() => {
-                  // Parsear geolocalizacion string "lat,lng" a objeto { lat, lng }
-                  const geoString = displayData.geolocalizacion
-                  let coordinates: { lat: number; lng: number } | null = null
-                  
-                  if (typeof geoString === 'string' && geoString.trim()) {
-                    try {
-                      const parts = geoString.split(',').map(v => parseFloat(v.trim()))
-                      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                        coordinates = { lat: parts[0], lng: parts[1] }
-                      }
-                    } catch (error) {
-                      console.error('Error parsing geolocalizacion:', error)
-                    }
-                  }
-                  
-                  return coordinates ? (
-                    <div className="md:col-span-2">
-                      <Label>Ubicación en el Mapa</Label>
-                      <div className="mt-2">
-                        <CompanyMap 
-                          coordinates={coordinates} 
-                          address={displayData?.direccion || displayData?.razon_social}
-                        />
-                      </div>
-                    </div>
-                  ) : null
-                })()}
+
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="comercial" className="space-y-6">
+          <TabsContent value="ubicacion" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#222A59]">Actividad Comercial</CardTitle>
+                <CardTitle className="text-[#222A59]">Ubicación</CardTitle>
+                <CardDescription>Dirección, código postal, departamento, municipio, localidad y geolocalización</CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="space-y-6">
                 <div>
-                  <Label>¿Exporta?</Label>
-                  {isEditing ? (
-                    <Select
-                      value={displayData?.exporta || ''}
-                      onValueChange={(value) => setEditedData(displayData ? { ...displayData, exporta: value } : null)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Sí">Sí</SelectItem>
-                        <SelectItem value="No, solo ventas nacionales">No</SelectItem>
-                        <SelectItem value="En proceso">En proceso</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="mt-1 font-semibold">{displayData?.exporta || 'N/A'}</p>
-                  )}
+                  <h3 className="text-lg font-semibold">Domicilio del Establecimiento Productivo</h3>
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label>Dirección</Label>
+                      <p className="mt-1 font-semibold">{displayData?.direccion || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Código Postal</Label>
+                      <p className="mt-1 font-semibold">{displayData?.codigo_postal || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Departamento</Label>
+                      <p className="mt-1 font-semibold">{displayData?.departamento_nombre || displayData?.departamento || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Municipio</Label>
+                      <p className="mt-1 font-semibold">{displayData?.municipio_nombre || displayData?.municipio || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Localidad</Label>
+                      <p className="mt-1 font-semibold">{displayData?.localidad_nombre || displayData?.localidad || 'N/A'}</p>
+                    </div>
+                    {displayData?.geolocalizacion && (() => {
+                      const geoString = displayData.geolocalizacion
+                      let coordinates: { lat: number; lng: number } | null = null
+                      if (typeof geoString === 'string' && geoString.trim()) {
+                        try {
+                          const parts = geoString.split(',').map(v => parseFloat(v.trim()))
+                          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                            coordinates = { lat: parts[0], lng: parts[1] }
+                          }
+                        } catch (error) {
+                          console.error('Error parsing geolocalizacion:', error)
+                        }
+                      }
+                      return coordinates ? (
+                        <div className="md:col-span-2">
+                          <Label>Ubicación en el Mapa</Label>
+                          <div className="mt-2">
+                            <CompanyMap
+                              coordinates={coordinates}
+                              address={displayData?.direccion || displayData?.razon_social}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="md:col-span-2">
+                          <Label>Ubicación en el Mapa</Label>
+                          <p className="mt-1 font-semibold">No disponible</p>
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
+
                 <div>
-                  <Label>Destino de Exportación</Label>
-                  {isEditing ? (
-                    <Textarea
-                      value={displayData?.destinoexporta || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, destinoexporta: e.target.value } : null)}
-                      rows={3}
-                    />
-                  ) : (
-                    <p className="mt-1 font-semibold">{displayData?.destinoexporta || 'N/A'}</p>
-                  )}
-                </div>
-                <div>
-                  <Label>¿Importa?</Label>
-                  <p className="mt-1 font-semibold">{displayData?.importa ? 'Sí' : 'No'}</p>
-                </div>
-                <div>
-                  <Label>Idiomas de Trabajo</Label>
-                  {isEditing ? (
-                    <Input
-                      value={displayData?.idiomas_trabaja || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, idiomas_trabaja: e.target.value } : null)}
-                    />
-                  ) : (
-                    <p className="mt-1 font-semibold">{displayData?.idiomas_trabaja || 'N/A'}</p>
-                  )}
+                  <h3 className="text-lg font-semibold">Domicilio Comercial</h3>
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label>Dirección</Label>
+                      <p className="mt-1 font-semibold">{displayData?.direccion_comercial || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label>Código Postal</Label>
+                      <p className="mt-1 font-semibold">{displayData?.codigo_postal_comercial || 'N/A'}</p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
+
+          
+<TabsContent value="comercial" className="space-y-6">
+  <Card>
+    <CardHeader>
+      <CardTitle className="text-[#222A59]">Actividad Comercial</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-6">
+      {/* Datos de exportación/importación */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <Label>¿Exporta?</Label>
+          {isEditing ? (
+            <Select
+              value={displayData?.exporta || ''}
+              onValueChange={(value) => setEditedData(displayData ? { ...displayData, exporta: value } : null)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Sí">Sí</SelectItem>
+                <SelectItem value="No, solo ventas nacionales">No</SelectItem>
+                <SelectItem value="En proceso">En proceso</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="mt-1 font-semibold">{displayData?.exporta || 'N/A'}</p>
+          )}
+        </div>
+        <div>
+          <Label>Destino de Exportación</Label>
+          {isEditing ? (
+            <Textarea
+              value={displayData?.destinoexporta || ''}
+              onChange={(e) => setEditedData(displayData ? { ...displayData, destinoexporta: e.target.value } : null)}
+              rows={3}
+            />
+          ) : (
+            <p className="mt-1 font-semibold">{displayData?.destinoexporta || 'N/A'}</p>
+          )}
+        </div>
+        <div>
+          <Label>¿Importa?</Label>
+          <p className="mt-1 font-semibold">{displayData?.importa ? 'Sí' : 'No'}</p>
+        </div>
+        <div>
+          <Label>Idiomas de Trabajo</Label>
+          {isEditing ? (
+            <Input
+              value={displayData?.idiomas_trabaja || ''}
+              onChange={(e) => setEditedData(displayData ? { ...displayData, idiomas_trabaja: e.target.value } : null)}
+            />
+          ) : (
+            <p className="mt-1 font-semibold">{displayData?.idiomas_trabaja || 'N/A'}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Sección de Actividades de Promoción Internacional */}
+      <div className="pt-6 border-t">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-[#222A59]">
+            Actividades de Promoción Internacional
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Ferias, misiones comerciales y rondas de negocios en las que ha participado
+          </p>
+        </div>
+
+        {displayData?.actividades_promocion_internacional && 
+         Array.isArray(displayData.actividades_promocion_internacional) && 
+         displayData.actividades_promocion_internacional.length > 0 ? (
+          <div className="space-y-3">
+            {displayData.actividades_promocion_internacional.map((actividad: any, index: number) => (
+              <div
+                key={index}
+                className="p-4 border border-[#3259B5]/30 rounded-lg bg-gradient-to-br from-[#3259B5]/5 to-transparent hover:border-[#3259B5]/50 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    {actividad.tipo === 'feria' && (
+                      <div className="flex items-center gap-2 text-[#3259B5]">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span className="font-semibold text-sm">Feria Internacional</span>
+                      </div>
+                    )}
+                    {actividad.tipo === 'mision' && (
+                      <div className="flex items-center gap-2 text-[#66A29C]">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-semibold text-sm">Misión Comercial</span>
+                      </div>
+                    )}
+                    {actividad.tipo === 'ronda' && (
+                      <div className="flex items-center gap-2 text-[#807DA1]">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        <span className="font-semibold text-sm">Ronda de Negocios</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="px-3 py-1 bg-[#222A59] text-white text-xs font-semibold rounded-full">
+                    {actividad.anio || 'N/A'}
+                  </span>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Lugar</p>
+                      <p className="font-medium text-[#222A59]">{actividad.lugar || 'No especificado'}</p>
+                    </div>
+                  </div>
+                  
+                  {actividad.observaciones && (
+                    <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200">
+                      <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Observaciones</p>
+                        <p className="text-sm text-gray-700">{actividad.observaciones}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="font-medium text-gray-600">No hay actividades de promoción registradas</p>
+            <p className="text-sm text-gray-500 mt-1">Esta empresa no ha registrado participación en ferias, misiones o rondas</p>
+          </div>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
 
           <TabsContent value="productos-servicios" className="space-y-6">
             <Card>
@@ -860,72 +1015,159 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                   </div>
                 ) : null}
                 {(empresa.tipo_empresa === 'servicio' || empresa.tipo_empresa === 'mixta' || empresa.tipo_empresa_valor === 'servicio' || empresa.tipo_empresa_valor === 'mixta') ? (
-                  <div className="space-y-4 mt-6">
-                    <h3 className="font-semibold text-lg">Servicios</h3>
-                    {displayData?.servicios && displayData.servicios.length > 0 ? (
-                      <div className="space-y-4">
-                        {displayData.servicios.map((servicio: any, index: number) => (
-                          <div key={servicio.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="font-semibold text-lg">{servicio.nombre_servicio || servicio.descripcion || servicio.nombre}</p>
-                                {servicio.descripcion && servicio.nombre_servicio && (
-                                  <p className="text-sm text-muted-foreground mt-2">{servicio.descripcion}</p>
-                                )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                                  {servicio.tipo_servicio && (
-                                    <div>
-                                      <span className="text-sm font-medium">Tipo: </span>
-                                      <span className="text-sm">{Array.isArray(servicio.tipo_servicio) ? servicio.tipo_servicio.join(', ') : servicio.tipo_servicio}</span>
-                                    </div>
-                                  )}
-                                  {servicio.sectores && servicio.sectores.length > 0 && (
-                                    <div>
-                                      <span className="text-sm font-medium">Sectores: </span>
-                                      <span className="text-sm">{Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores}</span>
-                                    </div>
-                                  )}
-                                  {servicio.alcance_geografico && (
-                                    <div>
-                                      <span className="text-sm font-medium">Alcance Geográfico: </span>
-                                      <span className="text-sm">{servicio.alcance_geografico}</span>
-                                    </div>
-                                  )}
-                                  {servicio.paises_destino && (
-                                    <div>
-                                      <span className="text-sm font-medium">Países Destino: </span>
-                                      <span className="text-sm">{servicio.paises_destino}</span>
-                                    </div>
-                                  )}
-                                  {servicio.idiomas && servicio.idiomas.length > 0 && (
-                                    <div>
-                                      <span className="text-sm font-medium">Idiomas: </span>
-                                      <span className="text-sm">{Array.isArray(servicio.idiomas) ? servicio.idiomas.join(', ') : servicio.idiomas}</span>
-                                    </div>
-                                  )}
-                                  {servicio.forma_contratacion && (
-                                    <div>
-                                      <span className="text-sm font-medium">Forma de Contratación: </span>
-                                      <span className="text-sm">{Array.isArray(servicio.forma_contratacion) ? servicio.forma_contratacion.join(', ') : servicio.forma_contratacion}</span>
-                                    </div>
-                                  )}
-                                  {servicio.certificaciones_tecnicas && (
-                                    <div className="md:col-span-2">
-                                      <span className="text-sm font-medium">Certificaciones Técnicas: </span>
-                                      <span className="text-sm">{servicio.certificaciones_tecnicas}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+  <div className="space-y-4 mt-6">
+    <h3 className="font-semibold text-lg">Servicios</h3>
+    {(() => {
+      const servicios = displayData?.servicios_ofrecidos 
+        ? (Array.isArray(displayData.servicios_ofrecidos)
+            ? displayData.servicios_ofrecidos
+            : (Object.keys(displayData.servicios_ofrecidos || {}).length ? [displayData.servicios_ofrecidos] : []))
+        : (displayData?.servicios || []);
+      
+      return servicios && servicios.length > 0 ? (
+        <div className="space-y-4">
+          {servicios.map((servicio: any, index: number) => (
+            <div key={servicio.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="font-semibold text-lg">
+                    {servicio.nombre || servicio.nombre_servicio || servicio.descripcion || `Servicio ${index + 1}`}
+                  </p>
+                  {servicio.descripcion && (servicio.nombre || servicio.nombre_servicio) && (
+                    <p className="text-sm text-muted-foreground mt-2">{servicio.descripcion}</p>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    {/* Tipo de Servicio */}
+                    {servicio.tipo_servicio && (
+                      <div>
+                        <span className="text-sm font-medium">Tipo: </span>
+                        <span className="text-sm">
+                          {Array.isArray(servicio.tipo_servicio) 
+                            ? servicio.tipo_servicio.join(', ') 
+                            : servicio.tipo_servicio}
+                        </span>
                       </div>
-                    ) : (
-                      <p className="text-muted-foreground py-4">No hay servicios registrados</p>
+                    )}
+                    
+                    {/* Sectores Atendidos */}
+                    {(servicio.sector_atendido || (servicio.sectores && servicio.sectores.length > 0)) && (
+                      <div>
+                        <span className="text-sm font-medium">Sectores Atendidos: </span>
+                        <span className="text-sm">
+                          {servicio.sector_atendido || 
+                           (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Alcance Geográfico */}
+                    {(servicio.alcance_geografico || servicio.alcance_servicio) && (
+                      <div>
+                        <span className="text-sm font-medium">Alcance Geográfico: </span>
+                        <span className="text-sm">
+                          {servicio.alcance_geografico || servicio.alcance_servicio || 'N/A'}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Países Destino */}
+                    {(servicio.paises_destino || servicio.paises_trabaja) && (
+                      <div>
+                        <span className="text-sm font-medium">Países donde trabaja: </span>
+                        <span className="text-sm">
+                          {servicio.paises_destino || servicio.paises_trabaja}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Exporta Servicios */}
+                    {(servicio.exporta_servicios || servicio.exporta_servicios_alias) && (
+                      <div>
+                        <span className="text-sm font-medium">Exporta Servicios: </span>
+                        <span className="text-sm">
+                          {servicio.exporta_servicios || servicio.exporta_servicios_alias}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Interés en Exportar */}
+                    {(servicio.interes_exportar || servicio.interes_exportar_servicios) && (
+                      <div>
+                        <span className="text-sm font-medium">Interés en Exportar: </span>
+                        <span className="text-sm">
+                          {servicio.interes_exportar || servicio.interes_exportar_servicios}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Idiomas */}
+                    {(servicio.idiomas_trabajo || (servicio.idiomas && servicio.idiomas.length > 0)) && (
+                      <div>
+                        <span className="text-sm font-medium">Idiomas: </span>
+                        <span className="text-sm">
+                          {servicio.idiomas_trabajo || 
+                           (Array.isArray(servicio.idiomas) ? servicio.idiomas.join(', ') : servicio.idiomas)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Forma de Contratación */}
+                    {servicio.forma_contratacion && (
+                      <div>
+                        <span className="text-sm font-medium">Forma de Contratación: </span>
+                        <span className="text-sm">
+                          {Array.isArray(servicio.forma_contratacion) 
+                            ? servicio.forma_contratacion.map(formatFormaContratacion).join(', ') 
+                            : formatFormaContratacion(servicio.forma_contratacion)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Certificaciones Técnicas */}
+                    {servicio.certificaciones_tecnicas && (
+                      <div className="md:col-span-2">
+                        <span className="text-sm font-medium">Certificaciones Técnicas: </span>
+                        <span className="text-sm">{servicio.certificaciones_tecnicas}</span>
+                      </div>
+                    )}
+                    
+                    {/* Equipo Técnico Especializado */}
+                    {(servicio.equipo_tecnico !== undefined && servicio.equipo_tecnico !== null) || 
+                     (servicio.tiene_equipo_tecnico !== undefined && servicio.tiene_equipo_tecnico !== null) ? (
+                      <div>
+                        <span className="text-sm font-medium">Equipo Técnico Especializado: </span>
+                        <span className="text-sm">
+                          {(servicio.tiene_equipo_tecnico === true || 
+                            servicio.tiene_equipo_tecnico === 'true' || 
+                            servicio.tiene_equipo_tecnico === 'si' || 
+                            servicio.tiene_equipo_tecnico === 'Sí' ||
+                            servicio.equipo_tecnico === true || 
+                            servicio.equipo_tecnico === 'true' || 
+                            servicio.equipo_tecnico === 'si' || 
+                            servicio.equipo_tecnico === 'Sí') ? 'Sí' : 'No'}
+                        </span>
+                      </div>
+                    ) : null}
+                    
+                    {/* Formación del Equipo Técnico */}
+                    {servicio.equipo_tecnico_formacion && (
+                      <div className="md:col-span-2">
+                        <span className="text-sm font-medium">Formación del Equipo Técnico: </span>
+                        <span className="text-sm">{servicio.equipo_tecnico_formacion}</span>
+                      </div>
                     )}
                   </div>
-                ) : null}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-muted-foreground py-4">No hay servicios registrados</p>
+      );
+    })()}
+  </div>
+) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -966,6 +1208,25 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                     />
                   ) : (
                     <p className="mt-1 font-semibold">{displayData?.observaciones || 'N/A'}</p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Brochure / Catálogo (PDF)</Label>
+                  {isEditing ? (
+                    <p className="mt-1 text-sm text-muted-foreground">Se puede subir o actualizar el brochure desde la edición.</p>
+                  ) : (
+                    displayData?.brochure ? (
+                      <a
+                        href={displayData.brochure}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block text-sm text-[#3259B5] font-semibold hover:underline"
+                      >
+                        Descargar Brochure / Catálogo
+                      </a>
+                    ) : (
+                      <p className="mt-1 font-semibold">N/A</p>
+                    )
                   )}
                 </div>
               </CardContent>

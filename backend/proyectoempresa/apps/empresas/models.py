@@ -1,7 +1,8 @@
 from django.db import models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
-from apps.core.models import Usuario, Dpto, Municipio, Localidades, TimestampedModel
+from apps.core.models import Usuario, TimestampedModel
+from apps.geografia.models import Departamento, Municipio, Localidad
 import re
 from datetime import datetime
 
@@ -176,6 +177,8 @@ class Empresa(TimestampedModel):
     """
     # Campos básicos obligatorios
     razon_social = models.CharField(max_length=150, verbose_name="Razón Social")
+    nombre_fantasia = models.CharField(max_length=150, blank=True, null=True, verbose_name="Nombre de Fantasía")
+    tipo_sociedad = models.CharField(max_length=50, blank=True, null=True, verbose_name="Tipo de Sociedad")
     cuit_cuil = models.CharField(
         unique=True, 
         max_length=11, 
@@ -186,26 +189,33 @@ class Empresa(TimestampedModel):
         )]
     )
     direccion = models.CharField(max_length=255, verbose_name="Dirección")
+    codigo_postal = models.CharField(max_length=10, blank=True, null=True, verbose_name="Código Postal")
+    # Dirección comercial (opcional) — proveniente del formulario de registro
+    direccion_comercial = models.CharField(max_length=255, blank=True, null=True, verbose_name="Dirección Comercial")
+    codigo_postal_comercial = models.CharField(max_length=10, blank=True, null=True, verbose_name="Código Postal Comercial")
     
     # Ubicación (usando modelos compartidos)
     departamento = models.ForeignKey(
-        Dpto, 
+        Departamento, 
         on_delete=models.PROTECT, 
-        verbose_name="Departamento"
+        verbose_name="Departamento",
+        related_name='empresas'
     )
     municipio = models.ForeignKey(
         Municipio, 
         on_delete=models.PROTECT, 
         blank=True, 
         null=True,
-        verbose_name="Municipio"
+        verbose_name="Municipio",
+        related_name='empresas'
     )
     localidad = models.ForeignKey(
-        Localidades, 
+        Localidad, 
         on_delete=models.PROTECT, 
         blank=True, 
         null=True,
-        verbose_name="Localidad"
+        verbose_name="Localidad",
+        related_name='empresas'
     )
     geolocalizacion = models.CharField(max_length=2083, blank=True, null=True, verbose_name="Geolocalización")
     
@@ -518,6 +528,14 @@ class Empresa(TimestampedModel):
         null=True,
         verbose_name="Nombre del Archivo de Ferias"
     )
+
+    # ACTIVIDADES DE PROMOCIÓN INTERNACIONAL
+    actividades_promocion_internacional = models.JSONField(
+    blank=True,
+    null=True,
+    verbose_name="Actividades de Promoción Internacional",
+    help_text="JSON con ferias, misiones comerciales y rondas de negocios"
+)
     
     # Campos adicionales - OPTIMIZADOS PARA MÉTRICAS
     observaciones = models.CharField(max_length=1000, blank=True, null=True, verbose_name="Observaciones")
@@ -569,7 +587,7 @@ class Empresa(TimestampedModel):
         indexes = [
             models.Index(fields=['razon_social']),
             models.Index(fields=['cuit_cuil']),
-            models.Index(fields=['departamento', 'municipio']),
+            models.Index(fields=['departamento', 'municipio', 'localidad']),
             models.Index(fields=['fecha_creacion']),
             models.Index(fields=['exporta', 'importa']),
             # Índices optimizados para métricas y filtros
@@ -918,7 +936,7 @@ class ServicioEmpresa(models.Model):
     
     # TIPO DE SERVICIO (basado en formulario)
     tipo_servicio = models.CharField(
-        max_length=50,
+        max_length=150,
         choices=[
             ('consultoria', 'Consultoría y servicios empresariales'),
             ('tecnologias', 'Tecnologías de la información (IT)'),
@@ -1008,7 +1026,7 @@ class ServicioEmpresa(models.Model):
     
     # FORMA DE CONTRATACIÓN
     forma_contratacion = models.CharField(
-        max_length=20,
+        max_length=100,
         choices=[
             ('hora', 'Por Hora'),
             ('proyecto', 'Por Proyecto'),
@@ -1218,7 +1236,7 @@ class ServicioEmpresaMixta(models.Model):
     
     # TIPO DE SERVICIO (basado en formulario)
     tipo_servicio = models.CharField(
-        max_length=50,
+        max_length=150,
         choices=[
             ('consultoria', 'Consultoría y servicios empresariales'),
             ('tecnologias', 'Tecnologías de la información (IT)'),
@@ -1308,7 +1326,7 @@ class ServicioEmpresaMixta(models.Model):
     
     # FORMA DE CONTRATACIÓN
     forma_contratacion = models.CharField(
-        max_length=20,
+        max_length=100,
         choices=[
             ('hora', 'Por Hora'),
             ('proyecto', 'Por Proyecto'),

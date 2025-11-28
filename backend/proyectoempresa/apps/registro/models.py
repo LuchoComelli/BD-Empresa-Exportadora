@@ -66,9 +66,10 @@ class SolicitudRegistro(TimestampedModel):
     )
     direccion = models.CharField(max_length=255, verbose_name="Dirección")
     codigo_postal = models.CharField(max_length=10, blank=True, null=True, verbose_name="Código Postal")
+    direccion_comercial = models.CharField(max_length=255, blank=True, null=True, verbose_name="Dirección Comercial")
+    codigo_postal_comercial = models.CharField(max_length=10, blank=True, null=True, verbose_name="Código Postal Comercial")
     
     # Ubicación
-    provincia = models.CharField(max_length=100, blank=True, null=True, verbose_name="Provincia")
     departamento = models.CharField(max_length=100, verbose_name="Departamento")
     municipio = models.CharField(max_length=100, blank=True, null=True, verbose_name="Municipio")
     localidad = models.CharField(max_length=100, blank=True, null=True, verbose_name="Localidad")

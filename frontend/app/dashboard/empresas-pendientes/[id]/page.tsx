@@ -27,6 +27,9 @@ interface EmpresaPendiente {
   departamento: string
   municipio?: string
   localidad?: string
+  departamento_nombre?: string
+  municipio_nombre?: string
+  localidad_nombre?: string
   correo: string
   telefono: string
   sitioweb?: string
@@ -263,15 +266,15 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
                 </div>
                 <div>
                   <Label className="text-sm text-muted-foreground">Departamento</Label>
-                  <p className="font-medium">{empresa.departamento}</p>
+                  <p className="font-medium">{empresa.departamento_nombre || empresa.departamento}</p>
                 </div>
                 <div>
                   <Label className="text-sm text-muted-foreground">Municipio</Label>
-                  <p className="font-medium">{empresa.municipio || 'N/A'}</p>
+                  <p className="font-medium">{empresa.municipio_nombre || empresa.municipio || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm text-muted-foreground">Localidad</Label>
-                  <p className="font-medium">{empresa.localidad || 'N/A'}</p>
+                  <p className="font-medium">{empresa.localidad_nombre || empresa.localidad || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm text-muted-foreground">Teléfono</Label>
@@ -324,22 +327,109 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
               </Card>
             )}
 
-            {empresa.servicios_ofrecidos && Object.keys(empresa.servicios_ofrecidos).length > 0 && (
-              <Card className="p-6">
-                <h2 className="text-xl font-bold text-[#222A59] mb-4">Servicios</h2>
-                <div className="space-y-4">
-                  <div className="border rounded-lg p-4">
-                    <h3 className="font-semibold text-[#222A59]">
-                      {empresa.servicios_ofrecidos.nombre || 'Servicios'}
-                    </h3>
-                    {empresa.servicios_ofrecidos.descripcion && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {empresa.servicios_ofrecidos.descripcion}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </Card>
+            {empresa.servicios_ofrecidos && (
+              (() => {
+                const servicios = Array.isArray(empresa.servicios_ofrecidos)
+                  ? empresa.servicios_ofrecidos
+                  : (Object.keys(empresa.servicios_ofrecidos || {}).length ? [empresa.servicios_ofrecidos] : [])
+
+                if (!servicios || servicios.length === 0) return null
+
+                return (
+                  <Card className="p-6">
+                    <h2 className="text-xl font-bold text-[#222A59] mb-4">Servicios</h2>
+                    <div className="space-y-4">
+                      {servicios.map((serv: any, idx: number) => (
+                        <div key={idx} className="border rounded-lg p-4">
+                          <h3 className="font-semibold text-[#222A59]">{serv.nombre || `Servicio ${idx + 1}`}</h3>
+                          {serv.descripcion && (
+                            <p className="text-sm text-muted-foreground mt-1">{serv.descripcion}</p>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-sm">
+                            {serv.tipo_servicio && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Tipo de Servicio</Label>
+                                <p className="font-medium">{serv.tipo_servicio}</p>
+                              </div>
+                            )}
+                            {serv.sector_atendido && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Sectores</Label>
+                                <p className="font-medium">{serv.sector_atendido}</p>
+                              </div>
+                            )}
+                            {serv.alcance_geografico && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Alcance Geográfico</Label>
+                                <p className="font-medium">{serv.alcance_geografico}</p>
+                              </div>
+                            )}
+                            {serv.paises_destino && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Países Destino</Label>
+                                <p className="font-medium">{serv.paises_destino}</p>
+                              </div>
+                            )}
+                            {serv.exporta_servicios && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Exporta Servicios</Label>
+                                <p className="font-medium">{serv.exporta_servicios}</p>
+                              </div>
+                            )}
+                            {serv.interes_exportar && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Interés en Exportar</Label>
+                                <p className="font-medium">{serv.interes_exportar}</p>
+                              </div>
+                            )}
+                            {serv.idiomas && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Idiomas</Label>
+                                <p className="font-medium">{serv.idiomas}</p>
+                              </div>
+                            )}
+                            {serv.forma_contratacion && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Forma de Contratación</Label>
+                                <p className="font-medium">{Array.isArray(serv.forma_contratacion) ? serv.forma_contratacion.join(', ') : (() => {
+                                  const v = typeof serv.forma_contratacion === 'string' ? serv.forma_contratacion.toLowerCase() : String(serv.forma_contratacion).toLowerCase()
+                                  switch (v) {
+                                    case 'hora':
+                                    case 'por hora':
+                                      return 'Por Hora'
+                                    case 'proyecto':
+                                    case 'por proyecto':
+                                      return 'Por Proyecto'
+                                    case 'mensual':
+                                      return 'Mensual'
+                                    case 'otro':
+                                      return 'Otro'
+                                    default:
+                                      return serv.forma_contratacion
+                                  }
+                                })()}</p>
+                              </div>
+                            )}
+                            {serv.certificaciones_tecnicas && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Certificaciones Técnicas</Label>
+                                <p className="font-medium">{serv.certificaciones_tecnicas}</p>
+                              </div>
+                            )}
+                            {typeof serv.equipo_tecnico !== 'undefined' && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Equipo Técnico Especializado</Label>
+                                <p className="font-medium">{serv.equipo_tecnico ? 'Sí' : 'No'}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )
+              })()
             )}
 
             {empresa.observaciones && (

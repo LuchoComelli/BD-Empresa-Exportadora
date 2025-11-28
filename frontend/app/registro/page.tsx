@@ -15,6 +15,7 @@ import { Building2, ArrowLeft, CheckCircle2, ArrowRight, Plus, X } from "lucide-
 import { LocationPicker } from "@/components/map/location-picker"
 import { api } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import Image from "next/image"
 
 interface ContactoSecundario {
   id: string
@@ -63,7 +64,6 @@ export default function RegistroPage() {
   const [tipoNegocio, setTipoNegocio] = useState<"productos" | "servicios" | "ambos">("productos")
   
   // Estados para datos geográficos
-  const [provincias, setProvincias] = useState<any[]>([])
   const [departamentos, setDepartamentos] = useState<any[]>([])
   const [municipios, setMunicipios] = useState<any[]>([])
   const [localidades, setLocalidades] = useState<any[]>([])
@@ -86,11 +86,12 @@ export default function RegistroPage() {
     rubroServicio: "",
     subRubroServicio: "",
     razonSocial: "",
-    provincia: "",
     direccion: "",
     departamento: "",
     municipio: "",
     localidad: "",
+    direccionComercial: "",
+    codigoPostalComercial: "",
     paginaWeb: "",
     observaciones: "",
     certificadoMiPyme: "",
@@ -145,166 +146,146 @@ export default function RegistroPage() {
 
   const toUpperCase = (value: string) => value.toUpperCase()
 
-  // Cargar provincias al montar el componente
-  useEffect(() => {
-    const loadProvincias = async () => {
-      try {
-        setLoadingGeografia(true)
-        const data = await api.getProvincias()
-        // Manejar respuesta paginada o directa
-        const provinciasArray = Array.isArray(data) ? data : (data.results || data)
-        setProvincias(provinciasArray || [])
-      } catch (error) {
-        console.error('Error cargando provincias:', error)
-        setProvincias([])
-      } finally {
-        setLoadingGeografia(false)
-      }
-    }
-    loadProvincias()
-  }, [])
 
-  // Cargar departamentos cuando se selecciona una provincia
-  useEffect(() => {
-    const loadDepartamentos = async () => {
-      if (!formData.provincia) {
-        setDepartamentos([])
-        setMunicipios([])
-        setLocalidades([])
-        return
-      }
-      try {
-        setLoadingGeografia(true)
-        const data = await api.getDepartamentosPorProvincia(formData.provincia)
-        // Manejar respuesta paginada o directa
-        const departamentosArray = Array.isArray(data) ? data : (data.results || data)
-        setDepartamentos(departamentosArray || [])
-        // Solo resetear si el departamento actual no pertenece a la nueva provincia
-        setFormData(prev => {
-          const currentDept = departamentosArray?.find((d: any) => d.id === prev.departamento)
-          if (!currentDept) {
-            return { ...prev, departamento: "", municipio: "", localidad: "" }
-          }
-          return prev
-        })
-        setMunicipios([])
-        setLocalidades([])
-      } catch (error) {
-        console.error('Error cargando departamentos:', error)
-        setDepartamentos([])
-      } finally {
-        setLoadingGeografia(false)
-      }
+useEffect(() => {
+  const loadDepartamentos = async () => {
+    try {
+      setLoadingGeografia(true)
+      const data = await api.getDepartamentos()
+      const departamentosArray = Array.isArray(data) ? data : (data.results || data)
+      setDepartamentos(departamentosArray || [])
+    } catch (error) {
+      console.error('Error cargando departamentos:', error)
+      setDepartamentos([])
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los departamentos",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingGeografia(false)
     }
-    loadDepartamentos()
-  }, [formData.provincia])
+  }
+  loadDepartamentos()
+}, [])
 
-  // Cargar municipios cuando se selecciona un departamento
-  useEffect(() => {
-    const loadMunicipios = async () => {
-      if (!formData.departamento) {
-        setMunicipios([])
-        setLocalidades([])
-        return
-      }
-      try {
-        setLoadingGeografia(true)
-        const data = await api.getMunicipiosPorDepartamento(formData.departamento)
-        // Manejar respuesta paginada o directa
-        const municipiosArray = Array.isArray(data) ? data : (data.results || data)
-        setMunicipios(municipiosArray || [])
-        // Solo resetear si el municipio actual no pertenece al nuevo departamento
-        setFormData(prev => {
-          const currentMun = municipiosArray?.find((m: any) => m.id === prev.municipio)
-          if (!currentMun) {
-            return { ...prev, municipio: "", localidad: "" }
-          }
-          return prev
-        })
-        
-        // Si no hay municipios, cargar localidades directamente por departamento
-        if (!municipiosArray || municipiosArray.length === 0) {
-          try {
-            const localidadesData = await api.getLocalidadesPorDepartamento(formData.departamento)
-            const localidadesArray = Array.isArray(localidadesData) ? localidadesData : (localidadesData.results || localidadesData)
-            setLocalidades(localidadesArray || [])
-          } catch (error) {
-            console.error('Error cargando localidades por departamento:', error)
-            setLocalidades([])
-          }
-        } else {
+// ============ CARGAR MUNICIPIOS CUANDO SE SELECCIONA DEPARTAMENTO ============
+useEffect(() => {
+  const loadMunicipios = async () => {
+    if (!formData.departamento) {
+      setMunicipios([])
+      setLocalidades([])
+      return
+    }
+    
+    try {
+      setLoadingGeografia(true)
+      const data = await api.getMunicipiosPorDepartamento(formData.departamento)
+      const municipiosArray = Array.isArray(data) ? data : (data.results || data)
+      setMunicipios(municipiosArray || [])
+      
+      // Solo resetear si el municipio actual no pertenece al nuevo departamento
+      setFormData(prev => {
+        const currentMun = municipiosArray?.find((m: any) => m.id === prev.municipio)
+        if (!currentMun) {
+          return { ...prev, municipio: "", localidad: "" }
+        }
+        return prev
+      })
+      
+      // Si no hay municipios, cargar localidades directamente por departamento
+      if (!municipiosArray || municipiosArray.length === 0) {
+        try {
+          const localidadesData = await api.getLocalidadesPorDepartamento(formData.departamento)
+          const localidadesArray = Array.isArray(localidadesData) ? localidadesData : (localidadesData.results || localidadesData)
+          setLocalidades(localidadesArray || [])
+        } catch (error) {
+          console.error('Error cargando localidades por departamento:', error)
           setLocalidades([])
         }
-      } catch (error) {
-        console.error('Error cargando municipios:', error)
-        setMunicipios([])
+      } else {
         setLocalidades([])
-      } finally {
-        setLoadingGeografia(false)
       }
+    } catch (error) {
+      console.error('Error cargando municipios:', error)
+      setMunicipios([])
+      setLocalidades([])
+    } finally {
+      setLoadingGeografia(false)
     }
-    loadMunicipios()
-  }, [formData.departamento])
+  }
+  loadMunicipios()
+}, [formData.departamento])
 
-  // Cargar localidades cuando se selecciona un municipio
-  useEffect(() => {
-    const loadLocalidades = async () => {
-      if (!formData.municipio) {
-        setLocalidades([])
-        return
-      }
-      try {
-        setLoadingGeografia(true)
-        const data = await api.getLocalidadesPorMunicipio(formData.municipio)
-        // Manejar respuesta paginada o directa
-        const localidadesArray = Array.isArray(data) ? data : (data.results || data)
-        setLocalidades(localidadesArray || [])
-        // Solo resetear si la localidad actual no pertenece al nuevo municipio
-        setFormData(prev => {
-          const currentLoc = localidadesArray?.find((l: any) => l.id === prev.localidad)
-          if (!currentLoc) {
-            return { ...prev, localidad: "" }
-          }
-          return prev
-        })
-      } catch (error) {
-        console.error('Error cargando localidades:', error)
-        setLocalidades([])
-      } finally {
-        setLoadingGeografia(false)
-      }
+// ============ CARGAR LOCALIDADES CUANDO SE SELECCIONA MUNICIPIO ============
+useEffect(() => {
+  const loadLocalidades = async () => {
+    if (!formData.municipio) {
+      // Si no hay municipio pero hay departamento, las localidades ya fueron cargadas
+      return
     }
-    loadLocalidades()
-  }, [formData.municipio])
+    
+    try {
+      setLoadingGeografia(true)
+      const data = await api.getLocalidadesPorMunicipio(formData.municipio)
+      const localidadesArray = Array.isArray(data) ? data : (data.results || data)
+      setLocalidades(localidadesArray || [])
+      
+      // Solo resetear si la localidad actual no pertenece al nuevo municipio
+      setFormData(prev => {
+        const currentLoc = localidadesArray?.find((l: any) => l.id === prev.localidad)
+        if (!currentLoc) {
+          return { ...prev, localidad: "" }
+        }
+        return prev
+      })
+    } catch (error) {
+      console.error('Error cargando localidades:', error)
+      setLocalidades([])
+    } finally {
+      setLoadingGeografia(false)
+    }
+  }
+  loadLocalidades()
+}, [formData.municipio])
 
   // Cargar rubros según el tipo de negocio
   useEffect(() => {
     const loadRubros = async () => {
       try {
         setLoadingRubros(true)
+        // Obtener todos los rubros y luego dividir/usar según disponibilidad
+        const data = await api.getRubros()
+        const allRubros = Array.isArray(data) ? data : (data.results || data)
+        const productosList = (allRubros || []).filter((r: any) => r.tipo === 'producto' || r.tipo === 'mixto')
+        const serviciosList = (allRubros || []).filter((r: any) => r.tipo === 'servicio' || r.tipo === 'mixto')
+
         if (tipoNegocio === 'productos') {
-          const data = await api.getRubrosPorTipo('producto')
-          const rubrosArray = Array.isArray(data) ? data : (data.results || data)
-          setRubrosProductos(rubrosArray || [])
+          setRubrosProductos(productosList || [])
           setRubrosServicios([])
-          setRubros(rubrosArray || [])
+          setRubros(productosList || [])
         } else if (tipoNegocio === 'servicios') {
-          const data = await api.getRubrosPorTipo('servicio')
-          const rubrosArray = Array.isArray(data) ? data : (data.results || data)
-          setRubrosServicios(rubrosArray || [])
+          // Si no hay rubros específicamente de servicio, caemos a los de producto
+          if (serviciosList.length > 0) {
+            setRubrosServicios(serviciosList || [])
+            setRubros(productosList.length > 0 ? serviciosList : productosList || [])
+          } else {
+            setRubrosServicios(productosList || [])
+            setRubros(productosList || [])
+          }
           setRubrosProductos([])
-          setRubros(rubrosArray || [])
         } else if (tipoNegocio === 'ambos') {
-          const [productosData, serviciosData] = await Promise.all([
-            api.getRubrosPorTipo('producto'),
-            api.getRubrosPorTipo('servicio')
-          ])
-          const rubrosProdArray = Array.isArray(productosData) ? productosData : (productosData.results || productosData)
-          const rubrosServArray = Array.isArray(serviciosData) ? serviciosData : (serviciosData.results || serviciosData)
-          setRubrosProductos(rubrosProdArray || [])
-          setRubrosServicios(rubrosServArray || [])
+          setRubrosProductos(productosList || [])
+          // Si no hay rubros específicamente de servicio, usar los mismos que productos (incluyendo mixtos)
+          if (serviciosList.length > 0) {
+            setRubrosServicios(serviciosList || [])
+          } else {
+            // Si no hay rubros de servicio, mostrar los mismos que productos para que el usuario pueda seleccionar
+            setRubrosServicios(productosList || [])
+          }
           setRubros([])
         }
+
         // Limpiar selecciones
         setFormData(prev => ({ 
           ...prev, 
@@ -499,9 +480,17 @@ export default function RegistroPage() {
           sub_rubro_producto: subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || null,
           rubro_servicio: rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || '',
           sub_rubro_servicio: subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || null,
-          // Mantener rubro_principal y sub_rubro para compatibilidad (se generan en el backend)
-          rubro_principal: '',
-          sub_rubro: null,
+          // Generar rubro_principal y sub_rubro combinando productos y servicios
+          rubro_principal: (() => {
+            const rubroProd = rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || ''
+            const rubroServ = rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || ''
+            return rubroProd ? (rubroServ ? `${rubroProd} / ${rubroServ}` : rubroProd) : rubroServ
+          })(),
+          sub_rubro: (() => {
+            const subProd = subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || ''
+            const subServ = subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || ''
+            return subProd ? (subServ ? `${subProd} / ${subServ}` : subProd) : (subServ || null)
+          })(),
         } : {
           rubro_principal: rubros.find(r => String(r.id) === formData.rubro)?.nombre || '',
           sub_rubro: subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || null,
@@ -527,7 +516,8 @@ export default function RegistroPage() {
             })(),
         direccion: formData.direccion ? String(formData.direccion).trim() : '',
         codigo_postal: formData.codigoPostal || null,
-        provincia: formData.provincia || null,
+        direccion_comercial: formData.direccionComercial || null,
+        codigo_postal_comercial: formData.codigoPostalComercial || null,
         // Los códigos de geografía se envían como strings directamente
         // El backend los convertirá usando las funciones helper
         departamento: formData.departamento ? String(formData.departamento).trim() : null,
@@ -591,7 +581,7 @@ export default function RegistroPage() {
           certificaciones_tecnicas: s.certificacionesTecnicas,
           equipo_tecnico: s.equipoTecnico,
         })) : null,
-        actividades_promocion: actividadesPromocion.map(a => ({
+        actividades_promocion_internacional: actividadesPromocion.map(a => ({
           tipo: a.tipo,
           lugar: a.lugar,
           anio: a.anio,
@@ -803,29 +793,33 @@ export default function RegistroPage() {
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
       <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
-        <div className="container mx-auto px-4 py-3 md:py-4 flex items-center justify-between gap-2">
-          <Link href="/" className="flex items-center gap-2 md:gap-3 min-w-0">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-6 h-6 md:w-7 md:h-7 text-[#222A59]" />
-            </div>
-            <div className="min-w-0 hidden sm:block">
-              <h1 className="text-sm md:text-lg font-bold text-white truncate">Dirección de Intercambio Comercial Internacional y Regional</h1>
-              <p className="text-xs text-white/80 hidden md:block">Provincia de Catamarca</p>
-            </div>
-          </Link>
-          <Link href="/">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
-            >
-              <ArrowLeft className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Volver al Inicio</span>
-              <span className="sm:hidden">Volver</span>
-            </Button>
-          </Link>
+  <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+    <div className="flex items-center gap-2 md:gap-3 min-w-0">
+      <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
+        <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
+          <Image
+            src="/logo.png"
+            alt="Logo Catamarca"
+            fill
+            className="object-contain"
+            priority
+          />
         </div>
-      </header>
+      </Link>
+    </div>
+    <Link href="/">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
+      >
+        <ArrowLeft className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+        <span className="hidden sm:inline">Volver al Inicio</span>
+        <span className="sm:hidden">Volver</span>
+      </Button>
+    </Link>
+  </div>
+</header>
 
       <div className="container mx-auto px-4 py-6 md:py-12 max-w-4xl">
         <div className="mb-6 md:mb-8">
@@ -1056,14 +1050,14 @@ export default function RegistroPage() {
                         <SelectValue placeholder="Selecciona el tipo de sociedad" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="sa">Sociedad Anónima (S.A.)</SelectItem>
-                        <SelectItem value="srl">Sociedad de Responsabilidad Limitada (S.R.L.)</SelectItem>
-                        <SelectItem value="scs">Sociedad en Comandita Simple (S.C.S.)</SelectItem>
-                        <SelectItem value="sca">Sociedad en Comandita por Acciones (S.C.A.)</SelectItem>
-                        <SelectItem value="sc">Sociedad Colectiva (S.C.)</SelectItem>
-                        <SelectItem value="ae">Asociación Empresaria (A.E.)</SelectItem>
-                        <SelectItem value="monotributo">Monotributo</SelectItem>
-                        <SelectItem value="otro">Otro</SelectItem>
+                        <SelectItem value="Sociedad Anónima">Sociedad Anónima (S.A.)</SelectItem>
+                        <SelectItem value="Sociedad de Responsabilidad Limitada">Sociedad de Responsabilidad Limitada (S.R.L.)</SelectItem>
+                        <SelectItem value="Sociedad en Comandita Simple">Sociedad en Comandita Simple (S.C.S.)</SelectItem>
+                        <SelectItem value="Sociedad en Comandita por Acciones">Sociedad en Comandita por Acciones (S.C.A.)</SelectItem>
+                        <SelectItem value="Sociedad Colectiva">Sociedad Colectiva (S.C.)</SelectItem>
+                        <SelectItem value="Asociación Empresaria">Asociación Empresaria (A.E.)</SelectItem>
+                        <SelectItem value="Monotributo">Monotributo</SelectItem>
+                        <SelectItem value="Otro">Otro</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1608,7 +1602,35 @@ export default function RegistroPage() {
                   )}
 
                   <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold text-[#222A59]">Domicilio del Establecimiento</h3>
+        <h3 className="font-semibold text-[#222A59]">Domicilio Comercial</h3>
+        <p className="text-xs text-[#6B7280]">
+          Dirección de facturación o domicilio legal de la empresa
+        </p>
+
+        <div>
+          <Label htmlFor="direccionComercial">Dirección</Label>
+          <Input
+            id="direccionComercial"
+            value={formData.direccionComercial}
+            onChange={(e) => setFormData(prev => ({ ...prev, direccionComercial: toUpperCase(e.target.value) }))}
+            placeholder="CALLE, NÚMERO"
+            className="uppercase"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="codigoPostalComercial">Código Postal</Label>
+          <Input
+            id="codigoPostalComercial"
+            value={formData.codigoPostalComercial}
+            onChange={(e) => setFormData(prev => ({ ...prev, codigoPostalComercial: e.target.value }))}
+            placeholder="EJ: 4700"
+          />
+        </div>
+      </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <h3 className="font-semibold text-[#222A59]">Domicilio del Establecimiento Productivo</h3>
 
                     <div>
                       <Label htmlFor="direccion">Dirección *</Label>
@@ -1632,26 +1654,6 @@ export default function RegistroPage() {
                       />
                     </div>
 
-                    <div>
-                      <Label htmlFor="provincia">Provincia *</Label>
-                      <Select
-                        value={formData.provincia}
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, provincia: value }))}
-                        disabled={loadingGeografia}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={loadingGeografia ? "Cargando..." : "Selecciona la provincia"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {provincias.map((provincia) => (
-                            <SelectItem key={provincia.id} value={provincia.id}>
-                              {provincia.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <Label htmlFor="departamento">Departamento *</Label>
@@ -1660,10 +1662,10 @@ export default function RegistroPage() {
                           onValueChange={(value) =>
                             setFormData(prev => ({ ...prev, departamento: value, municipio: "", localidad: "" }))
                           }
-                          disabled={!formData.provincia || loadingGeografia}
+                          disabled={loadingGeografia}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={loadingGeografia ? "Cargando..." : formData.provincia ? "Selecciona" : "Primero selecciona provincia"} />
+                            <SelectValue placeholder={loadingGeografia ? "Cargando..." : "Selecciona el departamento"} />
                           </SelectTrigger>
                           <SelectContent>
                             {departamentos.map((departamento) => (

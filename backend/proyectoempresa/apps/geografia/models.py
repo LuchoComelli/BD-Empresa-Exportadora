@@ -21,7 +21,7 @@ class Provincia(models.Model):
     
     class Meta:
         db_table = 'geografia_ar_provincias'
-        managed = False  # Las tablas ya existen en el esquema public
+        managed = True  # Las tablas ya existen en el esquema public
         verbose_name = 'Provincia'
         verbose_name_plural = 'Provincias'
         ordering = ['nombre']
@@ -57,7 +57,7 @@ class Departamento(models.Model):
     
     class Meta:
         db_table = 'geografia_ar_departamentos'
-        managed = False  # Las tablas ya existen en el esquema public
+        managed = True  # Las tablas ya existen en el esquema public
         verbose_name = 'Departamento'
         verbose_name_plural = 'Departamentos'
         ordering = ['nombre']
@@ -102,7 +102,7 @@ class Municipio(models.Model):
     
     class Meta:
         db_table = 'geografia_ar_municipios'
-        managed = False  # Las tablas ya existen en el esquema public
+        managed = True  # Las tablas ya existen en el esquema public
         verbose_name = 'Municipio'
         verbose_name_plural = 'Municipios'
         ordering = ['nombre']
@@ -153,7 +153,7 @@ class Localidad(models.Model):
     
     class Meta:
         db_table = 'geografia_ar_localidades'
-        managed = False  # Las tablas ya existen en el esquema public
+        managed = True  # Las tablas ya existen en el esquema public
         verbose_name = 'Localidad'
         verbose_name_plural = 'Localidades'
         ordering = ['nombre']

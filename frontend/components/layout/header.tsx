@@ -40,10 +40,6 @@ export function Header({ onMenuClick }: HeaderProps) {
             />
           </div>
         </Link>
-        <div className="flex flex-col min-w-0">
-          <span className="font-semibold text-xs md:text-sm leading-tight truncate">Dirección de Intercambio Comercial Internacional y Regional</span>
-          <span className="text-xs text-white/80 hidden sm:inline">Provincia de Catamarca</span>
-        </div>
       </div>
 
       <DropdownMenu>
