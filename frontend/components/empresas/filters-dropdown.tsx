@@ -64,17 +64,13 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
     loadSubRubros()
   }, [filters.rubro])
 
-  // Cargar departamentos
+  // Cargar departamentos (solo de Catamarca)
   useEffect(() => {
     const loadDepartamentos = async () => {
       try {
         setLoadingDepartamentos(true)
-        const provincias = await api.getProvincias()
-        const catamarca = provincias.find((p: any) => p.id === '10' || p.nombre === 'Catamarca')
-        if (catamarca) {
-          const data = await api.getDepartamentosPorProvincia(catamarca.id)
-          setDepartamentos(Array.isArray(data) ? data : (data.results || []))
-        }
+        const data = await api.getDepartamentos()
+        setDepartamentos(Array.isArray(data) ? data : (data.results || []))
       } catch (error) {
         console.error("Error loading departamentos:", error)
       } finally {

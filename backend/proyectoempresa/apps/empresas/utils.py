@@ -222,7 +222,7 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
         fontSize=14,
         textColor=COLOR_AZUL_PRINCIPAL,
         fontName='Helvetica-Bold',
-        alignment='CENTER',
+        alignment=TA_CENTER,
         spaceAfter=12
     )
     
@@ -233,7 +233,7 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
         fontSize=18,
         textColor=COLOR_AZUL_PRINCIPAL,
         fontName='Helvetica-Bold',
-        alignment='CENTER',
+        alignment=TA_CENTER,
         spaceAfter=20
     )
     
@@ -244,7 +244,7 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
         fontSize=10,
         textColor=COLOR_GRIS_NEUTRO,
         fontName='Helvetica',
-        alignment='CENTER',
+        alignment=TA_CENTER,
         spaceAfter=15
     )
     
@@ -307,7 +307,7 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
             tipo,
             empresa.razon_social,
             empresa.cuit_cuil,
-            empresa.departamento.nomdpto if empresa.departamento else '',
+            empresa.departamento.nombre if empresa.departamento else '',
             empresa.telefono or '',
             empresa.correo or '',
         ]
@@ -356,7 +356,7 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
         fontSize=8,
         textColor=COLOR_GRIS_NEUTRO,
         fontName='Helvetica',
-        alignment='CENTER',
+        alignment=TA_CENTER,
         spaceBefore=10
     )
     footer_text = Paragraph(

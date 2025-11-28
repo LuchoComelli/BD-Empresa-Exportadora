@@ -25,6 +25,19 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
     ordering = ['-fecha_creacion']
     parser_classes = [MultiPartParser, FormParser, JSONParser]  # Para aceptar archivos
     
+    def finalize_response(self, request, response, *args, **kwargs):
+        """Override para permitir que HttpResponse pase sin negociación de contenido"""
+        # Si la respuesta es un HttpResponse directo (no Response de DRF), devolverlo sin negociación
+        from django.http import HttpResponse
+        from rest_framework.response import Response
+        # Verificar si es HttpResponse pero NO Response de DRF
+        # Response hereda de HttpResponse, así que verificamos el módulo de origen
+        if isinstance(response, HttpResponse) and not isinstance(response, Response):
+            # Es un HttpResponse directo (como PDF), devolverlo sin pasar por DRF
+            return response
+        # Para Response de DRF, usar el método normal
+        return super().finalize_response(request, response, *args, **kwargs)
+    
     def get_serializer_class(self):
         if self.action == 'create':
             return SolicitudRegistroCreateSerializer
@@ -545,7 +558,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
                 'id': empresa.id,
                 'nombre': empresa.razon_social,
                 'categoria': categoria,
-                'ubicacion': (empresa.departamento.nomdpto if empresa.departamento else 'N/A') or 'N/A',
+                'ubicacion': (empresa.departamento.nombre if empresa.departamento else 'N/A') or 'N/A',
                 'fecha': empresa.fecha_creacion.isoformat(),
                 'estado': 'aprobada',
                 'tipo_empresa': empresa.tipo_empresa_valor,  # Usar tipo_empresa_valor del modelo unificado
@@ -589,7 +602,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated], url_path='empresas_aprobadas/exportar_pdf')
     def exportar_empresas_aprobadas_pdf(self, request):
         """Exportar empresas aprobadas a PDF con identidad visual institucional"""
-        from apps.empresas.models import Empresaproducto, Empresaservicio, EmpresaMixta
+        from apps.empresas.models import Empresa
         from apps.empresas.utils import generate_empresas_aprobadas_pdf
         from django.db.models import Q
         
@@ -599,6 +612,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         exporta = request.query_params.get('exporta', '')
         departamento = request.query_params.get('departamento', '')
         rubro = request.query_params.get('rubro', '')
+        categoria_matriz = request.query_params.get('categoria_matriz', '')
         
         # Obtener campos seleccionados (si vienen en los parámetros)
         campos_seleccionados = request.query_params.getlist('campos', [])
@@ -606,67 +620,53 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         if not campos_seleccionados:
             campos_seleccionados = ['exporta', 'importa', 'certificadopyme']
         
-        # Obtener todas las empresas aprobadas
-        empresas_producto = Empresaproducto.objects.select_related(
+        # Obtener todas las empresas usando el modelo unificado
+        empresas = Empresa.objects.select_related(
             'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-        ).prefetch_related('productos')
+        ).prefetch_related('productos_empresa', 'servicios_empresa', 'productos_mixta', 'servicios_mixta')
         
-        empresas_servicio = Empresaservicio.objects.select_related(
-            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-        ).prefetch_related('servicios')
-        
-        empresas_mixta = EmpresaMixta.objects.select_related(
-            'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
-        ).prefetch_related('productos', 'servicios')
-        
-        # Aplicar filtros (similar a empresas_aprobadas)
+        # Aplicar filtros
         if search:
-            empresas_producto = empresas_producto.filter(
+            empresas = empresas.filter(
                 Q(razon_social__icontains=search) |
                 Q(cuit_cuil__icontains=search) |
-                Q(correo__icontains=search)
-            )
-            empresas_servicio = empresas_servicio.filter(
-                Q(razon_social__icontains=search) |
-                Q(cuit_cuil__icontains=search) |
-                Q(correo__icontains=search)
-            )
-            empresas_mixta = empresas_mixta.filter(
-                Q(razon_social__icontains=search) |
-                Q(cuit_cuil__icontains=search) |
-                Q(correo__icontains=search)
+                Q(correo__icontains=search) |
+                Q(nombre_fantasia__icontains=search)
             )
         
         if tipo_empresa:
-            if tipo_empresa == 'producto':
-                empresas_servicio = empresas_servicio.none()
-                empresas_mixta = empresas_mixta.none()
-            elif tipo_empresa == 'servicio':
-                empresas_producto = empresas_producto.none()
-                empresas_mixta = empresas_mixta.none()
-            elif tipo_empresa == 'mixta':
-                empresas_producto = empresas_producto.none()
-                empresas_servicio = empresas_servicio.none()
+            empresas = empresas.filter(tipo_empresa_valor=tipo_empresa)
         
         if exporta:
-            if exporta == 'si':
-                empresas_producto = empresas_producto.filter(exporta='Sí')
-                empresas_servicio = empresas_servicio.filter(exporta='Sí')
-                empresas_mixta = empresas_mixta.filter(exporta='Sí')
+            if exporta == 'si' or exporta == 'exportadoras':
+                empresas = empresas.filter(exporta='Sí')
             elif exporta == 'no':
-                empresas_producto = empresas_producto.filter(exporta='No, solo ventas nacionales')
-                empresas_servicio = empresas_servicio.filter(exporta='No, solo ventas nacionales')
-                empresas_mixta = empresas_mixta.filter(exporta='No, solo ventas nacionales')
+                empresas = empresas.filter(exporta__in=['No, solo ventas nacionales', 'No, solo ventas locales'])
+            elif exporta == 'potenciales':
+                # Filtrar por categoría de matriz
+                from apps.empresas.models import MatrizClasificacionExportador
+                empresas_ids = MatrizClasificacionExportador.objects.filter(
+                    categoria='potencial_exportadora'
+                ).values_list('empresa_id', flat=True)
+                empresas = empresas.filter(id__in=empresas_ids)
         
         if departamento:
-            empresas_producto = empresas_producto.filter(departamento__nomdpto__icontains=departamento)
-            empresas_servicio = empresas_servicio.filter(departamento__nomdpto__icontains=departamento)
-            empresas_mixta = empresas_mixta.filter(departamento__nomdpto__icontains=departamento)
+            empresas = empresas.filter(departamento__nombre__icontains=departamento)
         
         if rubro:
-            empresas_producto = empresas_producto.filter(id_rubro__nombre__icontains=rubro)
-            empresas_servicio = empresas_servicio.filter(id_rubro__nombre__icontains=rubro)
-            empresas_mixta = empresas_mixta.filter(id_rubro__nombre__icontains=rubro)
+            empresas = empresas.filter(id_rubro__nombre__icontains=rubro)
+        
+        if categoria_matriz:
+            from apps.empresas.models import MatrizClasificacionExportador
+            empresas_ids = MatrizClasificacionExportador.objects.filter(
+                categoria=categoria_matriz
+            ).values_list('empresa_id', flat=True)
+            empresas = empresas.filter(id__in=empresas_ids)
+        
+        # Separar empresas por tipo para la función de generación de PDF
+        empresas_producto = empresas.filter(tipo_empresa_valor='producto')
+        empresas_servicio = empresas.filter(tipo_empresa_valor='servicio')
+        empresas_mixta = empresas.filter(tipo_empresa_valor='mixta')
         
         # Generar PDF
         pdf_response = generate_empresas_aprobadas_pdf(
@@ -675,6 +675,8 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             empresas_mixta,
             campos_seleccionados
         )
+        # Devolver HttpResponse directamente - DRF permite devolver HttpResponse
+        # sin pasar por la negociación de contenido cuando es un HttpResponse
         return pdf_response
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])

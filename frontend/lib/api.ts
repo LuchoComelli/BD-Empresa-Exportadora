@@ -394,6 +394,9 @@ class ApiService {
       ]
     }
     
+    // Limpiar endpoints: remover la barra final si no hay query params
+    endpoints = endpoints.map(ep => ep.replace(/\/$/, ''))
+    
     // Obtener empresas con manejo de errores
     const resultados = await Promise.allSettled(
       endpoints.map(endpoint => this.get<any>(endpoint))
@@ -438,18 +441,59 @@ class ApiService {
 
     for (const ep of endpoints) {
       try {
-        const empresa = await this.get<any>(ep);
-        // Normalizar: asegurar que siempre retornamos un objeto con id
-        if (empresa && empresa.id) {
-          // Normalizar nombres de relación: algunos serializers usan `servicios` o `productos`,
-          // otros pueden exponer `servicios_empresa` o `productos_empresa`. Unificar mínimamente.
-          if (!empresa.servicios && empresa.servicios_empresa) {
-            empresa.servicios = empresa.servicios_empresa;
+        // Usar fetch directamente para manejar 404 sin lanzar errores
+        const token = this.getAccessToken();
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(`${this.baseURL}${ep}`, {
+          method: 'GET',
+          headers,
+        });
+
+        if (response.ok) {
+          const empresa = await response.json();
+          // Normalizar: asegurar que siempre retornamos un objeto con id
+          if (empresa && empresa.id) {
+            // Normalizar nombres de relación: algunos serializers usan `servicios` o `productos`,
+            // otros pueden exponer `servicios_empresa` o `productos_empresa`. Unificar mínimamente.
+            if (!empresa.servicios && empresa.servicios_empresa) {
+              empresa.servicios = empresa.servicios_empresa;
+            }
+            if (!empresa.servicios && empresa.servicios_mixta) {
+              empresa.servicios = empresa.servicios_mixta;
+            }
+            if (!empresa.productos && empresa.productos_empresa) {
+              empresa.productos = empresa.productos_empresa;
+            }
+            if (!empresa.productos && empresa.productos_mixta) {
+              empresa.productos = empresa.productos_mixta;
+            }
+            return empresa;
           }
-          if (!empresa.productos && empresa.productos_empresa) {
-            empresa.productos = empresa.productos_empresa;
+        } else if (response.status === 404) {
+          // 404 es esperado cuando intentamos el endpoint incorrecto, continuar con el siguiente
+          continue;
+        } else {
+          // Para otros errores HTTP, intentar parsear el error pero no lanzarlo aún
+          try {
+            const errorText = await response.text();
+            const error = JSON.parse(errorText);
+            const msg = error.detail || error.message || response.statusText;
+            if (notFoundPattern.test(msg)) {
+              // Es un "not found" esperado, continuar
+              continue;
+            }
+            // Es un error real, lanzarlo
+            throw new Error(msg);
+          } catch (parseErr) {
+            // Si no se puede parsear, continuar con el siguiente endpoint
+            continue;
           }
-          return empresa;
         }
       } catch (err: any) {
         // Si el error es un "not found" típico del serializer/DRF, lo ignoramos y probamos siguiente endpoint.
@@ -498,7 +542,9 @@ class ApiService {
     exporta?: string;
     departamento?: string;
     rubro?: string;
+    categoria_matriz?: string;
     campos?: string[];
+    periodo?: string;
   }): Promise<Blob> {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
@@ -506,13 +552,15 @@ class ApiService {
     if (params?.exporta) queryParams.append('exporta', params.exporta);
     if (params?.departamento) queryParams.append('departamento', params.departamento);
     if (params?.rubro) queryParams.append('rubro', params.rubro);
+    if (params?.categoria_matriz) queryParams.append('categoria_matriz', params.categoria_matriz);
     if (params?.campos) {
       params.campos.forEach(campo => queryParams.append('campos', campo));
     }
     
     const query = queryParams.toString();
     const token = this.getAccessToken();
-    const url = `${this.baseURL}/registro/solicitudes/empresas_aprobadas/exportar_pdf/${query ? `?${query}` : ''}`;
+    // Corregir la URL: no debe tener barra final antes del query string
+    const url = `${this.baseURL}/registro/solicitudes/empresas_aprobadas/exportar_pdf${query ? `?${query}` : ''}`;
     
     console.log("Exportando PDF a URL:", url);
     
@@ -537,6 +585,12 @@ class ApiService {
     
     const blob = await response.blob();
     console.log("Blob recibido, tamaño:", blob.size, "tipo:", blob.type);
+    
+    // Verificar que el blob sea un PDF válido
+    if (blob.size === 0) {
+      throw new Error('El PDF generado está vacío');
+    }
+    
     return blob;
   }
 

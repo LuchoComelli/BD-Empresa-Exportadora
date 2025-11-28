@@ -67,7 +67,6 @@ export default function NuevaEmpresaPage() {
   const [loading, setLoading] = useState(false)
   
   // Estados para datos geográficos
-  const [provincias, setProvincias] = useState<any[]>([])
   const [departamentos, setDepartamentos] = useState<any[]>([])
   const [municipios, setMunicipios] = useState<any[]>([])
   const [localidades, setLocalidades] = useState<any[]>([])
@@ -90,7 +89,6 @@ export default function NuevaEmpresaPage() {
     rubroServicio: "",
     subRubroServicio: "",
     razonSocial: "",
-    provincia: "",
     direccion: "",
     departamento: "",
     municipio: "",
@@ -149,48 +147,14 @@ export default function NuevaEmpresaPage() {
 
   const toUpperCase = (value: string) => value.toUpperCase()
 
-  // Cargar provincias al montar el componente
-  useEffect(() => {
-    const loadProvincias = async () => {
-      try {
-        setLoadingGeografia(true)
-        const data = await api.getProvincias()
-        const provinciasArray = Array.isArray(data) ? data : (data.results || data)
-        setProvincias(provinciasArray || [])
-      } catch (error) {
-        console.error('Error cargando provincias:', error)
-        setProvincias([])
-      } finally {
-        setLoadingGeografia(false)
-      }
-    }
-    loadProvincias()
-  }, [])
-
-  // Cargar departamentos cuando se selecciona una provincia
+  // Cargar departamentos al montar el componente (solo de Catamarca)
   useEffect(() => {
     const loadDepartamentos = async () => {
-      if (!formData.provincia) {
-        setDepartamentos([])
-        setMunicipios([])
-        setLocalidades([])
-        return
-      }
       try {
         setLoadingGeografia(true)
-        const data = await api.getDepartamentosPorProvincia(formData.provincia)
+        const data = await api.getDepartamentos()
         const departamentosArray = Array.isArray(data) ? data : (data.results || data)
         setDepartamentos(departamentosArray || [])
-        // Solo resetear si el departamento actual no pertenece a la nueva provincia
-        setFormData(prev => {
-          const currentDept = departamentosArray?.find((d: any) => d.id === prev.departamento)
-          if (!currentDept) {
-            return { ...prev, departamento: "", municipio: "", localidad: "" }
-          }
-          return prev
-        })
-        setMunicipios([])
-        setLocalidades([])
       } catch (error) {
         console.error('Error cargando departamentos:', error)
         setDepartamentos([])
@@ -199,7 +163,7 @@ export default function NuevaEmpresaPage() {
       }
     }
     loadDepartamentos()
-  }, [formData.provincia])
+  }, [])
 
   // Cargar municipios cuando se selecciona un departamento
   useEffect(() => {
@@ -575,7 +539,6 @@ export default function NuevaEmpresaPage() {
         id_rubro: parseInt(String(rubroId)),
         direccion: formData.direccion.trim(),
         codigo_postal: formData.codigoPostal || null,
-        provincia: formData.provincia || null,
         departamento: departamentoCodigo,
         municipio: municipioCodigo,
         localidad: localidadCodigo,
@@ -723,7 +686,6 @@ export default function NuevaEmpresaPage() {
         rubroServicio: "",
         subRubroServicio: "",
         razonSocial: "",
-        provincia: "",
         direccion: "",
         departamento: "",
         municipio: "",
@@ -1690,26 +1652,6 @@ export default function NuevaEmpresaPage() {
                       />
                     </div>
 
-                    <div>
-                      <Label htmlFor="provincia">Provincia *</Label>
-                      <Select
-                        value={formData.provincia}
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, provincia: value }))}
-                        disabled={loadingGeografia}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={loadingGeografia ? "Cargando..." : "Selecciona la provincia"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {provincias.map((provincia) => (
-                            <SelectItem key={provincia.id} value={provincia.id}>
-                              {provincia.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <Label htmlFor="departamento">Departamento *</Label>
@@ -1718,10 +1660,10 @@ export default function NuevaEmpresaPage() {
                           onValueChange={(value) => {
                             setFormData(prev => ({ ...prev, departamento: value, municipio: "", localidad: "" }))
                           }}
-                          disabled={!formData.provincia || loadingGeografia}
+                          disabled={loadingGeografia}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={loadingGeografia ? "Cargando..." : formData.provincia ? "Selecciona" : "Primero selecciona provincia"} />
+                            <SelectValue placeholder={loadingGeografia ? "Cargando..." : "Selecciona el departamento"} />
                           </SelectTrigger>
                           <SelectContent>
                             {departamentos.map((departamento) => (

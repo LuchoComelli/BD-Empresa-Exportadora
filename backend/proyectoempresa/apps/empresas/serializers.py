@@ -150,6 +150,8 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)  # ✅ Cambio aquí
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
@@ -167,13 +169,22 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
             pass
         return None
     
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+    
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
     class Meta:
         model = Empresaproducto
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
-            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz'
+            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
+            'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
 
 
@@ -459,6 +470,8 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
     
     def get_categoria_matriz(self, obj):
@@ -477,13 +490,22 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
             pass
         return None
     
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+    
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
     class Meta:
         model = Empresaservicio
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
-            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz'
+            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
+            'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
 
 
@@ -728,6 +750,8 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
     actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
     categoria_matriz = serializers.SerializerMethodField()
     
@@ -747,6 +771,14 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
             pass
         return None
     
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+    
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
     class Meta:
         model = EmpresaMixta
         fields = [
@@ -754,7 +786,8 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'rubro_nombre',
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
-            'actividades_promocion_internacional'
+            'actividades_promocion_internacional',
+            'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
 
 

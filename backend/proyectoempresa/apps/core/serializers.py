@@ -85,19 +85,29 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 })
             
             # Verificar estado de la solicitud de registro si el usuario tiene una
-            from apps.registro.models import SolicitudRegistro
-            solicitud = SolicitudRegistro.objects.filter(usuario_creado=user).first()
-            if solicitud:
-                if solicitud.estado == 'pendiente':
-                    logger.warning(f"Intento de login con solicitud pendiente: {email}")
-                    raise serializers.ValidationError({
-                        'email': ['Tu solicitud de registro está pendiente de aprobación. Recibirás un email cuando sea aprobada.']
-                    })
-                elif solicitud.estado == 'rechazada':
-                    logger.warning(f"Intento de login con solicitud rechazada: {email}")
-                    raise serializers.ValidationError({
-                        'email': ['Tu solicitud de registro fue rechazada. Por favor, contacta con el administrador.']
-                    })
+            # Envolver en try-except para evitar errores si hay problemas con la tabla
+            try:
+                from apps.registro.models import SolicitudRegistro
+                solicitud = SolicitudRegistro.objects.filter(usuario_creado=user).first()
+                if solicitud:
+                    if solicitud.estado == 'pendiente':
+                        logger.warning(f"Intento de login con solicitud pendiente: {email}")
+                        raise serializers.ValidationError({
+                            'email': ['Tu solicitud de registro está pendiente de aprobación. Recibirás un email cuando sea aprobada.']
+                        })
+                    elif solicitud.estado == 'rechazada':
+                        logger.warning(f"Intento de login con solicitud rechazada: {email}")
+                        raise serializers.ValidationError({
+                            'email': ['Tu solicitud de registro fue rechazada. Por favor, contacta con el administrador.']
+                        })
+            except serializers.ValidationError:
+                # Re-lanzar errores de validación (pendiente/rechazada)
+                raise
+            except Exception as e:
+                # Si hay un error al consultar SolicitudRegistro (ej: migraciones pendientes),
+                # registrar el error pero continuar con el login
+                logger.warning(f"Error al verificar solicitud de registro para {email}: {str(e)}")
+                # Continuar con el proceso de autenticación
             
             # Autenticar usando authenticate() que usa USERNAME_FIELD = 'email'
             # authenticate() busca por el campo USERNAME_FIELD automáticamente

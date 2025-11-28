@@ -75,20 +75,28 @@ export default function ReportesPage() {
       // Configurar parámetros según el tipo de reporte
       switch (tipoReporte) {
         case "general":
-          // Reporte general - todas las empresas
+          // Reporte general - todas las empresas (sin filtros adicionales)
           break
         case "categoria":
-          // Por categoría - necesitaríamos más filtros
+          // Por categoría - se puede filtrar por categoria_matriz después
           break
         case "sector":
-          // Por sector - necesitaríamos más filtros
+          // Por sector - se puede filtrar por rubro después
           break
         case "ubicacion":
-          // Por ubicación - necesitaríamos más filtros
+          // Por ubicación - se puede filtrar por departamento después
           break
         case "certificaciones":
-          params.exporta = "certificaciones"
+          // Empresas con certificaciones
+          params.certificadopyme = "true"
           break
+      }
+      
+      // Agregar filtro de período si se selecciona (aunque no se use en el backend por ahora)
+      if (periodo) {
+        // El período se puede usar para filtrar por fecha_creacion en el futuro
+        // Por ahora solo lo guardamos en params para referencia
+        params.periodo = periodo
       }
 
       // Exportar según el formato

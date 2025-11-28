@@ -69,13 +69,23 @@ export default function MapaPage() {
     const loadEmpresas = async () => {
       try {
         setLoading(true)
-        const response = await api.getEmpresas({ estado: 'aprobada' })
+        const response = await api.getEmpresas({})
         const empresasData = Array.isArray(response) ? response : (response.results || [])
+        
+        console.log('[Mapa] Total empresas recibidas:', empresasData.length)
+        console.log('[Mapa] Primeras empresas:', empresasData.slice(0, 3).map((e: any) => ({
+          id: e.id,
+          razon_social: e.razon_social,
+          geolocalizacion: e.geolocalizacion
+        })))
         
         // Filtrar empresas con geolocalización válida y parsear coordenadas
         const empresasConCoords = empresasData
           .map((empresa: any) => {
-            if (!empresa.geolocalizacion) return null
+            if (!empresa.geolocalizacion) {
+              console.log('[Mapa] Empresa sin geolocalizacion:', empresa.id, empresa.razon_social)
+              return null
+            }
             
             try {
               const coords = empresa.geolocalizacion.split(',').map((c: string) => parseFloat(c.trim()))
@@ -85,6 +95,8 @@ export default function MapaPage() {
                   lat: coords[0],
                   lng: coords[1],
                 }
+              } else {
+                console.log('[Mapa] Coordenadas inválidas para empresa:', empresa.id, empresa.geolocalizacion)
               }
             } catch (error) {
               console.error('Error parsing coordinates for empresa:', empresa.id, error)
@@ -92,6 +104,8 @@ export default function MapaPage() {
             return null
           })
           .filter((e: Empresa | null) => e !== null) as Empresa[]
+        
+        console.log('[Mapa] Empresas con coordenadas válidas:', empresasConCoords.length)
         
         setEmpresas(empresasConCoords)
         
@@ -156,11 +170,23 @@ export default function MapaPage() {
           return
         }
 
-        // Calcular centro del mapa basado en las empresas
-        const avgLat = empresas.reduce((sum, e) => sum + (e.lat || 0), 0) / empresas.length
-        const avgLng = empresas.reduce((sum, e) => sum + (e.lng || 0), 0) / empresas.length
-        
-        const mapInstance = L.map("empresas-map").setView([avgLat || -28.4696, avgLng || -65.7795], 8)
+        // Verificar si el mapa ya está inicializado y limpiarlo
+        if (map) {
+          map.remove()
+          setMap(null)
+          setMarkers([])
+        }
+
+        // Limpiar cualquier instancia previa de Leaflet en el contenedor
+        if ((mapElement as any)._leaflet_id) {
+          delete (mapElement as any)._leaflet_id
+        }
+
+        // Centrar el mapa en Catamarca (San Fernando del Valle de Catamarca)
+        const catamarcaCenter: [number, number] = [-28.4696, -65.7795]
+        const mapInstance = L.map("empresas-map", {
+          preferCanvas: false
+        }).setView(catamarcaCenter, 8)
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -241,8 +267,36 @@ export default function MapaPage() {
     loadMap()
 
     return () => {
-      if (map) {
-        map.remove()
+      // Cleanup: remover mapa y marcadores
+      const currentMap = map
+      const currentMarkers = markers
+      
+      if (currentMap) {
+        try {
+          currentMap.remove()
+        } catch (e) {
+          console.warn('Error removing map:', e)
+        }
+        setMap(null)
+      }
+      
+      if (currentMarkers && currentMarkers.length > 0) {
+        currentMarkers.forEach(marker => {
+          try {
+            if (marker && typeof marker.remove === 'function') {
+              marker.remove()
+            }
+          } catch (e) {
+            console.warn('Error removing marker:', e)
+          }
+        })
+        setMarkers([])
+      }
+      
+      // Limpiar el contenedor del mapa
+      const mapElement = document.getElementById("empresas-map")
+      if (mapElement && (mapElement as any)._leaflet_id) {
+        delete (mapElement as any)._leaflet_id
       }
     }
   }, [loading, empresas, toast])
