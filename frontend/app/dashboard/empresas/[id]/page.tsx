@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { CompanyMap } from "@/components/map/company-map"
 import { LocationPicker } from "@/components/map/location-picker"
 import { useToast } from "@/hooks/use-toast"
+import { ExportEmpresaDialog } from "@/components/empresas/export-empresa-dialog"
 
 interface Empresa {
   id: number
@@ -79,7 +80,7 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
   const [isEditing, setIsEditing] = useState(false)
   const [editedData, setEditedData] = useState<Empresa | null>(null)
   const [saving, setSaving] = useState(false)
-  const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
 
   useEffect(() => {
     loadEmpresa()
@@ -171,72 +172,6 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
-  const handleExport = async (format: 'pdf' | 'csv' | 'xlsx') => {
-    if (!empresa) return
-
-    try {
-      setShowExportMenu(false)
-      
-      // Implementación básica de exportación CSV
-      if (format === 'csv') {
-        const csvData = [
-          ['Campo', 'Valor'],
-          ['Razón Social', empresa.razon_social],
-          ['Nombre Fantasía', empresa.nombre_fantasia || ''],
-          ['CUIT', empresa.cuit_cuil],
-          ['Tipo de Empresa', empresa.tipo_empresa || ''],
-          ['Rubro', empresa.id_rubro ? (typeof empresa.id_rubro === 'object' ? empresa.id_rubro.nombre : empresa.id_rubro) : ''],
-          ['Dirección', empresa.direccion || ''],
-          ['Departamento', empresa.departamento ? (typeof empresa.departamento === 'object' ? empresa.departamento.nomdpto : empresa.departamento) : ''],
-          ['Municipio', empresa.municipio ? (typeof empresa.municipio === 'object' ? empresa.municipio.nommun : empresa.municipio) : ''],
-          ['Localidad', empresa.localidad ? (typeof empresa.localidad === 'object' ? empresa.localidad.nomloc : empresa.localidad) : ''],
-          ['Teléfono', empresa.telefono || ''],
-          ['Email', empresa.correo || ''],
-          ['Sitio Web', empresa.sitioweb || ''],
-          ['Exporta', empresa.exporta || ''],
-          ['Destino Exportación', empresa.destinoexporta || ''],
-          ['Importa', empresa.importa ? 'Sí' : 'No'],
-          ['Certificado MiPyME', empresa.certificadopyme ? 'Sí' : 'No'],
-          ['Certificaciones', empresa.certificaciones || ''],
-          ['Material Promocional 2 Idiomas', empresa.promo2idiomas ? 'Sí' : 'No'],
-          ['Idiomas de Trabajo', empresa.idiomas_trabaja || ''],
-          ['Observaciones', empresa.observaciones || ''],
-          ['Instagram', empresa.instagram || ''],
-          ['Facebook', empresa.facebook || ''],
-          ['LinkedIn', empresa.linkedin || ''],
-        ]
-        
-        const csv = csvData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
-        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-        const link = document.createElement('a')
-        link.href = URL.createObjectURL(blob)
-        link.download = `${empresa.razon_social.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`
-        link.click()
-      } else if (format === 'xlsx') {
-        // Para Excel, necesitarías una librería como xlsx
-        // Por ahora, exportar como CSV
-        toast({
-          title: "Exportación a Excel",
-          description: "Exportación a Excel próximamente. Por ahora, usa CSV.",
-          variant: "default",
-        })
-      } else if (format === 'pdf') {
-        // Para PDF, necesitarías una librería como jsPDF
-        toast({
-          title: "Exportación a PDF",
-          description: "Exportación a PDF próximamente. Por ahora, usa CSV.",
-          variant: "default",
-        })
-      }
-    } catch (error: any) {
-      console.error("Error exporting empresa:", error)
-      toast({
-        title: "Error al exportar",
-        description: error.message || "Error al exportar la empresa. Por favor, intenta nuevamente.",
-        variant: "destructive",
-      })
-    }
-  }
 
   const getCategoryFromEmpresa = (empresa: Empresa): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" => {
     // Priorizar categoria_matriz si está disponible
@@ -353,44 +288,14 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
                   <Edit className="h-3 w-3 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">Editar</span>
                 </Button>
-                <div className="relative">
-                  <Button 
-                    variant="outline" 
-                    className="gap-2"
-                    onClick={() => setShowExportMenu(!showExportMenu)}
-                  >
-                    <Download className="h-4 w-4" />
-                    Exportar
-                  </Button>
-                  {showExportMenu && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-10" 
-                        onClick={() => setShowExportMenu(false)}
-                      />
-                      <div className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-20">
-                        <button
-                          onClick={() => handleExport('csv')}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm first:rounded-t-lg last:rounded-b-lg"
-                        >
-                          CSV
-                        </button>
-                        <button
-                          onClick={() => handleExport('xlsx')}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm first:rounded-t-lg last:rounded-b-lg"
-                        >
-                          Excel
-                        </button>
-                        <button
-                          onClick={() => handleExport('pdf')}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm first:rounded-t-lg last:rounded-b-lg"
-                        >
-                          PDF
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <Button 
+                  variant="outline" 
+                  className="gap-2"
+                  onClick={() => setShowExportDialog(true)}
+                >
+                  <Download className="h-4 w-4" />
+                  Exportar
+                </Button>
               </>
             ) : (
               <>
@@ -1267,6 +1172,14 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
           </TabsContent>
         </Tabs>
       </div>
+      
+      {empresa && (
+        <ExportEmpresaDialog
+          open={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          empresa={empresa}
+        />
+      )}
     </MainLayout>
   )
 }

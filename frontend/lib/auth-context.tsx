@@ -35,72 +35,167 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [lastActivity, setLastActivity] = useState<number>(Date.now())
   const router = useRouter()
   const pathname = usePathname()
 
-  // Verificar si hay un token y cargar usuario
+  // Tiempos de inactividad (en milisegundos)
+  const INACTIVITY_TIMEOUT = 3 * 60 * 60 * 1000 // 3 horas (entre 2-4 horas como solicitado)
+
+  // Renovar access token automáticamente al volver al sitio
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && user) {
+        // Usuario volvió al sitio, intentar renovar access token
+        try {
+          await api.refreshToken()
+          setLastActivity(Date.now())
+        } catch (error) {
+          // Si falla, el refresh token expiró, hacer logout
+          console.log('[Auth] Refresh token expirado al volver al sitio')
+          logout()
+        }
+      }
+    }
+
+    const handleFocus = async () => {
+      if (user) {
+        // Usuario volvió a la pestaña, renovar access token
+        try {
+          await api.refreshToken()
+          setLastActivity(Date.now())
+        } catch (error) {
+          console.log('[Auth] Refresh token expirado al volver a la pestaña')
+          logout()
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [user])
+
+  // Detectar inactividad y cerrar sesión automáticamente
+  useEffect(() => {
+    if (!user) return
+
+    const updateActivity = () => {
+      setLastActivity(Date.now())
+    }
+
+    // Eventos que indican actividad del usuario
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity, { passive: true })
+    })
+
+    // Verificar inactividad cada minuto
+    const inactivityCheck = setInterval(() => {
+      const timeSinceLastActivity = Date.now() - lastActivity
+      if (timeSinceLastActivity >= INACTIVITY_TIMEOUT) {
+        console.log('[Auth] Sesión cerrada por inactividad')
+        logout()
+      }
+    }, 60 * 1000) // Verificar cada minuto
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity)
+      })
+      clearInterval(inactivityCheck)
+    }
+  }, [user, lastActivity])
+
+  // Verificar si hay un token y cargar usuario (renovar si es necesario)
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const accessToken = localStorage.getItem("access_token")
-        if (accessToken) {
-          const userData = await api.getCurrentUser()
-          
-          // Debug: log para ver qué datos se reciben
-          console.log('[Auth] Loading user data:', {
-            email: userData.email,
-            is_superuser: userData.is_superuser,
-            is_staff: userData.is_staff,
-            rol: userData.rol,
-            fullData: userData
-          })
-          
-          // Determinar tipo de usuario basado en el rol y permisos
-          let userType: "admin" | "empresa" | "staff" = "empresa"
-          
-          // Superusuarios siempre son admin
-          // Verificar is_superuser de diferentes formas (boolean, número, string)
-          const isSuperuser = userData.is_superuser === true || 
-                             userData.is_superuser === 1 || 
-                             userData.is_superuser === "true" ||
-                             String(userData.is_superuser).toLowerCase() === "true"
-          
-          if (isSuperuser) {
-            console.log('[Auth] User is superuser, setting type to admin')
-            userType = "admin"
-          }
-          // Si tiene rol de Administrador, Analista o Consulta, puede acceder al dashboard
-          else if (userData.rol?.nombre) {
-            const rolNombre = userData.rol.nombre.toLowerCase()
-            if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
-              console.log('[Auth] User has admin role, setting type to admin')
-              userType = "admin"
-            } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
-              console.log('[Auth] User has staff role, setting type to staff')
-              userType = "staff"
-            }
-          }
-          
-          console.log('[Auth] Final user type (load):', userType)
-          
-          const user: User = {
-            id: userData.id,
-            email: userData.email,
-            username: userData.username,
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            type: userType,
-            is_superuser: userData.is_superuser,
-            is_staff: userData.is_staff,
-            rol: userData.rol,
-            empresaData: userData.empresa,
-          }
-          setUser(user)
+        // Intentar renovar access token primero si hay refresh token válido
+        try {
+          await api.refreshToken()
+        } catch (error) {
+          // Si no hay refresh token válido, continuar sin renovar
         }
-      } catch (error) {
-        console.error("Error loading user:", error)
-        // Si hay error, limpiar tokens
-        api.logout()
+
+        // Intentar obtener usuario (el token puede estar en memoria o cookie)
+        const userData = await api.getCurrentUser()
+        
+        // Debug: log para ver qué datos se reciben
+        console.log('[Auth] Loading user data:', {
+          email: userData.email,
+          is_superuser: userData.is_superuser,
+          is_staff: userData.is_staff,
+          rol: userData.rol,
+          fullData: userData
+        })
+        
+        // Determinar tipo de usuario basado en el rol y permisos
+        let userType: "admin" | "empresa" | "staff" = "empresa"
+        
+        // Superusuarios siempre son admin
+        // Verificar is_superuser de diferentes formas (boolean, número, string)
+        const isSuperuser = userData.is_superuser === true || 
+                           userData.is_superuser === 1 || 
+                           userData.is_superuser === "true" ||
+                           String(userData.is_superuser).toLowerCase() === "true"
+        
+        if (isSuperuser) {
+          console.log('[Auth] User is superuser, setting type to admin')
+          userType = "admin"
+        }
+        // Si tiene rol de Administrador, Analista o Consulta, puede acceder al dashboard
+        else if (userData.rol?.nombre) {
+          const rolNombre = userData.rol.nombre.toLowerCase()
+          if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
+            console.log('[Auth] User has admin role, setting type to admin')
+            userType = "admin"
+          } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
+            console.log('[Auth] User has staff role, setting type to staff')
+            userType = "staff"
+          }
+        }
+        
+        console.log('[Auth] Final user type (load):', userType)
+        
+        const user: User = {
+          id: userData.id,
+          email: userData.email,
+          username: userData.username,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          type: userType,
+          is_superuser: userData.is_superuser,
+          is_staff: userData.is_staff,
+          rol: userData.rol,
+          empresaData: userData.empresa,
+        }
+        setUser(user)
+        setLastActivity(Date.now()) // Actualizar actividad al cargar usuario
+      } catch (error: any) {
+        // Si no hay token o la sesión expiró, simplemente no cargar usuario
+        // Esto es normal cuando el usuario no está autenticado
+        const errorMessage = error?.message || String(error)
+        const isNoAuthError = error?.noAuth || 
+                              error?.silent ||
+                              error?.status === 401 ||
+                              errorMessage.includes('No hay sesión activa') ||
+                              errorMessage.includes('credenciales') || 
+                              errorMessage.includes('autenticación') || 
+                              errorMessage.includes('401') ||
+                              errorMessage.includes('Sesión expirada')
+        
+        if (isNoAuthError) {
+          // No hacer nada, simplemente no cargar usuario
+          // No mostrar logs ni errores, es el comportamiento esperado
+          // No llamar a api.logout() porque puede causar problemas si no hay cookies
+        } else {
+          console.error("Error loading user:", error)
+        }
       } finally {
         setIsLoading(false)
       }
@@ -120,11 +215,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Intentar login con la API
-      await api.login(email, password)
+      // Intentar login con la API (ahora retorna datos del usuario también)
+      const loginResponse = await api.login(email, password)
       
-      // Obtener información del usuario
-      const userData = await api.getCurrentUser()
+      // Obtener información del usuario (puede venir en la respuesta del login o hacer petición separada)
+      let userData
+      if (loginResponse.user) {
+        userData = loginResponse.user
+      } else {
+        userData = await api.getCurrentUser()
+      }
       
       // Debug: log para ver qué datos se reciben
       console.log('[Auth] User data received:', {
@@ -177,6 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       setUser(loggedUser)
+      setLastActivity(Date.now()) // Actualizar actividad al hacer login
       
       // Debug: log para ver la redirección
       console.log('[Auth] Redirecting user:', {
@@ -206,6 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     api.logout()
     setUser(null)
+    setLastActivity(Date.now())
     router.push("/login")
   }
 

@@ -636,6 +636,669 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
     return response
 
 
+def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
+    """
+    Genera un PDF con empresas específicas y campos seleccionados, manteniendo la estética institucional
+    y organizando los campos en secciones
+    """
+    from apps.empresas.models import Empresa
+    from django.http import HttpResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from io import BytesIO
+    from datetime import datetime
+    
+    # Obtener las empresas por sus IDs
+    empresas = Empresa.objects.filter(id__in=empresas_ids).select_related(
+        'tipo_empresa', 'id_rubro', 'departamento', 'municipio', 'localidad', 'id_usuario'
+    ).prefetch_related('productos_empresa', 'servicios_empresa', 'productos_mixta', 'servicios_mixta', 'clasificaciones_exportador')
+    
+    if not empresas.exists():
+        raise ValueError("No se encontraron empresas con los IDs proporcionados")
+    
+    # Separar empresas por tipo
+    empresas_producto = empresas.filter(tipo_empresa_valor='producto')
+    empresas_servicio = empresas.filter(tipo_empresa_valor='servicio')
+    empresas_mixta = empresas.filter(tipo_empresa_valor='mixta')
+    
+    # Combinar todas las empresas
+    todas_empresas = []
+    for empresa in empresas_producto:
+        todas_empresas.append(('Producto', empresa))
+    for empresa in empresas_servicio:
+        todas_empresas.append(('Servicio', empresa))
+    for empresa in empresas_mixta:
+        todas_empresas.append(('Mixta', empresa))
+    
+    todas_empresas.sort(key=lambda x: (x[0], x[1].razon_social))
+    
+    # Mapeo de campos del frontend a campos de la base de datos y secciones
+    campos_map = {
+        # Información Básica
+        'razon_social': {'field': 'razon_social', 'section': 'basica', 'label': 'Razón Social'},
+        'nombre_fantasia': {'field': 'nombre_fantasia', 'section': 'basica', 'label': 'Nombre de Fantasía'},
+        'cuit_cuil': {'field': 'cuit_cuil', 'section': 'basica', 'label': 'CUIT/CUIL'},
+        'tipo_sociedad': {'field': 'tipo_sociedad', 'section': 'basica', 'label': 'Tipo de Sociedad'},
+        'tipo_empresa': {'field': 'tipo_empresa', 'section': 'basica', 'label': 'Tipo de Empresa'},
+        'fecha_creacion': {'field': 'fecha_creacion', 'section': 'basica', 'label': 'Fecha de Registro'},
+        
+        # Rubro y Categorización
+        'rubro_principal': {'field': 'rubro_nombre', 'section': 'basica', 'label': 'Rubro Principal'},
+        'categoria_matriz': {'field': 'categoria_matriz', 'section': 'basica', 'label': 'Categoría Matriz'},
+        
+        # Ubicación
+        'departamento': {'field': 'departamento_nombre', 'section': 'basica', 'label': 'Departamento'},
+        'municipio': {'field': 'municipio_nombre', 'section': 'basica', 'label': 'Municipio'},
+        'localidad': {'field': 'localidad_nombre', 'section': 'basica', 'label': 'Localidad'},
+        'direccion': {'field': 'direccion', 'section': 'basica', 'label': 'Dirección'},
+        'codigo_postal': {'field': 'codigo_postal', 'section': 'basica', 'label': 'Código Postal'},
+        'provincia': {'field': 'provincia', 'section': 'basica', 'label': 'Provincia'},
+        'geolocalizacion': {'field': 'geolocalizacion', 'section': 'basica', 'label': 'Geolocalización'},
+        
+        # Contacto
+        'telefono': {'field': 'telefono', 'section': 'contacto', 'label': 'Teléfono'},
+        'correo': {'field': 'correo', 'section': 'contacto', 'label': 'Email'},
+        'sitioweb': {'field': 'sitioweb', 'section': 'contacto', 'label': 'Sitio Web'},
+        'email_secundario': {'field': 'email_secundario', 'section': 'contacto', 'label': 'Email Secundario'},
+        'email_terciario': {'field': 'email_terciario', 'section': 'contacto', 'label': 'Email Terciario'},
+        
+        # Contacto Principal
+        'contacto_principal_nombre': {'field': 'contacto_principal_nombre', 'section': 'contacto', 'label': 'Contacto Principal - Nombre'},
+        'contacto_principal_cargo': {'field': 'contacto_principal_cargo', 'section': 'contacto', 'label': 'Contacto Principal - Cargo'},
+        'contacto_principal_telefono': {'field': 'contacto_principal_telefono', 'section': 'contacto', 'label': 'Contacto Principal - Teléfono'},
+        'contacto_principal_email': {'field': 'contacto_principal_email', 'section': 'contacto', 'label': 'Contacto Principal - Email'},
+        
+        # Contacto Secundario
+        'contacto_secundario_nombre': {'field': 'contacto_secundario_nombre', 'section': 'contacto', 'label': 'Contacto Secundario - Nombre'},
+        'contacto_secundario_cargo': {'field': 'contacto_secundario_cargo', 'section': 'contacto', 'label': 'Contacto Secundario - Cargo'},
+        'contacto_secundario_telefono': {'field': 'contacto_secundario_telefono', 'section': 'contacto', 'label': 'Contacto Secundario - Teléfono'},
+        'contacto_secundario_email': {'field': 'contacto_secundario_email', 'section': 'contacto', 'label': 'Contacto Secundario - Email'},
+        
+        # Actividad Comercial
+        'exporta': {'field': 'exporta', 'section': 'comercial', 'label': '¿Exporta?'},
+        'destinoexporta': {'field': 'destinoexporta', 'section': 'comercial', 'label': 'Destino de Exportación'},
+        'tipoexporta': {'field': 'tipoexporta', 'section': 'comercial', 'label': 'Tipo de Exportación'},
+        'importa': {'field': 'importa', 'section': 'comercial', 'label': '¿Importa?'},
+        'tipoimporta': {'field': 'tipoimporta', 'section': 'comercial', 'label': 'Tipo de Importación'},
+        'frecuenciaimporta': {'field': 'frecuenciaimporta', 'section': 'comercial', 'label': 'Frecuencia de Importación'},
+        'interes_exportar': {'field': 'interes_exportar', 'section': 'comercial', 'label': 'Interés en Exportar'},
+        
+        # Certificaciones
+        'certificadopyme': {'field': 'certificadopyme', 'section': 'comercial', 'label': 'Certificado MiPYME'},
+        'certificacionesbool': {'field': 'certificacionesbool', 'section': 'comercial', 'label': 'Certificaciones Internacionales'},
+        'certificaciones': {'field': 'certificaciones', 'section': 'comercial', 'label': 'Detalle de Certificaciones'},
+        'certificaciones_otros': {'field': 'certificaciones_otros', 'section': 'comercial', 'label': 'Otras Certificaciones'},
+        
+        # Promoción
+        'promo2idiomas': {'field': 'promo2idiomas', 'section': 'comercial', 'label': 'Material en Múltiples Idiomas'},
+        'idiomas_trabaja': {'field': 'idiomas_trabaja', 'section': 'comercial', 'label': 'Idiomas de Trabajo'},
+        
+        # Capacidad
+        'capacidadproductiva': {'field': 'capacidadproductiva', 'section': 'comercial', 'label': 'Capacidad Productiva'},
+        'tiempocapacidad': {'field': 'tiempocapacidad', 'section': 'comercial', 'label': 'Período de Capacidad'},
+        'otracapacidad': {'field': 'otracapacidad', 'section': 'comercial', 'label': 'Otra Capacidad Productiva'},
+        
+        # Ferias
+        'participoferianacional': {'field': 'participoferianacional', 'section': 'comercial', 'label': 'Participó en Ferias Nacionales'},
+        'feriasnacionales': {'field': 'feriasnacionales', 'section': 'comercial', 'label': 'Detalle Ferias Nacionales'},
+        'participoferiainternacional': {'field': 'participoferiainternacional', 'section': 'comercial', 'label': 'Participó en Ferias Internacionales'},
+        'feriasinternacionales': {'field': 'feriasinternacionales', 'section': 'comercial', 'label': 'Detalle Ferias Internacionales'},
+        
+        # Otros
+        'observaciones': {'field': 'observaciones', 'section': 'comercial', 'label': 'Observaciones'},
+        'puntaje': {'field': 'puntaje', 'section': 'comercial', 'label': 'Puntaje'},
+        'descripcion': {'field': 'descripcion', 'section': 'comercial', 'label': 'Descripción'},
+    }
+    
+    # Expandir campos disponibles basándose en los campos seleccionados
+    # Si viene un campo que no está en el mapeo, intentar obtenerlo directamente
+    campos_expandidos = []
+    for campo_id in campos_seleccionados:
+        if campo_id in campos_map:
+            campos_expandidos.append(campos_map[campo_id])
+        else:
+            # Intentar inferir la sección basándose en el nombre del campo
+            section = 'basica'
+            if campo_id in ['correo', 'telefono', 'sitioweb', 'contacto_principal_nombre', 'contacto_principal_email']:
+                section = 'contacto'
+            elif campo_id in ['exporta', 'importa', 'destinoexporta', 'certificadopyme', 'certificaciones']:
+                section = 'comercial'
+            
+            campos_expandidos.append({
+                'field': campo_id,
+                'section': section,
+                'label': campo_id.replace('_', ' ').title()
+            })
+    
+    # Reorganizar campos por sección
+    secciones = {
+        'basica': [],
+        'contacto': [],
+        'comercial': []
+    }
+    
+    for campo_info in campos_expandidos:
+        secciones[campo_info['section']].append(campo_info)
+    
+    # Función helper para obtener el valor de un campo
+    def get_field_value(empresa, field_name):
+        """Obtiene el valor de un campo de la empresa, manejando relaciones"""
+        # Campos que requieren acceso a relaciones
+        if field_name == 'rubro_nombre':
+            if empresa.id_rubro:
+                return empresa.id_rubro.nombre if hasattr(empresa.id_rubro, 'nombre') else str(empresa.id_rubro)
+            return '-'
+        elif field_name == 'departamento_nombre':
+            if empresa.departamento:
+                return empresa.departamento.nombre if hasattr(empresa.departamento, 'nombre') else str(empresa.departamento)
+            return '-'
+        elif field_name == 'municipio_nombre':
+            if empresa.municipio:
+                return empresa.municipio.nombre if hasattr(empresa.municipio, 'nombre') else str(empresa.municipio)
+            return '-'
+        elif field_name == 'localidad_nombre':
+            if empresa.localidad:
+                return empresa.localidad.nombre if hasattr(empresa.localidad, 'nombre') else str(empresa.localidad)
+            return '-'
+        elif field_name == 'tipo_empresa':
+            if empresa.tipo_empresa:
+                return empresa.tipo_empresa.nombre if hasattr(empresa.tipo_empresa, 'nombre') else str(empresa.tipo_empresa)
+            elif empresa.tipo_empresa_valor:
+                return empresa.tipo_empresa_valor
+            return '-'
+        elif field_name == 'provincia':
+            # La provincia generalmente viene del departamento
+            if empresa.departamento and hasattr(empresa.departamento, 'provincia'):
+                return empresa.departamento.provincia.nombre if hasattr(empresa.departamento.provincia, 'nombre') else 'Catamarca'
+            return 'Catamarca'  # Valor por defecto
+        elif field_name == 'categoria_matriz':
+            try:
+                matriz = empresa.clasificaciones_exportador.first()
+                if matriz:
+                    return matriz.get_categoria_display() if hasattr(matriz, 'get_categoria_display') else str(matriz.categoria) if hasattr(matriz, 'categoria') else 'N/A'
+            except:
+                pass
+            return 'N/A'
+        # Campos directos del modelo
+        elif hasattr(empresa, field_name):
+            value = getattr(empresa, field_name)
+            # Formatear fechas
+            if hasattr(value, 'strftime'):
+                return value.strftime('%d/%m/%Y')
+            # Formatear booleanos
+            if isinstance(value, bool):
+                return 'Sí' if value else 'No'
+            # Formatear Decimal
+            if hasattr(value, '__class__') and 'Decimal' in str(value.__class__):
+                return str(value)
+            return value
+        return '-'
+    
+    
+    # Buffer para el PDF
+    buffer = BytesIO()
+    
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=1*cm,
+        leftMargin=1*cm,
+        topMargin=1.5*cm,
+        bottomMargin=1.5*cm,
+        title='Exportación de Empresas'
+    )
+    
+    # Estilos
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#222A59'),
+        spaceAfter=12,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'SubtitleStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#6B7280'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=14,
+        textColor=colors.HexColor('#222A59'),
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold',
+        spaceAfter=6
+    )
+    
+    footer_style = ParagraphStyle(
+        'FooterStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#6B7280'),
+        alignment=TA_CENTER
+    )
+    
+    story = []
+    
+    # Encabezado institucional
+    header_text = Paragraph(
+        "Dirección de Intercambio Comercial Internacional y Regional<br/>Provincia de Catamarca",
+        header_style
+    )
+    story.append(header_text)
+    story.append(Spacer(1, 0.3*cm))
+    
+    # Título
+    title = Paragraph("Exportación de Empresas", title_style)
+    story.append(title)
+    
+    # Fecha de generación
+    fecha = datetime.now().strftime('%d/%m/%Y %H:%M')
+    fecha_text = Paragraph(f"Generado el: {fecha}", subtitle_style)
+    story.append(fecha_text)
+    story.append(Spacer(1, 0.5*cm))
+    
+    ancho_disponible = landscape(A4)[0] - 2*cm
+    num_empresas = len(todas_empresas)
+    
+    # Determinar si usar formato compacto (muchas empresas) o detallado (pocas empresas)
+    usar_formato_compacto = num_empresas >= 5
+    
+    # SECCIÓN 1: INFORMACIÓN BÁSICA
+    if secciones['basica']:
+        story.append(Paragraph("Información Básica de Empresas", title_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        campos_basicos = secciones['basica']
+        
+        if usar_formato_compacto:
+            # Formato compacto: todas las columnas en una tabla, dividida en grupos si es necesario
+            max_cols = 8  # Máximo de columnas por tabla (incluyendo "Tipo")
+            
+            for i in range(0, len(campos_basicos), max_cols - 1):
+                grupo_campos = campos_basicos[i:i + max_cols - 1]
+                headers_basico = ['Tipo', 'Razón Social'] + [campo['label'] for campo in grupo_campos]
+                data_basico = [headers_basico]
+                
+                for tipo, empresa in todas_empresas:
+                    row = [tipo, Paragraph(normalize_text(empresa.razon_social), styles['Normal'])]
+                    for campo in grupo_campos:
+                        value = get_field_value(empresa, campo['field'])
+                        
+                        if isinstance(value, bool):
+                            value = 'Sí' if value else 'No'
+                        elif value is None:
+                            value = '-'
+                        else:
+                            value = str(value)
+                        
+                        # Truncar valores muy largos para formato compacto
+                        if len(value) > 30:
+                            value = value[:27] + '...'
+                        
+                        row.append(Paragraph(normalize_text(value), styles['Normal']))
+                    data_basico.append(row)
+                
+                num_cols = len(headers_basico)
+                # Calcular anchos: Tipo pequeño, Razón Social más grande, resto igual
+                if num_cols == 2:
+                    col_widths_basico = [ancho_disponible * 0.15, ancho_disponible * 0.85]
+                else:
+                    col_widths_basico = [
+                        ancho_disponible * 0.08,  # Tipo
+                        ancho_disponible * 0.20,  # Razón Social
+                    ] + [ancho_disponible * 0.72 / (num_cols - 2)] * (num_cols - 2)
+                
+                table_basico = Table(data_basico, colWidths=col_widths_basico, repeatRows=1)
+                table_basico.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('TOPPADDING', (0, 0), (-1, 0), 6),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 7),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 1), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ]))
+                story.append(table_basico)
+                
+                # Agregar espacio entre tablas si hay más grupos
+                if i + max_cols - 1 < len(campos_basicos):
+                    story.append(Spacer(1, 0.2*cm))
+        else:
+            # Formato detallado: menos columnas, más espacio
+            max_cols = 6  # Incluyendo la columna "Tipo"
+            
+            for i in range(0, len(campos_basicos), max_cols - 1):
+                grupo_campos = campos_basicos[i:i + max_cols - 1]
+                headers_basico = ['Tipo'] + [campo['label'] for campo in grupo_campos]
+                data_basico = [headers_basico]
+                
+                for tipo, empresa in todas_empresas:
+                    row = [tipo]
+                    for campo in grupo_campos:
+                        value = get_field_value(empresa, campo['field'])
+                        
+                        if isinstance(value, bool):
+                            value = 'Sí' if value else 'No'
+                        elif value is None:
+                            value = '-'
+                        else:
+                            value = str(value)
+                        
+                        row.append(Paragraph(normalize_text(value), styles['Normal']))
+                    data_basico.append(row)
+                
+                num_cols = len(headers_basico)
+                if num_cols <= 4:
+                    col_widths_basico = [ancho_disponible * 0.15] + [ancho_disponible * 0.85 / (num_cols - 1)] * (num_cols - 1)
+                else:
+                    col_width = ancho_disponible / num_cols
+                    col_widths_basico = [col_width] * num_cols
+                
+                table_basico = Table(data_basico, colWidths=col_widths_basico, repeatRows=1)
+                table_basico.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 1), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ]))
+                story.append(table_basico)
+                
+                if i + max_cols - 1 < len(campos_basicos):
+                    story.append(Spacer(1, 0.3*cm))
+        
+        story.append(Spacer(1, 0.5*cm))
+    
+    # SECCIÓN 2: CONTACTO
+    if secciones['contacto']:
+        # Nueva página para la sección de contacto
+        story.append(PageBreak())
+        story.append(Paragraph("Información de Contacto", title_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        campos_contacto = secciones['contacto']
+        
+        if usar_formato_compacto:
+            # Formato compacto
+            max_cols = 8  # Máximo de columnas por tabla (incluyendo "Razón Social")
+            
+            for i in range(0, len(campos_contacto), max_cols - 1):
+                grupo_campos = campos_contacto[i:i + max_cols - 1]
+                headers_contacto = ['Razón Social'] + [campo['label'] for campo in grupo_campos]
+                data_contacto = [headers_contacto]
+                
+                for tipo, empresa in todas_empresas:
+                    row = [Paragraph(normalize_text(empresa.razon_social), styles['Normal'])]
+                    for campo in grupo_campos:
+                        value = get_field_value(empresa, campo['field'])
+                        
+                        if isinstance(value, bool):
+                            value = 'Sí' if value else 'No'
+                        elif value is None or value == '-':
+                            value = '-'
+                        else:
+                            value = str(value).lower() if campo['field'] in ['correo', 'sitioweb', 'email_secundario', 'email_terciario', 'contacto_principal_email', 'contacto_secundario_email'] else str(value)
+                        
+                        # Truncar valores muy largos
+                        if len(value) > 30:
+                            value = value[:27] + '...'
+                        
+                        row.append(Paragraph(normalize_text(value), styles['Normal']))
+                    data_contacto.append(row)
+                
+                num_cols = len(headers_contacto)
+                col_widths_contacto = [ancho_disponible * 0.20] + [ancho_disponible * 0.80 / (num_cols - 1)] * (num_cols - 1)
+                
+                table_contacto = Table(data_contacto, colWidths=col_widths_contacto, repeatRows=1)
+                table_contacto.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('TOPPADDING', (0, 0), (-1, 0), 6),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 7),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 1), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ]))
+                story.append(table_contacto)
+                
+                if i + max_cols - 1 < len(campos_contacto):
+                    story.append(Spacer(1, 0.2*cm))
+        else:
+            # Formato detallado
+            max_cols = 6  # Incluyendo la columna "Razón Social"
+            
+            for i in range(0, len(campos_contacto), max_cols - 1):
+                grupo_campos = campos_contacto[i:i + max_cols - 1]
+                headers_contacto = ['Razón Social'] + [campo['label'] for campo in grupo_campos]
+                data_contacto = [headers_contacto]
+                
+                for tipo, empresa in todas_empresas:
+                    row = [Paragraph(normalize_text(empresa.razon_social), styles['Normal'])]
+                    for campo in grupo_campos:
+                        value = get_field_value(empresa, campo['field'])
+                        
+                        if isinstance(value, bool):
+                            value = 'Sí' if value else 'No'
+                        elif value is None or value == '-':
+                            value = '-'
+                        else:
+                            value = str(value).lower() if campo['field'] in ['correo', 'sitioweb', 'email_secundario', 'email_terciario', 'contacto_principal_email', 'contacto_secundario_email'] else str(value)
+                        
+                        row.append(Paragraph(normalize_text(value), styles['Normal']))
+                    data_contacto.append(row)
+                
+                num_cols = len(headers_contacto)
+                if num_cols <= 4:
+                    col_widths_contacto = [ancho_disponible * 0.20] + [ancho_disponible * 0.80 / (num_cols - 1)] * (num_cols - 1)
+                else:
+                    col_width = ancho_disponible / num_cols
+                    col_widths_contacto = [col_width] * num_cols
+                
+                table_contacto = Table(data_contacto, colWidths=col_widths_contacto, repeatRows=1)
+                table_contacto.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 1), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ]))
+                story.append(table_contacto)
+                
+                if i + max_cols - 1 < len(campos_contacto):
+                    story.append(Spacer(1, 0.3*cm))
+        
+        story.append(Spacer(1, 0.5*cm))
+    
+    # SECCIÓN 3: COMERCIAL
+    if secciones['comercial']:
+        # Nueva página para la sección comercial
+        story.append(PageBreak())
+        story.append(Paragraph("Información Comercial y Clasificación", title_style))
+        story.append(Spacer(1, 0.3*cm))
+        
+        campos_comercial = secciones['comercial']
+        
+        if usar_formato_compacto:
+            # Formato compacto
+            max_cols = 8  # Máximo de columnas por tabla (incluyendo "Razón Social")
+            
+            for i in range(0, len(campos_comercial), max_cols - 1):
+                grupo_campos = campos_comercial[i:i + max_cols - 1]
+                headers_comercial = ['Razón Social'] + [campo['label'] for campo in grupo_campos]
+                data_comercial = [headers_comercial]
+                
+                for tipo, empresa in todas_empresas:
+                    row = [Paragraph(normalize_text(empresa.razon_social), styles['Normal'])]
+                    for campo in grupo_campos:
+                        value = get_field_value(empresa, campo['field'])
+                        
+                        if isinstance(value, bool):
+                            value = 'Sí' if value else 'No'
+                        elif value is None or value == '-':
+                            value = '-'
+                        elif campo['field'] == 'exporta':
+                            value = 'Sí' if value == 'Sí' else 'No'
+                        else:
+                            value = str(value)
+                        
+                        # Truncar valores muy largos
+                        if len(value) > 30:
+                            value = value[:27] + '...'
+                        
+                        row.append(Paragraph(normalize_text(value), styles['Normal']))
+                    data_comercial.append(row)
+                
+                num_cols = len(headers_comercial)
+                col_widths_comercial = [ancho_disponible * 0.20] + [ancho_disponible * 0.80 / (num_cols - 1)] * (num_cols - 1)
+                
+                table_comercial = Table(data_comercial, colWidths=col_widths_comercial, repeatRows=1)
+                table_comercial.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('TOPPADDING', (0, 0), (-1, 0), 6),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 7),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 1), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ]))
+                story.append(table_comercial)
+                
+                if i + max_cols - 1 < len(campos_comercial):
+                    story.append(Spacer(1, 0.2*cm))
+        else:
+            # Formato detallado
+            max_cols = 6  # Incluyendo la columna "Razón Social"
+            
+            for i in range(0, len(campos_comercial), max_cols - 1):
+                grupo_campos = campos_comercial[i:i + max_cols - 1]
+                headers_comercial = ['Razón Social'] + [campo['label'] for campo in grupo_campos]
+                data_comercial = [headers_comercial]
+                
+                for tipo, empresa in todas_empresas:
+                    row = [Paragraph(normalize_text(empresa.razon_social), styles['Normal'])]
+                    for campo in grupo_campos:
+                        value = get_field_value(empresa, campo['field'])
+                        
+                        if isinstance(value, bool):
+                            value = 'Sí' if value else 'No'
+                        elif value is None or value == '-':
+                            value = '-'
+                        elif campo['field'] == 'exporta':
+                            value = 'Sí' if value == 'Sí' else 'No'
+                        else:
+                            value = str(value)
+                        
+                        row.append(Paragraph(normalize_text(value), styles['Normal']))
+                    data_comercial.append(row)
+                
+                num_cols = len(headers_comercial)
+                if num_cols <= 4:
+                    col_widths_comercial = [ancho_disponible * 0.20] + [ancho_disponible * 0.80 / (num_cols - 1)] * (num_cols - 1)
+                else:
+                    col_width = ancho_disponible / num_cols
+                    col_widths_comercial = [col_width] * num_cols
+                
+                table_comercial = Table(data_comercial, colWidths=col_widths_comercial, repeatRows=1)
+                table_comercial.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 1), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ]))
+                story.append(table_comercial)
+                
+                if i + max_cols - 1 < len(campos_comercial):
+                    story.append(Spacer(1, 0.3*cm))
+    
+    # Footer
+    story.append(Spacer(1, 0.3*cm))
+    footer_text = Paragraph(
+        "Dirección de Intercambio Comercial Internacional y Regional - "
+        "San Martín 320, San Fernando del Valle de Catamarca - "
+        "Tel: (0383) 4437390",
+        footer_style
+    )
+    story.append(footer_text)
+    
+    # Construir PDF
+    doc.build(story)
+    
+    # Obtener PDF
+    pdf = buffer.getvalue()
+    buffer.close()
+    
+    # Crear respuesta HTTP
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="empresas_exportacion_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf"'
+    response.write(pdf)
+    
+    return response
+
+
 def calcular_puntajes_matriz(empresa):
     """
     Calcular automáticamente los puntajes de la matriz de clasificación

@@ -165,8 +165,8 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
     if (empresaId) {
       calcularPuntajesAutomaticos()
     } else {
-      setCriterios(criteriosIniciales)
-    }
+    setCriterios(criteriosIniciales)
+  }
   }
 
   const handleSave = async () => {
@@ -204,7 +204,7 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
         title: "Evaluación guardada exitosamente",
         description: `La matriz de clasificación para ${empresaInfo.razon_social || 'la empresa'} ha sido guardada correctamente.`,
         variant: "default",
-      })
+    })
     } catch (error: any) {
       console.error("Error guardando evaluación:", error)
       const errorMessage = error?.message || error?.response?.data?.error || "Error desconocido"
@@ -306,8 +306,8 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
             </>
           ) : (
             <>
-              <Save className="h-4 w-4" />
-              Guardar Evaluación
+          <Save className="h-4 w-4" />
+          Guardar Evaluación
             </>
           )}
         </Button>

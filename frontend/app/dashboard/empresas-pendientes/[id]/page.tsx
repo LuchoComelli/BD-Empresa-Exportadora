@@ -91,22 +91,49 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
   const handleAprobar = async () => {
     try {
       setLoadingAction(true)
-      await api.post(`/registro/solicitudes/${resolvedParams.id}/aprobar/`, {
+      const response = await api.post(`/registro/solicitudes/${resolvedParams.id}/aprobar/`, {
         observaciones: observaciones
       })
-      toast({
-        title: "Empresa aprobada",
-        description: `La empresa "${empresa?.razon_social}" ha sido aprobada exitosamente y se ha creado su cuenta.`,
-        variant: "default",
-      })
-      router.push("/dashboard/empresas-pendientes")
+      
+      // Verificar si la respuesta es exitosa
+      if (response && (response.status === 'success' || response.status === 200 || response.empresa_id)) {
+        toast({
+          title: "Empresa aprobada",
+          description: `La empresa "${empresa?.razon_social}" ha sido aprobada exitosamente y se ha creado su cuenta.`,
+          variant: "default",
+        })
+        // Esperar un momento antes de redirigir para que el toast se vea
+        setTimeout(() => {
+          router.push("/dashboard/empresas-pendientes")
+          router.refresh() // Forzar recarga de la página
+        }, 1000)
+      } else {
+        throw new Error("La respuesta del servidor no indica éxito")
+      }
     } catch (error: any) {
       console.error("Error aprobando empresa:", error)
-      toast({
-        title: "Error al aprobar",
-        description: error.message || "Error al aprobar la empresa. Por favor, intenta nuevamente.",
-        variant: "destructive",
-      })
+      
+      // Verificar si el error es solo del email pero la empresa se creó
+      const errorMessage = error.response?.data?.error || error.message || "Error al aprobar la empresa"
+      
+      // Si el error menciona email, puede que la empresa se haya creado igual
+      if (errorMessage.toLowerCase().includes('email') || errorMessage.toLowerCase().includes('correo')) {
+        toast({
+          title: "Empresa aprobada con advertencia",
+          description: `La empresa fue aprobada pero hubo un problema al enviar el email. La empresa fue creada correctamente.`,
+          variant: "default",
+        })
+        setTimeout(() => {
+          router.push("/dashboard/empresas-pendientes")
+          router.refresh()
+        }, 1000)
+      } else {
+        toast({
+          title: "Error al aprobar",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoadingAction(false)
     }

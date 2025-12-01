@@ -33,41 +33,56 @@ interface UserResponse {
 
 class ApiService {
   private baseURL: string;
+  private accessTokenMemory: string | null = null; // Token en memoria
 
   constructor() {
     this.baseURL = API_BASE_URL;
   }
 
-  // Obtener token de localStorage
+  // Obtener cookie por nombre
+  private getCookie(name: string): string | null {
+    if (typeof document === 'undefined') return null;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return parts.pop()?.split(';').shift() || null;
+    }
+    return null;
+  }
+
+  // Obtener access token de memoria o cookie
   private getAccessToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('access_token');
+    // Primero intentar obtener de memoria
+    if (this.accessTokenMemory) {
+      return this.accessTokenMemory;
+    }
+    // Si no está en memoria, intentar obtener de cookie
+    if (typeof document !== 'undefined') {
+      const token = this.getCookie('access_token');
+      if (token) {
+        this.accessTokenMemory = token; // Guardar en memoria
+        return token;
+      }
     }
     return null;
   }
 
-  // Obtener refresh token de localStorage
+  // Guardar access token en memoria
+  private setAccessToken(token: string): void {
+    this.accessTokenMemory = token;
+  }
+
+  // Obtener refresh token de cookie (HTTP-Only, no accesible desde JS, pero lo intentamos)
   private getRefreshToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('refresh_token');
-    }
-    return null;
+    // El refresh token está en cookie HTTP-Only, no podemos leerlo desde JS
+    // Pero el backend lo leerá automáticamente de la cookie
+    return null; // No podemos leer cookies HTTP-Only desde JS
   }
 
-  // Guardar tokens en localStorage
-  private setTokens(access: string, refresh: string): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
-    }
-  }
-
-  // Eliminar tokens de localStorage
+  // Eliminar tokens
   private clearTokens(): void {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-    }
+    this.accessTokenMemory = null;
+    // Las cookies HTTP-Only se eliminan desde el backend en el logout
   }
 
   // Hacer petición con autenticación
@@ -91,6 +106,7 @@ class ApiService {
       const response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'include', // Importante: incluir cookies en todas las peticiones
       });
 
       // Si el token expiró, intentar refrescarlo
@@ -102,6 +118,7 @@ class ApiService {
           const retryResponse = await fetch(url, {
             ...options,
             headers,
+            credentials: 'include',
           });
           if (!retryResponse.ok) {
             throw new Error(`Error ${retryResponse.status}: ${retryResponse.statusText}`);
@@ -112,6 +129,16 @@ class ApiService {
           this.clearTokens();
           throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
         }
+      }
+
+      // Si es 401 y no hay token, es normal (usuario no autenticado)
+      // No lanzar error, simplemente retornar null o lanzar un error especial que se maneje silenciosamente
+      if (response.status === 401 && !token) {
+        const error: any = new Error('No hay sesión activa');
+        error.status = 401;
+        error.noAuth = true; // Flag para indicar que es un error esperado
+        error.silent = true; // Flag adicional para indicar que no debe mostrarse en consola
+        throw error;
       }
 
       if (!response.ok) {
@@ -146,8 +173,11 @@ class ApiService {
       }
 
       return response.json();
-    } catch (error) {
-      console.error('API Error:', error);
+    } catch (error: any) {
+      // No mostrar errores silenciosos en consola (cuando no hay sesión activa)
+      if (!error?.silent && !error?.noAuth) {
+        console.error('API Error:', error);
+      }
       throw error;
     }
   }
@@ -176,7 +206,7 @@ class ApiService {
   }
 
   // Login
-  async login(email: string, password: string): Promise<TokenResponse> {
+  async login(email: string, password: string): Promise<any> {
     console.log(`[API] Intentando login con email: ${email}`);
     
     const response = await fetch(`${this.baseURL}/core/auth/login/`, {
@@ -184,7 +214,8 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ username: email, password }), // El backend espera 'username' pero con el valor del email
+      credentials: 'include', // Importante: incluir cookies
+      body: JSON.stringify({ username: email, password }),
     });
 
     console.log(`[API] Respuesta del servidor: ${response.status} ${response.statusText}`);
@@ -225,26 +256,32 @@ class ApiService {
       throw new Error(errorMessage);
     }
 
-    const data: TokenResponse = await response.json();
+    const data = await response.json();
     console.log('[API] Login exitoso');
-    this.setTokens(data.access, data.refresh);
-    return data;
+    
+    // Guardar access token en memoria (viene en el body de la respuesta)
+    if (data.access_token) {
+      this.setAccessToken(data.access_token);
+    }
+    
+    // Retornar datos del usuario y token
+    return {
+      access: data.access_token,
+      refresh: '', // No se necesita, está en cookie HTTP-Only
+      user: data.user
+    };
   }
 
   // Refresh token
   async refreshToken(): Promise<boolean> {
-    const refresh = this.getRefreshToken();
-    if (!refresh) {
-      return false;
-    }
-
     try {
+      // El refresh token está en cookie HTTP-Only, el backend lo lee automáticamente
       const response = await fetch(`${this.baseURL}/core/auth/refresh/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ refresh }),
+        credentials: 'include', // Importante: incluir cookies
       });
 
       if (!response.ok) {
@@ -252,12 +289,32 @@ class ApiService {
         return false;
       }
 
-      const data: TokenResponse = await response.json();
-      this.setTokens(data.access, data.refresh);
+      const data = await response.json();
+      
+      // Guardar nuevo access token en memoria
+      if (data.access_token) {
+        this.setAccessToken(data.access_token);
+      }
+      
       return true;
     } catch (error) {
       this.clearTokens();
       return false;
+    }
+  }
+
+  // Logout
+  async logout(): Promise<void> {
+    try {
+      await fetch(`${this.baseURL}/core/auth/logout/`, {
+        method: 'POST',
+        credentials: 'include', // Incluir cookies para que el backend las elimine
+      });
+    } catch (error) {
+      console.error('Error al hacer logout:', error);
+    } finally {
+      // Limpiar token de memoria
+      this.clearTokens();
     }
   }
 
@@ -598,6 +655,48 @@ async getEmpresas(params?: {
     return blob;
   }
 
+  // Exportar empresas seleccionadas a PDF con campos personalizados
+  async exportEmpresasSeleccionadasPDF(empresasIds: number[], campos: string[]): Promise<Blob> {
+    const token = this.getAccessToken();
+    const url = `${this.baseURL}/registro/solicitudes/exportar_empresas_seleccionadas_pdf/`;
+    
+    console.log("Exportando PDF de empresas seleccionadas:", empresasIds, "con campos:", campos);
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        empresas_ids: empresasIds,
+        campos: campos,
+      }),
+    });
+    
+    console.log("Respuesta del servidor:", response.status, response.statusText);
+    console.log("Content-Type:", response.headers.get('content-type'));
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error del servidor:", errorText);
+      throw new Error(`Error al exportar PDF: ${response.statusText} - ${errorText}`);
+    }
+    
+    const blob = await response.blob();
+    console.log("Blob recibido, tamaño:", blob.size, "tipo:", blob.type);
+    
+    if (blob.size === 0) {
+      throw new Error('El PDF generado está vacío');
+    }
+    
+    return blob;
+  }
+
   // Eliminar una empresa por ID
   async deleteEmpresa(id: number, tipo_empresa?: string): Promise<any> {
     // Determinar el endpoint según el tipo de empresa
@@ -683,10 +782,6 @@ async getEmpresas(params?: {
     return this.get<any>('/core/roles/');
   }
 
-  // Logout
-  logout(): void {
-    this.clearTokens();
-  }
 
   // ========== MATRIZ DE CLASIFICACIÓN ==========
   

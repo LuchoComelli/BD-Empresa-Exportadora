@@ -70,6 +70,13 @@ class RolUsuario(models.Model):
     puede_importar_datos = models.BooleanField(default=False, verbose_name="Puede Importar Datos")
     puede_gestionar_usuarios = models.BooleanField(default=False, verbose_name="Puede Gestionar Usuarios")
     puede_acceder_admin = models.BooleanField(default=False, verbose_name="Puede Acceder al Admin")
+    puede_ver_usuarios = models.BooleanField(default=False, verbose_name="Puede Ver Usuarios")
+    puede_ver_configuracion = models.BooleanField(default=False, verbose_name="Puede Ver Configuración")
+    puede_aprobar_empresas = models.BooleanField(default=False, verbose_name="Puede Aprobar Empresas Pendientes")
+    puede_ver_empresas_pendientes = models.BooleanField(default=False, verbose_name="Puede Ver Empresas Pendientes")
+    puede_ver_reportes = models.BooleanField(default=True, verbose_name="Puede Ver Reportes")
+    puede_ver_mapa = models.BooleanField(default=True, verbose_name="Puede Ver Mapa")
+    puede_ver_matriz = models.BooleanField(default=True, verbose_name="Puede Ver Matriz de Clasificación")
     
     # Nivel de acceso
     nivel_acceso = models.IntegerField(

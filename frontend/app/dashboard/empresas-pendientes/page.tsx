@@ -31,6 +31,15 @@ export default function EmpresasPendientesPage() {
     loadEmpresasPendientes()
   }, [])
 
+  // Recargar cuando se vuelve a la página (después de aprobar/rechazar)
+  useEffect(() => {
+    const handleFocus = () => {
+      loadEmpresasPendientes()
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [])
+
   const loadEmpresasPendientes = async () => {
     try {
       setLoading(true)

@@ -19,6 +19,9 @@ class RolUsuarioSerializer(serializers.ModelSerializer):
             'puede_eliminar_empresas', 'puede_ver_auditoria',
             'puede_exportar_datos', 'puede_importar_datos',
             'puede_gestionar_usuarios', 'puede_acceder_admin',
+            'puede_ver_usuarios', 'puede_ver_configuracion',
+            'puede_aprobar_empresas', 'puede_ver_empresas_pendientes',
+            'puede_ver_reportes', 'puede_ver_mapa', 'puede_ver_matriz',
             'nivel_acceso', 'activo', 'fecha_creacion'
         ]
         read_only_fields = ['id', 'fecha_creacion']

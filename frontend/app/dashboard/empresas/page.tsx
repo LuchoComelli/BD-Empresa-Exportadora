@@ -188,6 +188,21 @@ if (response.results) {
       })
       return
     }
+    
+    // Verificar que las empresas seleccionadas existan en la lista actual
+    const empresasToExport = empresas.filter(e => selectedEmpresas.includes(e.id))
+    console.log('[Export] Empresas seleccionadas (IDs):', selectedEmpresas)
+    console.log('[Export] Empresas a exportar:', empresasToExport.length, empresasToExport.map(e => e.razon_social))
+    
+    if (empresasToExport.length === 0) {
+      toast({
+        title: "Error",
+        description: "No se encontraron las empresas seleccionadas. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
+      return
+    }
+    
     setShowExportDialog(true)
   }
 
@@ -309,13 +324,14 @@ if (response.results) {
         </div>
 
         {/* Export Dialog */}
-        {showExportDialog && (
-          <ExportDialog
-            open={showExportDialog}
-            onClose={() => setShowExportDialog(false)}
-            empresas={empresas.filter(e => selectedEmpresas.includes(e.id))}
-          />
-        )}
+        <ExportDialog
+          open={showExportDialog}
+          onClose={() => {
+            setShowExportDialog(false)
+            console.log('[Export] Dialog cerrado')
+          }}
+          empresas={empresas.filter(e => selectedEmpresas.includes(e.id))}
+        />
       </div>
     </MainLayout>
   )

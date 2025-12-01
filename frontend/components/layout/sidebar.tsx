@@ -16,55 +16,55 @@ const allMenuItems = [
     title: "Dashboard",
     icon: LayoutDashboard,
     href: "/dashboard",
-    adminOnly: false,
+    permission: null, // Todos pueden ver el dashboard
   },
   {
     title: "Empresas",
     icon: Building2,
     href: "/dashboard/empresas",
-    adminOnly: false,
+    permission: null, // Todos pueden ver empresas
   },
   {
     title: "Empresas Pendientes",
     icon: Clock,
     href: "/dashboard/empresas-pendientes",
-    adminOnly: false,
+    permission: 'puede_ver_empresas_pendientes',
   },
   {
     title: "Nueva Empresa",
     icon: FileText,
     href: "/dashboard/nueva-empresa",
-    adminOnly: false,
+    permission: 'puede_crear_empresas',
   },
   {
     title: "Matriz de Clasificación",
     icon: BarChart3,
     href: "/dashboard/matriz",
-    adminOnly: false,
+    permission: 'puede_ver_matriz',
   },
   {
     title: "Mapa",
     icon: MapPin,
     href: "/dashboard/mapa",
-    adminOnly: false,
+    permission: 'puede_ver_mapa',
   },
   {
     title: "Reportes",
     icon: FileBarChart,
     href: "/dashboard/reportes",
-    adminOnly: false,
+    permission: 'puede_ver_reportes',
   },
   {
     title: "Usuarios",
     icon: Users,
     href: "/dashboard/usuarios",
-    adminOnly: true,
+    permission: 'puede_ver_usuarios',
   },
   {
     title: "Configuración",
     icon: Settings,
     href: "/dashboard/configuracion",
-    adminOnly: true,
+    permission: 'puede_ver_configuracion',
   },
 ]
 
@@ -72,14 +72,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useAuth()
   
-  // Verificar si el usuario es admin
-  const isAdmin = user?.is_superuser || 
-                 user?.type === "admin" ||
-                 user?.rol?.nombre?.toLowerCase().includes("admin") ||
-                 user?.rol?.nombre?.toLowerCase().includes("administrador")
+  // Función helper para verificar permisos
+  const hasPermission = (permission: string | null): boolean => {
+    if (!permission) return true // Sin permiso específico = todos pueden ver
+    
+    if (!user?.rol) return false
+    
+    // Superusuarios tienen todos los permisos
+    if (user.is_superuser) return true
+    
+    // Verificar permiso específico en el rol
+    const rol = user.rol as any
+    return rol[permission] === true
+  }
   
-  // Filtrar items del menú según permisos
-  const menuItems = allMenuItems.filter(item => !item.adminOnly || isAdmin)
+  // Filtrar items del menú según permisos del rol
+  const menuItems = allMenuItems.filter(item => hasPermission(item.permission))
 
   return (
     <>

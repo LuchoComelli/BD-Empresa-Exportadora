@@ -123,24 +123,37 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             solicitud.save()
             logger.info(f"Solicitud marcada como aprobada: ID={solicitud.id}")
             
-            # Enviar email
+            # Enviar email (no crítico - si falla, no afecta la aprobación)
+            email_enviado = False
+            email_error_msg = None
             try:
                 enviar_email_aprobacion(solicitud)
+                email_enviado = True
+                logger.info(f"Email de aprobación enviado exitosamente para solicitud ID={solicitud.id}")
             except Exception as email_error:
-                logger.warning(f"Error al enviar email de aprobación: {str(email_error)}")
-                # No fallar si el email falla
+                email_error_msg = str(email_error)
+                logger.warning(f"Error al enviar email de aprobación para solicitud ID={solicitud.id}: {email_error_msg}")
+                # No fallar si el email falla - la empresa ya está creada y aprobada
             
-            return Response({
+            # Siempre retornar éxito si la empresa se creó y la solicitud se aprobó
+            response_data = {
                 'status': 'success',
                 'message': 'Solicitud aprobada correctamente',
-                'empresa_id': empresa.id
-            })
+                'empresa_id': empresa.id,
+                'email_enviado': email_enviado
+            }
+            
+            if not email_enviado and email_error_msg:
+                response_data['email_warning'] = f'La empresa fue aprobada pero hubo un problema al enviar el email: {email_error_msg}'
+            
+            return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error al aprobar solicitud ID={solicitud.id}: {str(e)}", exc_info=True)
             
-            # Revertir el estado si se había marcado como aprobada
+            # Revertir el estado si se había marcado como aprobada pero falló algo
+            solicitud.refresh_from_db()
             if solicitud.estado == 'aprobada' and not solicitud.empresa_creada:
                 solicitud.estado = 'pendiente'
                 solicitud.fecha_aprobacion = None
@@ -149,7 +162,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
                 logger.warning(f"Estado de solicitud revertido a pendiente debido a error")
             
             return Response(
-                {'error': str(e)},
+                {'error': f'Error al aprobar la solicitud: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -678,6 +691,46 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         # Devolver HttpResponse directamente - DRF permite devolver HttpResponse
         # sin pasar por la negociación de contenido cuando es un HttpResponse
         return pdf_response
+    
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], url_path='exportar_empresas_seleccionadas_pdf')
+    def exportar_empresas_seleccionadas_pdf(self, request):
+        """Exportar empresas específicas a PDF con campos seleccionados"""
+        from apps.empresas.models import Empresa
+        from apps.empresas.utils import generate_empresas_seleccionadas_pdf
+        
+        # Obtener IDs de empresas y campos seleccionados del body
+        empresas_ids = request.data.get('empresas_ids', [])
+        campos_seleccionados = request.data.get('campos', [])
+        
+        if not empresas_ids:
+            return Response(
+                {'error': 'No se proporcionaron IDs de empresas'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not campos_seleccionados:
+            return Response(
+                {'error': 'No se seleccionaron campos para exportar'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Convertir IDs a enteros
+            empresas_ids = [int(id) for id in empresas_ids]
+            
+            # Generar PDF
+            pdf_response = generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados)
+            return pdf_response
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error al generar PDF: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def mi_perfil(self, request):

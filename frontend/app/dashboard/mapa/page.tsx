@@ -65,11 +65,43 @@ export default function MapaPage() {
   useEffect(() => {
     const style = document.createElement('style')
     style.textContent = `
+      #empresas-map {
+        position: relative !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 500px !important;
+        display: block !important;
+        visibility: visible !important;
+        overflow: hidden !important;
+      }
       #empresas-map .leaflet-container {
         z-index: 0 !important;
+        position: relative !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 500px !important;
+        touch-action: pan-x pan-y !important;
+        pointer-events: auto !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+        display: block !important;
+        visibility: visible !important;
+        cursor: grab !important;
+      }
+      #empresas-map .leaflet-container.leaflet-dragging {
+        cursor: grabbing !important;
+      }
+      #empresas-map .leaflet-tile-pane {
+        pointer-events: auto !important;
       }
       #empresas-map .leaflet-control-container {
         z-index: 1 !important;
+        pointer-events: none !important;
+      }
+      #empresas-map .leaflet-control {
+        pointer-events: auto !important;
       }
       #empresas-map .leaflet-top,
       #empresas-map .leaflet-bottom {
@@ -77,24 +109,38 @@ export default function MapaPage() {
       }
       #empresas-map .leaflet-pane {
         z-index: 0 !important;
+        pointer-events: auto !important;
       }
-      #empresas-map .leaflet-control {
-        z-index: 1 !important;
+      #empresas-map .leaflet-map-pane {
+        pointer-events: auto !important;
       }
-        #empresas-map .leaflet-container {
-  cursor: grab;
-}
-#empresas-map .leaflet-container:active {
-  cursor: grabbing;
-}
-#empresas-map .leaflet-dragging .leaflet-container {
-  cursor: grabbing;
-}
+      #empresas-map .leaflet-container {
+        cursor: grab !important;
+      }
+      #empresas-map .leaflet-container:active {
+        cursor: grabbing !important;
+      }
+      #empresas-map .leaflet-dragging .leaflet-container {
+        cursor: grabbing !important;
+      }
+      /* Asegurar que los marcadores sean clickeables */
+      #empresas-map .leaflet-marker-icon {
+        cursor: pointer !important;
+        pointer-events: auto !important;
+      }
+      #empresas-map .custom-marker-icon {
+        pointer-events: auto !important;
+      }
+      #empresas-map .leaflet-interactive {
+        cursor: pointer !important;
+      }
     `
     document.head.appendChild(style)
     
     return () => {
-      document.head.removeChild(style)
+      if (document.head.contains(style)) {
+        document.head.removeChild(style)
+      }
     }
   }, [])
 
@@ -268,33 +314,175 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
 
         // Verificar si el mapa ya está inicializado y limpiarlo
         if (map) {
-          map.remove()
+          try {
+            // Remover todas las capas primero
+            map.eachLayer((layer: any) => {
+              try {
+                map.removeLayer(layer)
+              } catch (e) {
+                // Ignorar errores al remover capas
+              }
+            })
+            map.remove()
+          } catch (e) {
+            console.warn('Error removing existing map:', e)
+          }
           setMap(null)
           setMarkers([])
         }
 
         // Limpiar cualquier instancia previa de Leaflet en el contenedor
+        // Verificar si el contenedor ya tiene una instancia de Leaflet
         if ((mapElement as any)._leaflet_id) {
+          try {
+            // Intentar obtener la instancia del mapa desde Leaflet si está disponible
+            if ((L as any).map && (L as any).map._instances) {
+              const leafletMap = (L as any).map._instances[(mapElement as any)._leaflet_id]
+              if (leafletMap) {
+                try {
+                  // Remover todas las capas
+                  leafletMap.eachLayer((layer: any) => {
+                    try {
+                      leafletMap.removeLayer(layer)
+                    } catch (e) {
+                      // Ignorar errores
+                    }
+                  })
+                  leafletMap.remove()
+                } catch (e) {
+                  console.warn('Error removing Leaflet map instance:', e)
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Error accessing Leaflet instances:', e)
+          }
+        }
+        
+        // Limpiar TODAS las propiedades de Leaflet del contenedor
+        // Esto es crucial para evitar el error "Map container is already initialized"
+        const leafletProps = ['_leaflet_id', '_leaflet', 'leaflet']
+        leafletProps.forEach(prop => {
+          try {
+            delete (mapElement as any)[prop]
+          } catch (e) {
+            // Ignorar errores
+          }
+        })
+        
+        // Limpiar el contenido del contenedor para asegurar un inicio limpio
+        // Esto ayuda a prevenir conflictos con instancias previas
+        mapElement.innerHTML = ''
+        
+        // Asegurar que el contenedor tenga un tamaño antes de inicializar el mapa
+        // Esto es crucial para que el mapa sea interactivo desde el inicio
+        const rect = mapElement.getBoundingClientRect()
+        if (rect.width === 0 || rect.height === 0) {
+          console.warn('Map container has no size, waiting...')
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        
+        // Esperar un momento para asegurar que la limpieza se complete
+        // Esto es importante para que Leaflet no detecte el contenedor como ya inicializado
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Verificar una vez más que el contenedor esté limpio
+        if ((mapElement as any)._leaflet_id) {
+          console.warn('Container still has _leaflet_id, attempting to clear again...')
           delete (mapElement as any)._leaflet_id
+          await new Promise(resolve => setTimeout(resolve, 50))
         }
 
         // Centrar el mapa en Catamarca (San Fernando del Valle de Catamarca)
         const catamarcaCenter: [number, number] = [-28.2, -66.0]
-        const mapInstance = L.map("empresas-map", {
-  preferCanvas: false,
-  dragging: true,
-  touchZoom: true,
-  scrollWheelZoom: true,
-  doubleClickZoom: true,
-  boxZoom: true,
-  keyboard: true,
-  tap: true,
-  zoomControl: true
-}).setView(catamarcaCenter, 8)
+        
+        // Intentar crear el mapa, si falla por contenedor ya inicializado, limpiar y reintentar
+        let mapInstance: any
+        try {
+          mapInstance = L.map("empresas-map", {
+            preferCanvas: false,
+            dragging: true,
+            touchZoom: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
+            boxZoom: true,
+            keyboard: true,
+            tap: true,
+            zoomControl: true
+          }).setView(catamarcaCenter, 8)
+        } catch (error: any) {
+          // Si el error es "Map container is already initialized", limpiar y reintentar
+          if (error.message && error.message.includes('already initialized')) {
+            console.warn('Map container was already initialized, cleaning and retrying...')
+            // Limpiar completamente el contenedor
+            mapElement.innerHTML = ''
+            delete (mapElement as any)._leaflet_id
+            // Esperar un momento
+            await new Promise(resolve => setTimeout(resolve, 100))
+            // Reintentar
+            mapInstance = L.map("empresas-map", {
+              preferCanvas: false,
+              dragging: true,
+              touchZoom: true,
+              scrollWheelZoom: true,
+              doubleClickZoom: true,
+              boxZoom: true,
+              keyboard: true,
+              tap: true,
+              zoomControl: true
+            }).setView(catamarcaCenter, 8)
+          } else {
+            throw error
+          }
+        }
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(mapInstance)
+
+        // Forzar que el mapa calcule su tamaño correctamente
+        // Esto es crucial para que el mapa sea interactivo desde el inicio
+        // Llamar múltiples veces para asegurar que funcione
+        mapInstance.invalidateSize()
+        
+        // Esperar a que el mapa se renderice completamente
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Llamar invalidateSize de nuevo después de que el DOM se actualice
+        mapInstance.invalidateSize()
+        
+        // Habilitar explícitamente todas las interacciones del mapa
+        // Forzar habilitación del dragging después de un pequeño delay
+        setTimeout(() => {
+          if (mapInstance.dragging) {
+            mapInstance.dragging.enable()
+            // Forzar que el dragging esté activo
+            if (!mapInstance.dragging._enabled) {
+              mapInstance.dragging._enabled = true
+            }
+          }
+          if (mapInstance.touchZoom) {
+            mapInstance.touchZoom.enable()
+          }
+          if (mapInstance.scrollWheelZoom) {
+            mapInstance.scrollWheelZoom.enable()
+          }
+          if (mapInstance.doubleClickZoom) {
+            mapInstance.doubleClickZoom.enable()
+          }
+          if (mapInstance.boxZoom) {
+            mapInstance.boxZoom.enable()
+          }
+        }, 200)
+        if (mapInstance.keyboard) {
+          mapInstance.keyboard.enable()
+        }
+        if (mapInstance.tap) {
+          mapInstance.tap.enable()
+        }
+        
+        // Esperar un poco más antes de agregar marcadores
+        await new Promise(resolve => setTimeout(resolve, 100))
 
         // Crear marcadores para cada empresa
         const newMarkers: any[] = []
@@ -302,36 +490,52 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
           if (empresa.lat && empresa.lng) {
             console.log(`[Marker] Empresa: ${empresa.razon_social}, Tipo: "${empresa.tipo_empresa}"`)
 
-            const markerColor = getCategoriaColor(empresa.categoria || '')
+            // Obtener color según el tipo de empresa
+            const getTipoColor = (tipo: string): string => {
+              switch(tipo?.toLowerCase()) {
+                case 'producto':
+                  return '#3b82f6' // Azul para productos
+                case 'servicio':
+                  return '#10b981' // Verde para servicios
+                case 'mixta':
+                  return '#f59e0b' // Amarillo/Naranja para mixta
+                default:
+                  return '#6b7280' // Gris para tipo desconocido
+              }
+            }
+            
+            const tipoColor = getTipoColor(empresa.tipo_empresa || '')
             const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
 
             console.log('[Marker] tipoInfo:', tipoInfo)
             
-// Actualiza la creación del customIcon:
-const customIcon = L.divIcon({
-  className: '',
-  html: `
-    <div style="
-      background-color: ${markerColor}; 
-      width: 30px; 
-      height: 30px; 
-      border-radius: ${tipoInfo.borderRadius}; 
-      border: 2px solid white; 
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
-    ">
-      <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
-        ${tipoInfo.iconSvg}
-      </div>
-    </div>
-  `,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
-  popupAnchor: [0, -15],
-})
+            // Actualiza la creación del customIcon:
+            const customIcon = L.divIcon({
+              className: 'custom-marker-icon',
+              html: `
+                <div style="
+                  background-color: ${tipoColor}; 
+                  width: 30px; 
+                  height: 30px; 
+                  border-radius: ${tipoInfo.borderRadius}; 
+                  border: 2px solid white; 
+                  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  cursor: pointer;
+                  pointer-events: auto;
+                  ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
+                ">
+                  <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
+                    ${tipoInfo.iconSvg}
+                  </div>
+                </div>
+              `,
+              iconSize: [30, 30],
+              iconAnchor: [15, 15],
+              popupAnchor: [0, -15],
+            })
 
             const tipoEmpresaTexto = empresa.tipo_empresa === 'producto' 
               ? 'Productos' 
@@ -341,7 +545,11 @@ const customIcon = L.divIcon({
                   ? 'Productos y Servicios'
                   : ''
 
-            const marker = L.marker([empresa.lat, empresa.lng], { icon: customIcon })
+            const marker = L.marker([empresa.lat, empresa.lng], { 
+              icon: customIcon,
+              interactive: true,
+              keyboard: true
+            })
               .addTo(mapInstance)
               .bindPopup(`
                 <div style="min-width: 200px;">
@@ -354,17 +562,54 @@ const customIcon = L.divIcon({
                 </div>
               `)
             
-            marker.on('click', () => {
+            // Usar 'click' y también asegurar que el evento funcione
+            // Usar once: false para que el evento se mantenga incluso después de reinicializar
+            marker.on('click', (e) => {
+              if (e.originalEvent) {
+                e.originalEvent.stopPropagation()
+              }
               setSelectedEmpresa(empresa)
             })
+            
+            // También agregar evento de popup para asegurar que funcione
+            marker.on('popupopen', () => {
+              setSelectedEmpresa(empresa)
+            })
+            
+            // Asegurar que el marcador sea clickeable
+            if (marker.getElement) {
+              const markerElement = marker.getElement()
+              if (markerElement) {
+                markerElement.style.pointerEvents = 'auto'
+                markerElement.style.cursor = 'pointer'
+              }
+            }
 
             newMarkers.push(marker)
           }
         })
+        
+        // Forzar otro invalidateSize después de agregar marcadores
+        mapInstance.invalidateSize()
 
-setMap(mapInstance)
-setMarkers(newMarkers)
-setMapLoaded(true)
+        // Asegurar que el dragging esté habilitado después de agregar todos los marcadores
+        setTimeout(() => {
+          if (mapInstance.dragging) {
+            mapInstance.dragging.enable()
+            // Forzar que el dragging esté activo
+            if (!mapInstance.dragging._enabled) {
+              mapInstance.dragging._enabled = true
+            }
+            // Asegurar que los handlers estén registrados
+            if (mapInstance.dragging._draggable) {
+              mapInstance.dragging._draggable._enabled = true
+            }
+          }
+        }, 100)
+        
+        setMap(mapInstance)
+        setMarkers(newMarkers)
+        setMapLoaded(true)
 
       } catch (error) {
         console.error('Error loading map:', error)
@@ -385,6 +630,14 @@ setMapLoaded(true)
       
       if (currentMap) {
         try {
+          // Remover todas las capas primero
+          currentMap.eachLayer((layer: any) => {
+            try {
+              currentMap.removeLayer(layer)
+            } catch (e) {
+              // Ignorar errores al remover capas
+            }
+          })
           currentMap.remove()
         } catch (e) {
           console.warn('Error removing map:', e)
@@ -407,8 +660,25 @@ setMapLoaded(true)
       
       // Limpiar el contenedor del mapa
       const mapElement = document.getElementById("empresas-map")
-      if (mapElement && (mapElement as any)._leaflet_id) {
-        delete (mapElement as any)._leaflet_id
+      if (mapElement) {
+        // Limpiar cualquier instancia de Leaflet
+        if ((mapElement as any)._leaflet_id) {
+          try {
+            // Intentar obtener la instancia del mapa desde Leaflet si está disponible
+            const L = (window as any).L
+            if (L && L.map && L.map._instances) {
+              const leafletMap = L.map._instances[(mapElement as any)._leaflet_id]
+              if (leafletMap) {
+                leafletMap.remove()
+              }
+            }
+          } catch (e) {
+            console.warn('Error cleaning Leaflet instance:', e)
+          }
+          delete (mapElement as any)._leaflet_id
+        }
+        // Limpiar el contenido del contenedor
+        mapElement.innerHTML = ''
       }
     }
   }, [loading, empresas, toast])
@@ -683,14 +953,28 @@ document.head.appendChild(styleOverride)
       // Agregar todos los marcadores de empresas
       empresas.forEach((empresa) => {
         if (empresa.lat && empresa.lng) {
-          const markerColor = getCategoriaColor(empresa.categoria || '')
+          // Obtener color según el tipo de empresa
+          const getTipoColor = (tipo: string): string => {
+            switch(tipo?.toLowerCase()) {
+              case 'producto':
+                return '#3b82f6' // Azul para productos
+              case 'servicio':
+                return '#10b981' // Verde para servicios
+              case 'mixta':
+                return '#f59e0b' // Amarillo/Naranja para mixta
+              default:
+                return '#6b7280' // Gris para tipo desconocido
+            }
+          }
+          
+          const tipoColor = getTipoColor(empresa.tipo_empresa || '')
           const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
           
 const customIcon = L.divIcon({
   className: '',
   html: `
     <div style="
-      background-color: ${markerColor}; 
+      background-color: ${tipoColor}; 
       width: 20px;
       height: 20px;
       border-radius: ${tipoInfo.borderRadius}; 
@@ -845,6 +1129,20 @@ titleDiv.innerHTML = `
           return !node.className.includes('leaflet-control')
         }
         return true
+      },
+      onclone: (clonedDoc: any) => {
+        // Remover referencias a CSS externos que causan problemas de seguridad
+        try {
+          const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]')
+          links.forEach((link: any) => {
+            if (link.href && (link.href.includes('leaflet.css') || link.href.includes('unpkg.com'))) {
+              link.remove()
+            }
+          })
+        } catch (e) {
+          // Ignorar errores al remover links
+        }
+        return clonedDoc
       }
     })
     
@@ -1033,14 +1331,28 @@ document.head.appendChild(styleOverride)
     // Agregar marcadores de empresas
 empresasDept.forEach((empresa) => {
   if (empresa.lat && empresa.lng) {
-    const markerColor = getCategoriaColor(empresa.categoria || '')
+    // Obtener color según el tipo de empresa
+    const getTipoColor = (tipo: string): string => {
+      switch(tipo?.toLowerCase()) {
+        case 'producto':
+          return '#3b82f6' // Azul para productos
+        case 'servicio':
+          return '#10b981' // Verde para servicios
+        case 'mixta':
+          return '#f59e0b' // Amarillo/Naranja para mixta
+        default:
+          return '#6b7280' // Gris para tipo desconocido
+      }
+    }
+    
+    const tipoColor = getTipoColor(empresa.tipo_empresa || '')
     const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
     
     const customIcon = L.divIcon({
       className: '',  // ← VACÍO
       html: `
         <div style="
-          background-color: ${markerColor}; 
+          background-color: ${tipoColor}; 
           width: 20px;
           height: 20px;
           border-radius: ${tipoInfo.borderRadius}; 
@@ -1194,21 +1506,23 @@ centerLabelDiv.style.cssText = `
     
     // Capturar como imagen
     const dataUrl = await domtoimage.toPng(exportDiv, {
-  quality: 1,
-  bgcolor: '#f8f9fa',
-  width: 900,  // o 1200/1400 según la función
-  height: 900, // o 1400 según la función
-  cacheBust: true,
-  skipFonts: true,
-  imagePlaceholder: undefined,
-  filter: (node: any) => {
-    // Filtrar controles de Leaflet
-    if (node.className && typeof node.className === 'string') {
-      if (node.className.includes('leaflet-control')) return false
-    }
-    // Filtrar elementos con recursos externos
-    if (node.tagName === 'LINK' && node.href?.includes('_next')) return false
-    if (node.tagName === 'STYLE' && node.textContent?.includes('@font-face')) return false
+      quality: 1,
+      bgcolor: '#f8f9fa',
+      width: 900,  // o 1200/1400 según la función
+      height: 900, // o 1400 según la función
+      cacheBust: true,
+      skipFonts: true,
+      useCORS: true,
+      allowTaint: false,
+      imagePlaceholder: undefined,
+      filter: (node: any) => {
+        // Filtrar controles de Leaflet
+        if (node.className && typeof node.className === 'string') {
+          if (node.className.includes('leaflet-control')) return false
+        }
+        // Filtrar elementos con recursos externos
+        if (node.tagName === 'LINK' && node.href?.includes('_next')) return false
+        if (node.tagName === 'STYLE' && node.textContent?.includes('@font-face')) return false
     return true
   },
   onclone: (clonedDoc: any) => {
@@ -1219,6 +1533,17 @@ centerLabelDiv.style.cssText = `
         style.textContent = style.textContent.replace(/@font-face[^}]+}/g, '')
       }
     })
+    // Remover referencias a CSS externos que causan problemas de seguridad
+    try {
+      const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]')
+      links.forEach((link: any) => {
+        if (link.href && (link.href.includes('leaflet.css') || link.href.includes('unpkg.com'))) {
+          link.remove()
+        }
+      })
+    } catch (e) {
+      // Ignorar errores al remover links
+    }
     return clonedDoc
   }
 })
@@ -1460,14 +1785,14 @@ const handleSearchChange = (value: string) => {
     )}
   </div>
 </CardHeader>
-                <CardContent>
+                <CardContent className="relative">
                   <div 
                     id="empresas-map" 
-                    className="h-[300px] md:h-[400px] lg:h-[500px] rounded-lg border shadow-sm w-full relative z-0"
+                    className="h-[500px] md:h-[600px] lg:h-[700px] rounded-lg border shadow-sm w-full relative z-0"
                     style={{ isolation: 'isolate' }}
                   />
                   {!mapLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-lg">
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-lg z-10" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
                       <div className="text-center space-y-2">
                         <Loader2 className="h-6 w-6 animate-spin text-[#3259B5] mx-auto" />
                         <p className="text-sm text-muted-foreground">Cargando mapa...</p>
