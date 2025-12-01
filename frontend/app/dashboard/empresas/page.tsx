@@ -44,6 +44,9 @@ export default function EmpresasPage() {
   })
 
   const loadEmpresas = async () => {
+    console.log('[DEBUG] Cargando empresas con página:', pagination.page)
+  console.log('[DEBUG] Total páginas calculadas:', pagination.totalPages)
+  console.log('[DEBUG] Filtros actuales:', filters)
     try {
       setLoading(true)
       const params: any = {
@@ -94,51 +97,66 @@ export default function EmpresasPage() {
         params.certificadopyme = filters.certificadopyme === 'si' ? 'true' : 'false'
       }
 
-      const response = await api.getEmpresas(params)
-      console.log('[Empresas Page] Response received:', response)
-      
-      // Si la respuesta tiene paginación (DRF pagination)
-      if (response.results) {
-        console.log('[Empresas Page] Results count:', response.results.length)
-        console.log('[Empresas Page] First empresa:', response.results[0])
-        // Asegurar que cada empresa tenga un ID válido
-        const empresasWithIds = response.results.map((empresa: any) => {
-          if (!empresa.id) {
-            console.warn('[Empresas Page] Empresa without ID:', empresa)
-          }
-          return empresa
-        })
-        setEmpresas(empresasWithIds)
-        setPagination(prev => ({
-          ...prev,
-          total: response.count || response.results.length,
-          totalPages: Math.ceil((response.count || response.results.length) / prev.pageSize),
-        }))
-      } else if (Array.isArray(response)) {
-        // Si es un array simple
-        console.log('[Empresas Page] Array response, count:', response.length)
-        setEmpresas(response)
-        setPagination(prev => ({
-          ...prev,
-          total: response.length,
-          totalPages: Math.ceil(response.length / prev.pageSize),
-        }))
-      } else {
-        // Si viene en otro formato
-        console.warn('[Empresas Page] Unexpected response format:', response)
-        setEmpresas([])
-        setPagination(prev => ({
-          ...prev,
-          total: 0,
-          totalPages: 0,
-        }))
-      }
-    } catch (error) {
-      console.error("Error loading empresas:", error)
-      setEmpresas([])
-    } finally {
-      setLoading(false)
+     console.log('[DEBUG] Params enviados al backend:', params)
+const response = await api.getEmpresas(params)
+console.log('[DEBUG] Response completa:', response)
+console.log('[Empresas Page] Response received:', response)
+
+// Si la respuesta tiene paginación (DRF pagination)
+if (response.results) {
+  console.log('[Empresas Page] Results count:', response.results.length)
+  console.log('[Empresas Page] First empresa:', response.results[0])
+  
+  // Asegurar que cada empresa tenga un ID válido
+  const empresasWithIds = response.results.map((empresa: any) => {
+    if (!empresa.id) {
+      console.warn('[Empresas Page] Empresa without ID:', empresa)
     }
+    return empresa
+  })
+  
+  const totalCount = response.count || response.results.length
+  const calculatedTotalPages = totalCount > 0 ? Math.ceil(totalCount / pagination.pageSize) : 1
+  
+  console.log('[DEBUG] Total count:', totalCount)
+  console.log('[DEBUG] Page size:', pagination.pageSize)
+  console.log('[DEBUG] Calculated total pages:', calculatedTotalPages)
+  
+  setEmpresas(empresasWithIds)
+  setPagination(prev => ({
+    ...prev,
+    total: totalCount,
+    totalPages: calculatedTotalPages,
+  }))
+} else if (Array.isArray(response)) {
+  // Si es un array simple
+  console.log('[Empresas Page] Array response, count:', response.length)
+  
+  const totalCount = response.length
+  const calculatedTotalPages = totalCount > 0 ? Math.ceil(totalCount / pagination.pageSize) : 1
+  
+  setEmpresas(response)
+  setPagination(prev => ({
+    ...prev,
+    total: totalCount,
+    totalPages: calculatedTotalPages,
+  }))
+} else {
+  // Si viene en otro formato
+  console.warn('[Empresas Page] Unexpected response format:', response)
+  setEmpresas([])
+  setPagination(prev => ({
+    ...prev,
+    total: 0,
+    totalPages: 1,
+  }))
+}
+} catch (error) {
+  console.error("Error loading empresas:", error)
+  setEmpresas([])
+} finally {
+  setLoading(false)
+}
   }
 
   useEffect(() => {
@@ -174,8 +192,13 @@ export default function EmpresasPage() {
   }
 
   const handlePageChange = (page: number) => {
-    setPagination({ ...pagination, page })
+  // Validar que la página esté en el rango válido
+  if (page < 1 || page > pagination.totalPages) {
+    console.warn(`Intento de acceder a página inválida: ${page}. Total páginas: ${pagination.totalPages}`)
+    return
   }
+  setPagination({ ...pagination, page })
+}
 
   const handleDelete = async (id: number) => {
     try {

@@ -148,11 +148,18 @@ class ServicioEmpresaSerializer(serializers.ModelSerializer):
 class EmpresaproductoListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de empresas de producto"""
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
+    tipo_empresa = serializers.SerializerMethodField()
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)  # ✅ Cambio aquí
     municipio_nombre = serializers.SerializerMethodField()
     localidad_nombre = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
+
+    def get_tipo_empresa(self, obj):
+        """Retornar el valor del tipo de empresa"""
+        if hasattr(obj, 'tipo_empresa_valor'):
+            return obj.tipo_empresa_valor
+        return 'producto'
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
@@ -182,7 +189,7 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
-            'tipo_empresa_nombre', 'rubro_nombre',
+            'tipo_empresa_nombre','tipo_empresa', 'rubro_nombre',
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
@@ -468,11 +475,18 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
 class EmpresaservicioListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de empresas de servicio"""
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
+    tipo_empresa = serializers.SerializerMethodField()
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
     municipio_nombre = serializers.SerializerMethodField()
     localidad_nombre = serializers.SerializerMethodField()
     categoria_matriz = serializers.SerializerMethodField()
+
+    def get_tipo_empresa(self, obj):
+        """Retornar el valor del tipo de empresa"""
+        if hasattr(obj, 'tipo_empresa_valor'):
+            return obj.tipo_empresa_valor
+        return 'servicio'
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
@@ -503,7 +517,7 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
-            'tipo_empresa_nombre', 'rubro_nombre',
+            'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre',  
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
@@ -748,12 +762,19 @@ class ServicioEmpresaMixtaSerializer(serializers.ModelSerializer):
 class EmpresaMixtaListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas de empresas mixtas"""
     tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
+    tipo_empresa = serializers.SerializerMethodField()
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
     municipio_nombre = serializers.SerializerMethodField()
     localidad_nombre = serializers.SerializerMethodField()
     actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
     categoria_matriz = serializers.SerializerMethodField()
+
+    def get_tipo_empresa(self, obj):
+        """Retornar el valor del tipo de empresa"""
+        if hasattr(obj, 'tipo_empresa_valor'):
+            return obj.tipo_empresa_valor
+        return 'mixta'  # Default para EmpresaMixta
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
@@ -784,7 +805,7 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
-            'tipo_empresa_nombre', 'rubro_nombre',
+            'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre',  # ← AGREGAR 'tipo_empresa'
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
             'actividades_promocion_internacional',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'

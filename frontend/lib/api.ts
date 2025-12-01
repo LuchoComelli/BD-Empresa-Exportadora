@@ -341,87 +341,91 @@ class ApiService {
   }
 
   // Obtener lista de empresas (solicitudes aprobadas)
-  async getEmpresas(params?: {
-    search?: string;
-    estado?: string;
-    tipo_empresa?: string;
-    exporta?: string;
-    importa?: string;
-    departamento?: string;
-    rubro?: string;
-    sub_rubro?: string;
-    categoria_matriz?: string;
-    promo2idiomas?: string;
-    certificadopyme?: string;
-    page?: number;
-    page_size?: number;
-  }): Promise<any> {
-    // Obtener todas las empresas de todos los tipos y combinarlas
-    const queryParams = new URLSearchParams();
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.tipo_empresa) queryParams.append('tipo_empresa', params.tipo_empresa);
-    if (params?.exporta) queryParams.append('exporta', params.exporta);
-    if (params?.importa) queryParams.append('importa', params.importa);
-    if (params?.departamento) queryParams.append('departamento', params.departamento);
-    if (params?.rubro) queryParams.append('id_rubro', params.rubro);
-    if (params?.sub_rubro) queryParams.append('sub_rubro', params.sub_rubro);
-    if (params?.categoria_matriz) queryParams.append('categoria_matriz', params.categoria_matriz);
-    if (params?.promo2idiomas) queryParams.append('promo2idiomas', params.promo2idiomas);
-    if (params?.certificadopyme) queryParams.append('certificadopyme', params.certificadopyme);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
-    
-    const query = queryParams.toString();
-    
-    // Si hay filtro de tipo_empresa, solo obtener ese tipo (optimización)
-    let endpoints: string[] = []
-    if (params?.tipo_empresa && params.tipo_empresa !== 'all') {
-      if (params.tipo_empresa === 'producto') {
-        endpoints = [`/empresas/empresas-producto/${query ? `?${query}` : ''}`]
-      } else if (params.tipo_empresa === 'servicio') {
-        endpoints = [`/empresas/empresas-servicio/${query ? `?${query}` : ''}`]
-      } else if (params.tipo_empresa === 'mixta') {
-        endpoints = [`/empresas/empresas-mixta/${query ? `?${query}` : ''}`]
-      }
+async getEmpresas(params?: {
+  search?: string;
+  estado?: string;
+  tipo_empresa?: string;
+  exporta?: string;
+  importa?: string;
+  departamento?: string;
+  rubro?: string;
+  sub_rubro?: string;
+  categoria_matriz?: string;
+  promo2idiomas?: string;
+  certificadopyme?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<any> {
+  const queryParams = new URLSearchParams();
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.tipo_empresa) queryParams.append('tipo_empresa_valor', params.tipo_empresa);
+  if (params?.exporta) queryParams.append('exporta', params.exporta);
+  if (params?.importa) queryParams.append('importa', params.importa);
+  if (params?.departamento) queryParams.append('departamento', params.departamento);
+  if (params?.rubro) queryParams.append('id_rubro', params.rubro);
+  if (params?.sub_rubro) queryParams.append('sub_rubro', params.sub_rubro);
+  if (params?.categoria_matriz) queryParams.append('categoria_matriz', params.categoria_matriz);
+  if (params?.promo2idiomas) queryParams.append('promo2idiomas', params.promo2idiomas);
+  if (params?.certificadopyme) queryParams.append('certificadopyme', params.certificadopyme);
+  
+  // NO enviar paginación al backend cuando consultamos múltiples endpoints
+  // La paginación la haremos en el frontend después de combinar resultados
+  
+  const query = queryParams.toString();
+  
+  let endpoints: string[] = []
+  if (params?.tipo_empresa && params.tipo_empresa !== 'all') {
+    if (params.tipo_empresa === 'producto') {
+      endpoints = [`/empresas/empresas-producto/${query ? `?${query}` : ''}`]
+    } else if (params.tipo_empresa === 'servicio') {
+      endpoints = [`/empresas/empresas-servicio/${query ? `?${query}` : ''}`]
+    } else if (params.tipo_empresa === 'mixta') {
+      endpoints = [`/empresas/empresas-mixta/${query ? `?${query}` : ''}`]
     }
-    
-    // Si no hay filtro de tipo o no se especificó, obtener todos los tipos
-    if (endpoints.length === 0) {
-      endpoints = [
-        `/empresas/empresas-producto/${query ? `?${query}` : ''}`,
-        `/empresas/empresas-servicio/${query ? `?${query}` : ''}`,
-        `/empresas/empresas-mixta/${query ? `?${query}` : ''}`,
-      ]
-    }
-    
-    // Limpiar endpoints: remover la barra final si no hay query params
-    endpoints = endpoints.map(ep => ep.replace(/\/$/, ''))
-    
-    // Obtener empresas con manejo de errores
-    const resultados = await Promise.allSettled(
-      endpoints.map(endpoint => this.get<any>(endpoint))
-    );
-    
-    // Procesar resultados exitosos
-    const allResults = resultados
-      .filter(r => r.status === 'fulfilled')
-      .map(r => (r as PromiseFulfilledResult<any>).value)
-    
-    // Combinar resultados
-    const allEmpresas = allResults.flatMap(result => 
-      result.results || (Array.isArray(result) ? result : [])
-    );
-    
-    // Si hay paginación, calcular totales
-    const total = allResults.reduce((sum, result) => 
-      sum + (result.count || (Array.isArray(result) ? result.length : 0)), 0
-    );
-    
-    return {
-      results: allEmpresas,
-      count: total,
-    };
   }
+  
+  if (endpoints.length === 0) {
+    endpoints = [
+      `/empresas/empresas-producto/${query ? `?${query}` : ''}`,
+      `/empresas/empresas-servicio/${query ? `?${query}` : ''}`,
+      `/empresas/empresas-mixta/${query ? `?${query}` : ''}`,
+    ]
+  }
+  
+  endpoints = endpoints.map(ep => ep.replace(/\/$/, ''))
+  
+  const resultados = await Promise.allSettled(
+    endpoints.map(endpoint => this.get<any>(endpoint))
+  );
+  
+  const allResults = resultados
+    .filter(r => r.status === 'fulfilled')
+    .map(r => (r as PromiseFulfilledResult<any>).value)
+  
+  // Combinar TODOS los resultados
+  const allEmpresas = allResults.flatMap(result => 
+    result.results || (Array.isArray(result) ? result : [])
+  );
+  
+  const total = allEmpresas.length;
+  
+  // APLICAR PAGINACIÓN EN EL FRONTEND
+  const page = params?.page || 1;
+  const pageSize = params?.page_size || 10;
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedEmpresas = allEmpresas.slice(startIndex, endIndex);
+  
+  console.log('[API] Total empresas:', total);
+  console.log('[API] Página:', page, 'Tamaño:', pageSize);
+  console.log('[API] Mostrando empresas desde', startIndex, 'hasta', endIndex);
+  console.log('[API] Empresas en esta página:', paginatedEmpresas.length);
+  
+  return {
+    results: paginatedEmpresas,
+    count: total,
+  };
+}
 
   // Obtener una empresa por ID (sin importar tipo)
   async getEmpresaById(id: number): Promise<any> {

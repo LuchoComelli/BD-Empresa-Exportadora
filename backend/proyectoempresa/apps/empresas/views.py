@@ -142,14 +142,35 @@ def export_empresas_pdf(request):
     
     # Obtener filtros
     tipo = request.GET.get('tipo', 'producto')
-    campos = request.GET.getlist('campos', [])
+    # CAMBIO: Ya no usar campos del request, incluir TODOS automáticamente
+    campos = [
+        'razon_social', 'nombre_fantasia', 'cuit_cuil', 'tipo_sociedad',
+        'direccion', 'departamento', 'municipio', 'localidad',
+        'telefono', 'correo', 'sitioweb',
+        'contacto_principal', 'rubro', 'tipo_empresa',
+        'exporta', 'destinoexporta', 'tipoexporta',
+        'importa', 'frecuenciaimporta',
+        'certificadopyme', 'certificacionesbool', 'certificaciones',
+        'capacidadproductiva', 'promo2idiomas', 'idiomas_trabaja',
+        'participoferianacional', 'participoferiainternacional',
+        'categoria_matriz', 'puntaje'
+    ]
     
     if tipo == 'producto':
-        empresas = Empresaproducto.objects.all()
+        empresas = Empresaproducto.objects.select_related(
+            'departamento', 'municipio', 'localidad', 
+            'id_rubro', 'tipo_empresa'
+        ).prefetch_related('clasificaciones_exportador').all()
     elif tipo == 'servicio':
-        empresas = Empresaservicio.objects.all()
+        empresas = Empresaservicio.objects.select_related(
+            'departamento', 'municipio', 'localidad',
+            'id_rubro', 'tipo_empresa'
+        ).prefetch_related('clasificaciones_exportador').all()
     else:
-        empresas = EmpresaMixta.objects.all()
+        empresas = EmpresaMixta.objects.select_related(
+            'departamento', 'municipio', 'localidad',
+            'id_rubro', 'tipo_empresa'
+        ).prefetch_related('clasificaciones_exportador').all()
     
     # Generar PDF
     pdf_response = generate_empresas_pdf(empresas, campos, tipo)

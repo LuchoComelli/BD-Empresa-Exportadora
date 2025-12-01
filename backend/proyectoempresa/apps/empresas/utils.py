@@ -1,9 +1,9 @@
 from django.http import HttpResponse
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter, A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.lib.units import inch
+from reportlab.lib.units import inch, cm
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import datetime
 from io import BytesIO
@@ -22,6 +22,34 @@ COLOR_GRIS_CLARO = colors.HexColor('#F3F4F6')  # Gris claro
 COLOR_BLANCO = colors.white
 COLOR_NEGRO = colors.black
 
+def normalize_text(text):
+    """
+    Normaliza texto a formato Title Case (solo iniciales en mayúscula)
+    """
+    if not text or text == '-':
+        return '-'
+    
+    # Palabras que deben permanecer en minúsculas
+    lowercase_words = ['de', 'del', 'la', 'el', 'los', 'las', 'y', 'e', 'o', 'u']
+    
+    # Siglas que deben permanecer en mayúsculas
+    siglas = ['SA', 'SRL', 'SH', 'CUIT', 'CUIL', 'CEO', 'CFO', 'CTO']
+    
+    words = text.lower().split()
+    normalized_words = []
+    
+    for i, word in enumerate(words):
+        if word.upper() in siglas:
+            normalized_words.append(word.upper())
+        elif i == 0:
+            normalized_words.append(word.capitalize())
+        elif word in lowercase_words:
+            normalized_words.append(word)
+        else:
+            normalized_words.append(word.capitalize())
+    
+    return ' '.join(normalized_words)
+
 def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
     """
     Generar PDF con empresas filtradas usando la identidad visual institucional
@@ -29,49 +57,49 @@ def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, 
-        pagesize=A4,
-        rightMargin=0.75*inch,
-        leftMargin=0.75*inch,
-        topMargin=1*inch,
-        bottomMargin=0.75*inch
+        pagesize=landscape(A4),
+        rightMargin=1*cm,
+        leftMargin=1*cm,
+        topMargin=1.5*cm,
+        bottomMargin=1*cm
     )
     story = []
     
     # Estilos personalizados
     styles = getSampleStyleSheet()
     
-    # Estilo para el header institucional
-    header_style = ParagraphStyle(
-        'HeaderStyle',
-        parent=styles['Normal'],
-        fontSize=14,
-        textColor=COLOR_AZUL_PRINCIPAL,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        spaceAfter=12
-    )
-    
-    # Estilo para el título
+   # Estilo para título
     title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=COLOR_AZUL_PRINCIPAL,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        spaceAfter=20
-    )
-    
-    # Estilo para subtítulos
+    'TitleStyle',
+    parent=styles['Heading1'],
+    fontSize=10,  # Mismo tamaño
+    textColor=colors.HexColor('#222A59'),
+    spaceAfter=12,
+    alignment=TA_CENTER,
+    fontName='Helvetica-Bold'
+)
+
+# Estilo para subtítulos
     subtitle_style = ParagraphStyle(
-        'SubtitleStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=COLOR_GRIS_NEUTRO,
-        fontName='Helvetica',
-        alignment=TA_CENTER,
-        spaceAfter=15
-    )
+    'SubtitleStyle',
+    parent=styles['Normal'],
+    fontSize=10,  # Mismo tamaño
+    textColor=colors.HexColor('#6B7280'),
+    spaceAfter=12,
+    alignment=TA_CENTER,
+    fontName='Helvetica'
+)
+
+# Estilo para encabezado
+    header_style = ParagraphStyle(
+    'HeaderStyle',
+    parent=styles['Normal'],
+    fontSize=10,  # Mismo tamaño
+    textColor=colors.HexColor('#222A59'),
+    alignment=TA_CENTER,
+    fontName='Helvetica-Bold',
+    spaceAfter=6
+)
     
     # Header institucional
     header_text = Paragraph(
@@ -83,7 +111,7 @@ def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
     
     # Línea decorativa (usando tabla como workaround)
     line_data = [['']]
-    line_table = Table(line_data, colWidths=[7*inch])
+    line_table = Table(line_data, colWidths=[27*cm])
     line_table.setStyle(TableStyle([
         ('LINEBELOW', (0, 0), (-1, -1), 2, COLOR_VERDE_INSTITUCIONAL),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
@@ -107,37 +135,147 @@ def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
     data = []
     
     # Encabezados
-    headers = ['Razón Social', 'CUIT', 'Departamento', 'Teléfono', 'Email']
-    if 'exporta' in campos_seleccionados:
-        headers.append('Exporta')
-    if 'importa' in campos_seleccionados:
-        headers.append('Importa')
-    if 'certificadopyme' in campos_seleccionados:
-        headers.append('Certificado MiPYME')
+    headers = [
+    'Razón Social', 'Nombre Fantasía', 'CUIT', 'Tipo Sociedad',
+    'Dirección', 'Departamento', 
+    'Teléfono', 'Email', 'Sitio Web',
+    'Contacto Principal', 'Cargo',
+    'Rubro', 'Tipo Empresa'
+]
+    if 'exporta' in campos_seleccionados or True:  # Mostrar siempre
+        headers.extend(['Exporta', 'Destino Export.', 'Tipo Export.'])
+    if 'importa' in campos_seleccionados or True:  # Mostrar siempre
+        headers.extend(['Importa', 'Frecuencia Import.'])
+    if 'certificadopyme' in campos_seleccionados or True:  # Mostrar siempre
+        headers.extend(['Certif. MiPYME', 'Certif. Internac.', 'Detalle Certif.'])
+
+        headers.extend([
+            'Capacidad Prod.', 'Material 2+ Idiomas', 'Idiomas',
+            'Ferias Nac.', 'Ferias Intern.', 'Categoría Matriz'
+])
     
     data.append(headers)
     
     # Datos de las empresas
+    # Datos de las empresas
     for empresa in empresas:
+        # Obtener la matriz de clasificación si existe
+        try:
+            matriz = empresa.clasificaciones_exportador.first()
+        except:
+            matriz = None
+    
         row = [
-            empresa.razon_social,
-            empresa.cuit_cuil,
-            empresa.departamento.nomdpto if empresa.departamento else '',
+            # Datos básicos
+            Paragraph(empresa.razon_social or '', styles['Normal']),
+            Paragraph(empresa.nombre_fantasia or '', styles['Normal']),
+            empresa.cuit_cuil or '',
+            empresa.tipo_sociedad or '',
+            Paragraph(empresa.direccion or '', styles['Normal']),
+            empresa.departamento.nombre if empresa.departamento else '',
             empresa.telefono or '',
             empresa.correo or '',
+            Paragraph(empresa.sitioweb or '', styles['Normal']),
+            
+            # Contacto principal
+            Paragraph(empresa.contacto_principal_nombre or '', styles['Normal']),
+            empresa.contacto_principal_cargo or '',
+            empresa.contacto_principal_email or '',
+            
+            # Rubro y tipo
+            empresa.id_rubro.nombre if empresa.id_rubro else '',
+            empresa.tipo_empresa.nombre if empresa.tipo_empresa else '',
         ]
         
-        if 'exporta' in campos_seleccionados:
-            row.append('Sí' if empresa.exporta else 'No')
-        if 'importa' in campos_seleccionados:
-            row.append('Sí' if empresa.importa else 'No')
-        if 'certificadopyme' in campos_seleccionados:
-            row.append('Sí' if empresa.certificadopyme else 'No')
+        # Exportación (IMPORTANTE: Debe estar INDENTADO dentro del for)
+        if 'exporta' in campos_seleccionados or True:
+            row.extend([
+                empresa.exporta or 'No',
+                Paragraph(empresa.destinoexporta or '', styles['Normal']),
+                empresa.tipoexporta or '',
+            ])
         
-        data.append(row)
+        # Importación (IMPORTANTE: Debe estar INDENTADO dentro del for)
+        if 'importa' in campos_seleccionados or True:
+            row.extend([
+                'Sí' if empresa.importa else 'No',
+                empresa.frecuenciaimporta or '',
+            ])
+        
+        # Certificaciones (IMPORTANTE: Debe estar INDENTADO dentro del for)
+        if 'certificadopyme' in campos_seleccionados or True:
+            row.extend([
+                'Sí' if empresa.certificadopyme else 'No',
+                'Sí' if empresa.certificacionesbool else 'No',
+                Paragraph(empresa.certificaciones or '', styles['Normal']),
+            ])
+        
+        # Capacidad, idiomas, ferias (IMPORTANTE: Debe estar INDENTADO dentro del for)
+        capacidad_str = f"{empresa.capacidadproductiva} {empresa.tiempocapacidad}" if empresa.capacidadproductiva else ''
+        row.extend([
+            capacidad_str,
+            'Sí' if empresa.promo2idiomas else 'No',
+            Paragraph(empresa.idiomas_trabaja or '', styles['Normal']),
+            'Sí' if empresa.participoferianacional else 'No',
+            'Sí' if empresa.participoferiainternacional else 'No',
+            matriz.get_categoria_display() if matriz else '',
+            str(matriz.puntaje_total) if matriz else '',
+        ])
+        
+        data.append(row)  # ← Esta línea DEBE estar dentro del for
+
+        # Calcular anchos de columna según campos seleccionados
+    num_columnas = len(headers)
+    ancho_disponible = 27*cm  # Ancho disponible en landscape A4
+    
+    # Distribuir anchos inteligentemente
+    if num_columnas >= 25:  # Ahora tenemos ~30 columnas
+        col_widths = [
+        # Básicos
+        3*cm,  # Razón Social
+        2*cm,  # Nombre Fantasía
+        2*cm,  # CUIT
+        1.5*cm,  # Tipo Sociedad
+        2.5*cm,  # Dirección
+        1.8*cm,  # Departamento
+        1.5*cm,  # Teléfono
+        2*cm,  # Email
+        2*cm,  # Sitio Web
+        # Contacto
+        2*cm,  # Contacto Principal
+        1.5*cm,  # Cargo
+        # Rubro
+        1.8*cm,  # Rubro
+        1.5*cm,  # Tipo Empresa
+        # Exportación
+        1.5*cm,  # Exporta
+        2*cm,  # Destino
+        # Importación
+        1.2*cm,  # Importa
+        1.5*cm,  # Frecuencia
+        # Certificaciones
+        1.2*cm,  # Certif MiPYME
+        1.2*cm,  # Certif Internac
+        2*cm,  # Detalle Certif
+        # Otros
+        1.8*cm,  # Capacidad
+        1.2*cm,  # Material 2+ idiomas
+        1.5*cm,  # Idiomas
+        1*cm,  # Ferias Nac
+        1*cm,  # Ferias Intern
+        1.5*cm,  # Categoría
+    ]
+    # Ajustar si no suma exactamente 27cm
+    total_ancho = sum(col_widths)
+    if total_ancho != ancho_disponible:
+        factor = ancho_disponible / total_ancho
+        col_widths = [w * factor for w in col_widths]
+    else:
+        # Fallback: distribuir equitativamente
+        col_widths = [ancho_disponible/num_columnas] * num_columnas
     
     # Crear tabla con estilos institucionales
-    table = Table(data, repeatRows=1)  # Repetir encabezado en cada página
+    table = Table(data, colWidths=col_widths, repeatRows=1)
     
     # Estilos de la tabla
     table_style = [
@@ -152,7 +290,7 @@ def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
         # Filas alternadas
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [COLOR_BLANCO, COLOR_GRIS_CLARO]),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('GRID', (0, 0), (-1, -1), 1, COLOR_GRIS_NEUTRO),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 1), (-1, -1), 8),
@@ -197,44 +335,46 @@ def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
     return response
 
 
-def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empresas_mixta, campos_seleccionados):
+def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empresas_mixta, campos_seleccionados=None):
     """
-    Generar PDF con empresas aprobadas (producto, servicio, mixta) usando identidad visual institucional
+    Genera un PDF con todas las empresas aprobadas, optimizado para orientación landscape
     """
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=A4,
-        rightMargin=0.75*inch,
-        leftMargin=0.75*inch,
-        topMargin=1*inch,
-        bottomMargin=0.75*inch
-    )
-    story = []
+    from django.http import HttpResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from io import BytesIO
+    from datetime import datetime
     
-    # Estilos personalizados
+    # Buffer para el PDF
+    buffer = BytesIO()
+    
+    # CAMBIO CRÍTICO: Usar orientación LANDSCAPE (horizontal) para más espacio
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),  # Orientación horizontal
+        rightMargin=1*cm,
+        leftMargin=1*cm,
+        topMargin=1.5*cm,
+        bottomMargin=1.5*cm,
+        title='Reporte de Empresas Aprobadas'
+    )
+    
+    # Estilos
     styles = getSampleStyleSheet()
     
-    # Estilo para el header institucional
-    header_style = ParagraphStyle(
-        'HeaderStyle',
-        parent=styles['Normal'],
-        fontSize=14,
-        textColor=COLOR_AZUL_PRINCIPAL,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        spaceAfter=12
-    )
-    
-    # Estilo para el título
+    # Estilo para título
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
         fontSize=18,
-        textColor=COLOR_AZUL_PRINCIPAL,
-        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#222A59'),
+        spaceAfter=12,
         alignment=TA_CENTER,
-        spaceAfter=20
+        fontName='Helvetica-Bold'
     )
     
     # Estilo para subtítulos
@@ -242,41 +382,65 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
         'SubtitleStyle',
         parent=styles['Normal'],
         fontSize=10,
-        textColor=COLOR_GRIS_NEUTRO,
-        fontName='Helvetica',
-        alignment=TA_CENTER,
-        spaceAfter=15
+        textColor=colors.HexColor('#6B7280'),
+        spaceAfter=12,
+        alignment=TA_CENTER
     )
     
-    # Header institucional
+    # Estilo para encabezado
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=14,
+        textColor=colors.HexColor('#222A59'),
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold',
+        spaceAfter=6
+    )
+    
+    # Estilo para footer
+    footer_style = ParagraphStyle(
+        'FooterStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#6B7280'),
+        alignment=TA_CENTER
+    )
+    
+    # Story
+    story = []
+    
+    # Encabezado institucional
     header_text = Paragraph(
-        "Dirección de Intercambio Comercial Internacional y Regional<br/>"
-        "Provincia de Catamarca",
+        "Dirección de Intercambio Comercial Internacional y Regional<br/>Provincia de Catamarca",
         header_style
     )
     story.append(header_text)
+    story.append(Spacer(1, 0.3*cm))
     
-    # Línea decorativa (usando tabla como workaround)
-    line_data = [['']]
-    line_table = Table(line_data, colWidths=[7*inch])
-    line_table.setStyle(TableStyle([
-        ('LINEBELOW', (0, 0), (-1, -1), 2, COLOR_VERDE_INSTITUCIONAL),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    story.append(line_table)
-    story.append(Spacer(1, 0.2*inch))
-    
-    # Título del reporte
+    # Título
     title = Paragraph("Reporte de Empresas Aprobadas", title_style)
     story.append(title)
     
     # Fecha de generación
-    fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
+    fecha = datetime.now().strftime('%d/%m/%Y %H:%M')
     fecha_text = Paragraph(f"Generado el: {fecha}", subtitle_style)
     story.append(fecha_text)
+    story.append(Spacer(1, 0.5*cm))
     
-    story.append(Spacer(1, 0.3*inch))
+    # SECCIÓN 1: INFORMACIÓN BÁSICA
+    story.append(Paragraph("Información Básica de Empresas", title_style))
+    story.append(Spacer(1, 0.3*cm))
+    
+    headers_basico = [
+        'Tipo',
+        'Razón Social',
+        'Nombre Fantasía',
+        'CUIT',
+        'Tipo Sociedad',
+        'Dirección',
+        'Departamento',
+    ]
     
     # Combinar todas las empresas
     todas_empresas = []
@@ -287,78 +451,168 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
     for empresa in empresas_mixta:
         todas_empresas.append(('Mixta', empresa))
     
-    # Datos de la tabla
-    data = []
+    todas_empresas.sort(key=lambda x: (x[0], x[1].razon_social))
     
-    # Encabezados
-    headers = ['Tipo', 'Razón Social', 'CUIT', 'Departamento', 'Teléfono', 'Email']
-    if 'exporta' in campos_seleccionados:
-        headers.append('Exporta')
-    if 'importa' in campos_seleccionados:
-        headers.append('Importa')
-    if 'certificadopyme' in campos_seleccionados:
-        headers.append('Certificado MiPYME')
-    
-    data.append(headers)
-    
-    # Datos de las empresas
+    # Tabla 1: Datos Básicos
+    data_basico = [headers_basico]
     for tipo, empresa in todas_empresas:
         row = [
             tipo,
-            empresa.razon_social,
-            empresa.cuit_cuil,
-            empresa.departamento.nombre if empresa.departamento else '',
-            empresa.telefono or '',
-            empresa.correo or '',
+            Paragraph(normalize_text(empresa.razon_social), styles['Normal']),
+            Paragraph(normalize_text(empresa.nombre_fantasia), styles['Normal']),
+            empresa.cuit_cuil or '-',
+            empresa.tipo_sociedad if empresa.tipo_sociedad else '-',
+            Paragraph(normalize_text(empresa.direccion), styles['Normal']),
+            normalize_text(empresa.departamento.nombre) if empresa.departamento else '-',
         ]
-        
-        if 'exporta' in campos_seleccionados:
-            row.append('Sí' if empresa.exporta == 'Sí' else 'No')
-        if 'importa' in campos_seleccionados:
-            row.append('Sí' if empresa.importa else 'No')
-        if 'certificadopyme' in campos_seleccionados:
-            row.append('Sí' if empresa.certificadopyme else 'No')
-        
-        data.append(row)
+        data_basico.append(row)
     
-    # Crear tabla con estilos institucionales
-    table = Table(data, repeatRows=1)  # Repetir encabezado en cada página
+    ancho_disponible = landscape(A4)[0] - 2*cm
+    col_widths_basico = [
+        ancho_disponible * 0.07,  # Tipo
+        ancho_disponible * 0.18,  # Razón Social
+        ancho_disponible * 0.15,  # Nombre Fantasía
+        ancho_disponible * 0.10,  # CUIT
+        ancho_disponible * 0.10,  # Tipo Sociedad
+        ancho_disponible * 0.15,  # Dirección
+        ancho_disponible * 0.10,  # Departamento
+    ]
     
-    # Estilos de la tabla
-    table_style = [
-        # Encabezado
-        ('BACKGROUND', (0, 0), (-1, 0), COLOR_AZUL_PRINCIPAL),
-        ('TEXTCOLOR', (0, 0), (-1, 0), COLOR_BLANCO),
+    table_basico = Table(data_basico, colWidths=col_widths_basico, repeatRows=1)
+    table_basico.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('TOPPADDING', (0, 0), (-1, 0), 12),
-        # Filas alternadas
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [COLOR_BLANCO, COLOR_GRIS_CLARO]),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('GRID', (0, 0), (-1, -1), 1, COLOR_GRIS_NEUTRO),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 1), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+    ]))
+    story.append(table_basico)
+    
+    # NUEVA PÁGINA - SECCIÓN 2: CONTACTO
+    story.append(PageBreak())
+    story.append(Paragraph("Información de Contacto", title_style))
+    story.append(Spacer(1, 0.3*cm))
+    
+    headers_contacto = [
+        'Razón Social',
+        'Teléfono',
+        'Email',
+        'Sitio Web',
+        'Contacto Principal',
+        'Cargo'
     ]
     
-    table.setStyle(TableStyle(table_style))
+    data_contacto = [headers_contacto]
+    for tipo, empresa in todas_empresas:
+        row = [
+            Paragraph(normalize_text(empresa.razon_social), styles['Normal']),
+            empresa.telefono or '-',
+            Paragraph((empresa.correo or '-').lower(), styles['Normal']),  # emails en minúscula
+            Paragraph((empresa.sitioweb or '-').lower(), styles['Normal']),  # URLs en minúscula
+            Paragraph(normalize_text(empresa.contacto_principal_nombre), styles['Normal']),
+            normalize_text(empresa.contacto_principal_cargo) if empresa.contacto_principal_cargo else '-',
+            ]
+        data_contacto.append(row)
     
-    story.append(table)
+    col_widths_contacto = [
+        ancho_disponible * 0.20,  # Razón Social
+        ancho_disponible * 0.10,  # Teléfono
+        ancho_disponible * 0.15,  # Email
+        ancho_disponible * 0.15,  # Sitio Web
+        ancho_disponible * 0.15,  # Contacto
+        ancho_disponible * 0.10,  # Cargo
+    ]
     
-    # Footer con información institucional
-    story.append(Spacer(1, 0.3*inch))
-    footer_style = ParagraphStyle(
-        'FooterStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        textColor=COLOR_GRIS_NEUTRO,
-        fontName='Helvetica',
-        alignment=TA_CENTER,
-        spaceBefore=10
-    )
+    table_contacto = Table(data_contacto, colWidths=col_widths_contacto, repeatRows=1)
+    table_contacto.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(table_contacto)
+    
+    # NUEVA PÁGINA - SECCIÓN 3: COMERCIAL
+    story.append(PageBreak())
+    story.append(Paragraph("Información Comercial y Clasificación", title_style))
+    story.append(Spacer(1, 0.3*cm))
+    
+    headers_comercial = [
+    'Razón Social',
+    'Rubro',
+    'Tipo Empresa',
+    'Exporta',
+    'Destino Export.',
+    'Importa',
+    'Certif. MiPYME',
+    'Categoría',
+]
+    
+    data_comercial = [headers_comercial]
+    for tipo, empresa in todas_empresas:
+        try:
+            matriz = empresa.clasificaciones_exportador.first()
+            categoria = matriz.get_categoria_display() if matriz else 'N/A'
+        except:
+            categoria = 'N/A'
+        
+        row = [
+    Paragraph(normalize_text(empresa.razon_social), styles['Normal']),
+    Paragraph(normalize_text(empresa.id_rubro.nombre) if empresa.id_rubro else '-', styles['Normal']),
+    normalize_text(empresa.tipo_empresa.nombre) if empresa.tipo_empresa else '-',
+    'Sí' if empresa.exporta == 'Sí' else 'No',
+    Paragraph(normalize_text(empresa.destinoexporta) if empresa.destinoexporta else '-', styles['Normal']),
+    'Sí' if empresa.importa else 'No',
+    'Sí' if empresa.certificadopyme else 'No',
+    categoria,
+]
+        data_comercial.append(row)
+    
+    col_widths_comercial = [
+    ancho_disponible * 0.20,  # Razón Social
+    ancho_disponible * 0.15,  # Rubro
+    ancho_disponible * 0.08,  # Tipo Empresa
+    ancho_disponible * 0.06,  # Exporta
+    ancho_disponible * 0.15,  # Destino
+    ancho_disponible * 0.06,  # Importa
+    ancho_disponible * 0.06,  # Certif
+    ancho_disponible * 0.10,  # Categoría
+]
+    
+    table_comercial = Table(data_comercial, colWidths=col_widths_comercial, repeatRows=1)
+    table_comercial.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#222A59')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#6B7280')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(table_comercial)
+    
+    # Footer
+    story.append(Spacer(1, 0.3*cm))
     footer_text = Paragraph(
         "Dirección de Intercambio Comercial Internacional y Regional - "
         "San Martín 320, San Fernando del Valle de Catamarca - "
@@ -376,7 +630,7 @@ def generate_empresas_aprobadas_pdf(empresas_producto, empresas_servicio, empres
     
     # Crear respuesta HTTP
     response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="empresas_aprobadas_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="empresas_aprobadas_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf"'
     response.write(pdf)
     
     return response

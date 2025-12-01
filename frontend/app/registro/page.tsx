@@ -97,6 +97,7 @@ export default function RegistroPage() {
     certificadoMiPyme: "",
     exporta: "",
     destinoExportacion: "",
+    interesExportar: "",
     materialPromocion: "",
     certificaciones: "",
     cuit: "",
@@ -110,6 +111,13 @@ export default function RegistroPage() {
     instagram: "",
     facebook: "",
     linkedin: "",
+  })
+
+  // Estados para coordenadas del mapa
+  const [mapCenter, setMapCenter] = useState<{ lat: number | null; lng: number | null; zoom: number }>({
+    lat: -28.2, // Centro de Provincia de Catamarca por defecto
+  lng: -66.0,
+  zoom: 8
   })
 
   const [contactosSecundarios, setContactosSecundarios] = useState<ContactoSecundario[]>([])
@@ -183,6 +191,14 @@ useEffect(() => {
       const data = await api.getMunicipiosPorDepartamento(formData.departamento)
       const municipiosArray = Array.isArray(data) ? data : (data.results || data)
       setMunicipios(municipiosArray || [])
+      const deptoSeleccionado = departamentos?.find((d: any) => d.id === formData.departamento)
+      if (deptoSeleccionado && deptoSeleccionado.centroide_lat && deptoSeleccionado.centroide_lon) {
+        setMapCenter({
+          lat: parseFloat(deptoSeleccionado.centroide_lat),
+          lng: parseFloat(deptoSeleccionado.centroide_lon),
+          zoom: 11 // Zoom medio para departamento
+        })
+      }
       
       // Solo resetear si el municipio actual no pertenece al nuevo departamento
       setFormData(prev => {
@@ -199,6 +215,14 @@ useEffect(() => {
           const localidadesData = await api.getLocalidadesPorDepartamento(formData.departamento)
           const localidadesArray = Array.isArray(localidadesData) ? localidadesData : (localidadesData.results || localidadesData)
           setLocalidades(localidadesArray || [])
+          const localidadSeleccionada = localidadesArray?.find((l: any) => l.id === formData.localidad)
+      if (localidadSeleccionada && localidadSeleccionada.centroide_lat && localidadSeleccionada.centroide_lon) {
+        setMapCenter({
+          lat: parseFloat(localidadSeleccionada.centroide_lat),
+          lng: parseFloat(localidadSeleccionada.centroide_lon),
+          zoom: 14 // Zoom cercano para localidad
+        })
+      }
         } catch (error) {
           console.error('Error cargando localidades por departamento:', error)
           setLocalidades([])
@@ -206,6 +230,14 @@ useEffect(() => {
       } else {
         setLocalidades([])
       }
+      // Resetear selección de municipio si no pertenece al departamento
+      setFormData(prev => {
+        const currentMun = municipiosArray?.find((m: any) => m.id === prev.municipio)
+        if (!currentMun) {
+          return { ...prev, municipio: "", localidad: "" }
+        }
+        return prev
+      })
     } catch (error) {
       console.error('Error cargando municipios:', error)
       setMunicipios([])
@@ -224,7 +256,6 @@ useEffect(() => {
       // Si no hay municipio pero hay departamento, las localidades ya fueron cargadas
       return
     }
-    
     try {
       setLoadingGeografia(true)
       const data = await api.getLocalidadesPorMunicipio(formData.municipio)
@@ -248,6 +279,33 @@ useEffect(() => {
   }
   loadLocalidades()
 }, [formData.municipio])
+
+// Centrar mapa cuando se selecciona un municipio
+useEffect(() => {
+  if (formData.municipio && municipios.length > 0) {
+    const municipioSeleccionado = municipios.find((m: any) => m.id === formData.municipio)
+    if (municipioSeleccionado && municipioSeleccionado.centroide_lat && municipioSeleccionado.centroide_lon) {
+      setMapCenter({
+        lat: parseFloat(municipioSeleccionado.centroide_lat),
+        lng: parseFloat(municipioSeleccionado.centroide_lon),
+        zoom: 12 // Zoom para municipio
+      })
+    }
+  }
+}, [formData.municipio, municipios])
+
+useEffect(() => {
+  if (formData.localidad && localidades.length > 0) {
+    const localidadSeleccionada = localidades.find((l: any) => l.id === formData.localidad)
+    if (localidadSeleccionada && localidadSeleccionada.centroide_lat && localidadSeleccionada.centroide_lon) {
+      setMapCenter({
+        lat: parseFloat(localidadSeleccionada.centroide_lat),
+        lng: parseFloat(localidadSeleccionada.centroide_lon),
+        zoom: 15 // Zoom cercano para localidad
+      })
+    }
+  }
+}, [formData.localidad, localidades])
 
   // Cargar rubros según el tipo de negocio
   useEffect(() => {
@@ -589,6 +647,7 @@ useEffect(() => {
         })),
         exporta: formData.exporta || null,
         destino_exportacion: formData.destinoExportacion || null,
+        interes_exportar: formData.exporta === 'no' ? (formData.interesExportar === 'si') : null,
         importa: formData.importa || null,
         tipo_importacion: formData.importa === 'si' ? 'Importación' : null,
         certificado_pyme: formData.certificadoMiPyme || null,
@@ -1050,12 +1109,12 @@ useEffect(() => {
                         <SelectValue placeholder="Selecciona el tipo de sociedad" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Sociedad Anónima">Sociedad Anónima (S.A.)</SelectItem>
-                        <SelectItem value="Sociedad de Responsabilidad Limitada">Sociedad de Responsabilidad Limitada (S.R.L.)</SelectItem>
-                        <SelectItem value="Sociedad en Comandita Simple">Sociedad en Comandita Simple (S.C.S.)</SelectItem>
-                        <SelectItem value="Sociedad en Comandita por Acciones">Sociedad en Comandita por Acciones (S.C.A.)</SelectItem>
-                        <SelectItem value="Sociedad Colectiva">Sociedad Colectiva (S.C.)</SelectItem>
-                        <SelectItem value="Asociación Empresaria">Asociación Empresaria (A.E.)</SelectItem>
+                        <SelectItem value="S.A.">Sociedad Anónima (S.A.)</SelectItem>
+                        <SelectItem value="S.R.L.">Sociedad de Responsabilidad Limitada (S.R.L.)</SelectItem>
+                        <SelectItem value="S.C.S.">Sociedad en Comandita Simple (S.C.S.)</SelectItem>
+                        <SelectItem value="S.C.A.">Sociedad en Comandita por Acciones (S.C.A.)</SelectItem>
+                        <SelectItem value="S.C.">Sociedad Colectiva (S.C.)</SelectItem>
+                        <SelectItem value="A.E.">Asociación Empresaria (A.E.)</SelectItem>
                         <SelectItem value="Monotributo">Monotributo</SelectItem>
                         <SelectItem value="Otro">Otro</SelectItem>
                       </SelectContent>
@@ -1786,9 +1845,12 @@ useEffect(() => {
                         Haz clic en el mapa o arrastra el marcador para seleccionar la ubicación de tu empresa
                       </p>
                       <LocationPicker
-                        value={formData.geolocalizacion}
-                        onChange={(coords) => setFormData(prev => ({ ...prev, geolocalizacion: coords }))}
-                      />
+  value={formData.geolocalizacion}
+  onChange={(coords) => setFormData(prev => ({ ...prev, geolocalizacion: coords }))}
+  centerLat={mapCenter.lat}
+  centerLng={mapCenter.lng}
+  zoomLevel={mapCenter.zoom}
+/>
                     </div>
                   </div>
                 </div>
@@ -1824,35 +1886,53 @@ useEffect(() => {
 
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="exporta">¿Exporta actualmente? *</Label>
-                    <Select
-                      value={formData.exporta}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, exporta: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una opción" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="si">Sí</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                        <SelectItem value="en-proceso">En proceso</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+  <Label htmlFor="exporta">¿Exporta actualmente? *</Label>
+  <Select
+    value={formData.exporta}
+    onValueChange={(value) => setFormData(prev => ({ ...prev, exporta: value }))}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="Selecciona una opción" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="si">Sí</SelectItem>
+      <SelectItem value="no">No</SelectItem>
+      <SelectItem value="en-proceso">En proceso</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
 
-                  {formData.exporta === "si" && (
-                    <div>
-                      <Label htmlFor="destinoExportacion">Destino de Exportación</Label>
-                      <Textarea
-                        id="destinoExportacion"
-                        value={formData.destinoExportacion}
-                        onChange={(e) => setFormData(prev => ({ ...prev, destinoExportacion: toUpperCase(e.target.value) }))}
-                        placeholder="PAÍSES A LOS QUE EXPORTA (SEPARADOS POR COMAS)"
-                        rows={3}
-                        className="uppercase"
-                      />
-                    </div>
-                  )}
+{formData.exporta === "si" && (
+  <div>
+    <Label htmlFor="destinoExportacion">Destino de Exportación</Label>
+    <Textarea
+      id="destinoExportacion"
+      value={formData.destinoExportacion}
+      onChange={(e) => setFormData(prev => ({ ...prev, destinoExportacion: toUpperCase(e.target.value) }))}
+      placeholder="PAÍSES A LOS QUE EXPORTA (SEPARADOS POR COMAS)"
+      rows={3}
+      className="uppercase"
+    />
+  </div>
+)}
+
+{formData.exporta === "no" && (
+  <div>
+    <Label htmlFor="interesExportar">¿Tiene interés en exportar?</Label>
+    <Select
+      value={formData.interesExportar}
+      onValueChange={(value) => setFormData(prev => ({ ...prev, interesExportar: value }))}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecciona una opción" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="si">Sí</SelectItem>
+        <SelectItem value="no">No</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+)}
 
                   <div>
                     <Label htmlFor="importa">¿Importa actualmente? *</Label>

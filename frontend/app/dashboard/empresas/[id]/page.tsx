@@ -44,6 +44,7 @@ interface Empresa {
   categoria_matriz?: string
   destinoexporta?: string
   importa?: boolean
+  interes_exportar?: boolean
   certificadopyme?: boolean
   certificaciones?: string
   promo2idiomas?: boolean
@@ -820,25 +821,57 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
       {/* Datos de exportación/importación */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label>¿Exporta?</Label>
-          {isEditing ? (
-            <Select
-              value={displayData?.exporta || ''}
-              onValueChange={(value) => setEditedData(displayData ? { ...displayData, exporta: value } : null)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Sí">Sí</SelectItem>
-                <SelectItem value="No, solo ventas nacionales">No</SelectItem>
-                <SelectItem value="En proceso">En proceso</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="mt-1 font-semibold">{displayData?.exporta || 'N/A'}</p>
-          )}
-        </div>
+  <Label>¿Exporta?</Label>
+  {isEditing ? (
+    <Select
+      value={displayData?.exporta || ''}
+      onValueChange={(value) => setEditedData(displayData ? { ...displayData, exporta: value } : null)}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecciona" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="Sí">Sí</SelectItem>
+        <SelectItem value="No, solo ventas nacionales">No</SelectItem>
+        <SelectItem value="En proceso">En proceso</SelectItem>
+      </SelectContent>
+    </Select>
+  ) : (
+    <p className="mt-1 font-semibold">{displayData?.exporta || 'N/A'}</p>
+  )}
+</div>
+
+{/* Mostrar "Interés en Exportar" solo si NO exporta */}
+{(displayData?.exporta === "No, solo ventas nacionales" || displayData?.exporta === "No") && (
+  <div>
+    <Label>¿Interés en Exportar?</Label>
+    {isEditing ? (
+      <Select
+        value={displayData?.interes_exportar ? 'si' : 'no'}
+        onValueChange={(value) => setEditedData(displayData ? { 
+          ...displayData, 
+          interes_exportar: value === 'si' 
+        } : null)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Selecciona" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="si">Sí</SelectItem>
+          <SelectItem value="no">No</SelectItem>
+        </SelectContent>
+      </Select>
+    ) : (
+      <p className="mt-1 font-semibold">
+        {displayData?.interes_exportar === true || displayData?.interes_exportar === 'true' 
+          ? 'Sí' 
+          : displayData?.interes_exportar === false || displayData?.interes_exportar === 'false'
+          ? 'No'
+          : 'N/A'}
+      </p>
+    )}
+  </div>
+)}
         <div>
           <Label>Destino de Exportación</Label>
           {isEditing ? (

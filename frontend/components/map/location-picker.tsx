@@ -7,9 +7,19 @@ import { Card } from "@/components/ui/card"
 interface LocationPickerProps {
   value: string
   onChange: (coordinates: string) => void
+  // Nuevas props para controlar el zoom automático
+  centerLat?: number | null
+  centerLng?: number | null
+  zoomLevel?: number
 }
 
-export function LocationPicker({ value, onChange }: LocationPickerProps) {
+export function LocationPicker({ 
+  value, 
+  onChange,
+  centerLat,
+  centerLng,
+  zoomLevel = 13
+}: LocationPickerProps) {
   const [mounted, setMounted] = useState(false)
   const [map, setMap] = useState<any>(null)
   const [marker, setMarker] = useState<any>(null)
@@ -24,7 +34,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         console.error('Error parsing coordinates:', error)
       }
     }
-    return { lat: -28.4696, lng: -65.7795 } // Default: Catamarca
+    return { lat: -28.2, lng: -66.0 } // Default: Centro de Provincia de Catamarca
   })
 
   useEffect(() => {
@@ -100,7 +110,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
           return
         }
 
-        const mapInstance = L.map("location-picker-map").setView([coordinates.lat, coordinates.lng], 13)
+        const mapInstance = L.map("location-picker-map").setView([coordinates.lat, coordinates.lng], 8)
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -150,7 +160,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         if (!isNaN(lat) && !isNaN(lng)) {
           marker.setLatLng([lat, lng])
           if (map) {
-            map.setView([lat, lng], 13)
+            map.panTo([lat, lng]) 
           }
         }
       } catch (error) {
@@ -158,6 +168,18 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       }
     }
   }, [value, marker, map])
+
+  // Zoom automático cuando cambian las coordenadas de centro
+  useEffect(() => {
+    if (map && centerLat !== null && centerLat !== undefined && 
+        centerLng !== null && centerLng !== undefined) {
+      // Animar el zoom hacia las nuevas coordenadas
+      map.flyTo([centerLat, centerLng], zoomLevel, {
+        duration: 1.5, // Duración de la animación en segundos
+        easeLinearity: 0.5
+      })
+    }
+  }, [centerLat, centerLng, zoomLevel, map])
 
   if (!mounted) {
     return (
