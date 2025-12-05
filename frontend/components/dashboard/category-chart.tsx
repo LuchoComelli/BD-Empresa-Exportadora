@@ -21,7 +21,7 @@ export function CategoryChart({ stats }: CategoryChartProps) {
     {
       name: "Potencial",
       cantidad: stats?.potencial_exportadora || 0,
-      fill: "#F59E0B",
+      fill: "#C0217E",
     },
     {
       name: "Etapa Inicial",

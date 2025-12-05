@@ -72,17 +72,86 @@ class PosicionArancelariaSerializer(serializers.ModelSerializer):
 class ProductoEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para productos de empresa"""
     posicion_arancelaria = serializers.SerializerMethodField()
+    codigo_arancelario_input = serializers.CharField(
+        write_only=True, 
+        required=False, 
+        allow_blank=True,
+        source='posicion_arancelaria_codigo'
+    )
     
     def get_posicion_arancelaria(self, obj):
         """Obtener la posición arancelaria del producto si existe"""
         try:
-            # Intentar obtener la posición arancelaria relacionada
-            posicion = obj.posicion_arancelaria.first() if hasattr(obj, 'posicion_arancelaria') else None
-            if posicion:
-                return PosicionArancelariaSerializer(posicion).data
+            if hasattr(obj, 'posicion_arancelaria') and obj.posicion_arancelaria:
+                return PosicionArancelariaSerializer(obj.posicion_arancelaria).data
             return None
-        except Exception:
+        except PosicionArancelaria.DoesNotExist:
             return None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo posicion_arancelaria: {str(e)}", exc_info=True)
+            return None
+    
+    def create(self, validated_data):
+        """Crear producto y su posición arancelaria si se proporciona"""
+        codigo_arancelario = validated_data.pop('posicion_arancelaria_codigo', None)
+        
+        # Crear el producto
+        producto = ProductoEmpresa.objects.create(**validated_data)
+        
+        # Crear la posición arancelaria si se proporcionó un código
+        if codigo_arancelario and codigo_arancelario.strip():
+            try:
+                PosicionArancelaria.objects.create(
+                    producto=producto,
+                    codigo_arancelario=codigo_arancelario.strip(),
+                    descripcion_arancelaria=''
+                )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error creando posición arancelaria: {str(e)}", exc_info=True)
+        
+        return producto
+    
+    def update(self, instance, validated_data):
+        """Actualizar producto y su posición arancelaria"""
+        codigo_arancelario = validated_data.pop('posicion_arancelaria_codigo', None)
+        
+        # Actualizar campos del producto
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Actualizar o crear posición arancelaria
+        if codigo_arancelario is not None:  # Permitir actualización incluso si está vacío
+            try:
+                if codigo_arancelario.strip():
+                    # Intentar obtener la posición existente
+                    try:
+                        posicion = instance.posicion_arancelaria
+                        posicion.codigo_arancelario = codigo_arancelario.strip()
+                        posicion.save()
+                    except PosicionArancelaria.DoesNotExist:
+                        # Crear nueva si no existe
+                        PosicionArancelaria.objects.create(
+                            producto=instance,
+                            codigo_arancelario=codigo_arancelario.strip(),
+                            descripcion_arancelaria=''
+                        )
+                else:
+                    # Si el código está vacío, eliminar la posición arancelaria
+                    try:
+                        instance.posicion_arancelaria.delete()
+                    except PosicionArancelaria.DoesNotExist:
+                        pass
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error actualizando posición arancelaria: {str(e)}", exc_info=True)
+        
+        return instance
     
     class Meta:
         model = ProductoEmpresa
@@ -90,7 +159,7 @@ class ProductoEmpresaSerializer(serializers.ModelSerializer):
             'id', 'empresa', 'nombre_producto', 'descripcion',
             'capacidad_productiva', 'unidad_medida', 'periodo_capacidad',
             'es_principal', 'precio_estimado', 'moneda_precio',
-            'posicion_arancelaria'
+            'posicion_arancelaria', 'codigo_arancelario_input'  # ← Agregar el campo de escritura
         ]
         read_only_fields = ['id']
 
@@ -189,7 +258,7 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
-            'tipo_empresa_nombre','tipo_empresa', 'rubro_nombre',
+            'tipo_empresa_nombre','tipo_empresa', 'rubro_nombre', 'id_subrubro',
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
@@ -231,6 +300,7 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
+    
 
     def _parse_redes(self, obj):
         """Intentar parsear el campo `redes_sociales` que puede ser JSON o texto simple."""
@@ -275,77 +345,6 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
             return self._parse_redes(obj).get('linkedin') or None
         except Exception:
             return None
-
-    def update(self, instance, validated_data):
-        import json
-        redes_updated = {}
-        for key in ('instagram', 'facebook', 'linkedin'):
-            if key in validated_data:
-                val = validated_data.pop(key)
-                if val:
-                    redes_updated[key] = val
-
-        existing = {}
-        raw = getattr(instance, 'redes_sociales', None)
-        if raw:
-            try:
-                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-            except Exception:
-                existing = {}
-
-        existing.update(redes_updated)
-        if existing:
-            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
-
-        return super().update(instance, validated_data)
-
-    def update(self, instance, validated_data):
-        import json
-        redes_updated = {}
-        for key in ('instagram', 'facebook', 'linkedin'):
-            if key in validated_data:
-                val = validated_data.pop(key)
-                if val:
-                    redes_updated[key] = val
-
-        existing = {}
-        raw = getattr(instance, 'redes_sociales', None)
-        if raw:
-            try:
-                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-            except Exception:
-                existing = {}
-
-        existing.update(redes_updated)
-        if existing:
-            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
-
-        return super().update(instance, validated_data)
-
-    def update(self, instance, validated_data):
-        """Permitir actualizar instagram/facebook/linkedin mapeándolos a `redes_sociales`."""
-        import json
-        redes_updated = {}
-        for key in ('instagram', 'facebook', 'linkedin'):
-            if key in validated_data:
-                val = validated_data.pop(key)
-                if val:
-                    redes_updated[key] = val
-
-        # Merge con las redes existentes
-        existing = {}
-        raw = getattr(instance, 'redes_sociales', None)
-        if raw:
-            try:
-                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-            except Exception:
-                existing = {}
-
-        existing.update(redes_updated)
-        if existing:
-            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
-
-        return super().update(instance, validated_data)
     
     def get_departamento_nombre(self, obj):
         """Obtener nombre del departamento"""
@@ -360,27 +359,22 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         import logging
         logger = logging.getLogger(__name__)
     
-        logger.info(f"[Localidad Debug] Empresa ID: {obj.id}")
-        logger.info(f"[Localidad Debug] Localidad field value: {obj.localidad}")
-        logger.info(f"[Localidad Debug] Localidad type: {type(obj.localidad)}")
-    
         if obj.localidad:
-            logger.info(f"[Localidad Debug] Localidad ID: {obj.localidad.id if hasattr(obj.localidad, 'id') else 'No ID'}")
-            logger.info(f"[Localidad Debug] Localidad nombre: {obj.localidad.nombre if hasattr(obj.localidad, 'nombre') else 'No nombre'}")
             return obj.localidad.nombre if obj.localidad else None
         else:
-            logger.info("[Localidad Debug] Localidad is None/empty")
             return None
     
     def get_sub_rubro_nombre(self, obj):
-        """Obtener nombre del subrubro desde la solicitud relacionada o descripción"""
+        """Obtener nombre del subrubro desde el campo directo o desde la solicitud relacionada"""
+        # Primero intentar usar el campo directo (nuevo)
+        if obj.id_subrubro:
+            return obj.id_subrubro.nombre
+    
+        # Si no existe, usar el método antiguo como fallback (compatibilidad)
         try:
-            # Buscar en solicitudes relacionadas por CUIT (normalizar para comparación)
             from apps.registro.models import SolicitudRegistro
-            # Normalizar CUIT de la empresa (sin guiones ni espacios)
             cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
-            
-            # Buscar solicitud aprobada con CUIT normalizado
+        
             solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
             solicitud = None
             for sol in solicitudes:
@@ -388,36 +382,105 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
                 if cuit_sol == cuit_empresa:
                     solicitud = sol
                     break
-            
+        
             if solicitud:
-                # Para empresas mixtas, retornar ambos subrubros
-                if obj.tipo_empresa_valor == 'mixta':
-                    sub_prod = solicitud.sub_rubro_producto or ''
-                    sub_serv = solicitud.sub_rubro_servicio or ''
-                    if sub_prod and sub_serv:
-                        return f"{sub_prod} / {sub_serv}"
-                    return sub_prod or sub_serv or None
-                else:
-                    # Para empresas de producto o servicio únicos
-                    return solicitud.sub_rubro or None
+                return solicitud.sub_rubro or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error obteniendo sub_rubro_nombre: {str(e)}", exc_info=True)
+    
         return None
     
+    def update(self, instance, validated_data):
+        """
+        Actualizar empresa incluyendo subrubro y redes sociales
+        """
+        import json
+        
+        # 1. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        # Merge con redes existentes
+        if redes_updated:
+            existing = {}
+            raw = getattr(instance, 'redes_sociales', None)
+            if raw:
+                try:
+                    existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                except Exception:
+                    existing = {}
+            
+            existing.update(redes_updated)
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+        
+        # 2. MANEJAR SUBRUBRO
+        id_subrubro = validated_data.pop('id_subrubro', None)
+        
+        # Obtener el rubro (puede ser el nuevo o el actual)
+        rubro = validated_data.get('id_rubro', instance.id_rubro)
+        
+        # Si se está cambiando el rubro, limpiar el subrubro si no pertenece al nuevo rubro
+        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
+            if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
+                instance.id_subrubro = None
+        
+        # Si se proporciona un nuevo subrubro, validar y asignar
+        if id_subrubro is not None:
+            # Validar que el subrubro pertenezca al rubro seleccionado
+            if id_subrubro.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
+                })
+            instance.id_subrubro = id_subrubro
+        
+        # 3. ACTUALIZAR OTROS CAMPOS
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
+    
     def create(self, validated_data):
-        """Crear empresa con conversión de códigos geográficos y creación automática de usuario"""
+        """
+        Crear empresa con validación de subrubro y creación automática de usuario
+        """
         from apps.core.models import Usuario, RolUsuario
         from django.db import transaction
-    
+        import json
         
-        # Si no hay id_usuario o el usuario actual es admin/staff, crear usuario automáticamente
+        # 1. EXTRAER Y VALIDAR SUBRUBRO
+        id_subrubro = validated_data.pop('id_subrubro', None)
+        rubro = validated_data.get('id_rubro')
+        
+        if id_subrubro:
+            # Validar que el subrubro pertenezca al rubro seleccionado
+            if id_subrubro.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
+                })
+        
+        # 2. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            validated_data['redes_sociales'] = json.dumps(redes_updated, ensure_ascii=False)
+        
+        # 3. CREAR USUARIO AUTOMÁTICAMENTE SI ES NECESARIO
         id_usuario = validated_data.get('id_usuario')
         contacto_email = validated_data.get('contacto_principal_email')
         cuit_cuil = validated_data.get('cuit_cuil')
         
-        # Si el usuario actual es admin/staff y hay email de contacto, crear usuario automáticamente
         request = self.context.get('request')
         if request and request.user and (request.user.is_staff or request.user.is_superuser):
             if contacto_email and cuit_cuil and (not id_usuario or id_usuario == request.user):
@@ -440,19 +503,17 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
                         }
                     )
                     
-                    # Crear o obtener usuario
+                    # Crear o actualizar usuario
                     try:
                         usuario_empresa = Usuario.objects.get(email=contacto_email)
-                        # Actualizar usuario existente
                         usuario_empresa.rol = rol_empresa
-                        usuario_empresa.set_password(cuit_cuil)  # Actualizar contraseña
+                        usuario_empresa.set_password(cuit_cuil)
                         usuario_empresa.is_active = True
                         usuario_empresa.save()
                     except Usuario.DoesNotExist:
-                        # Crear nuevo usuario
                         usuario_empresa = Usuario.objects.create_user(
                             email=contacto_email,
-                            password=cuit_cuil,  # Contraseña inicial es el CUIT
+                            password=cuit_cuil,
                             nombre=validated_data.get('contacto_principal_nombre', ''),
                             apellido=validated_data.get('contacto_principal_cargo', ''),
                             rol=rol_empresa,
@@ -462,8 +523,15 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
                     
                     validated_data['id_usuario'] = usuario_empresa
         
-        return super().create(validated_data)
-    
+        # 4. CREAR LA EMPRESA
+        empresa = Empresaproducto.objects.create(**validated_data)
+        
+        # 5. ASIGNAR SUBRUBRO SI EXISTE
+        if id_subrubro:
+            empresa.id_subrubro = id_subrubro
+            empresa.save()
+        
+        return empresa
     
     
     class Meta:
@@ -517,7 +585,7 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
-            'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre',  
+            'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre', 'id_subrubro',  
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
@@ -610,13 +678,16 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
         return obj.localidad.nombre if obj.localidad else None
     
     def get_sub_rubro_nombre(self, obj):
-        """Obtener nombre del subrubro desde la solicitud relacionada"""
+        """Obtener nombre del subrubro desde el campo directo o desde la solicitud relacionada"""
+        # Primero intentar usar el campo directo (nuevo)
+        if obj.id_subrubro:
+            return obj.id_subrubro.nombre
+    
+        # Si no existe, usar el método antiguo como fallback (compatibilidad)
         try:
             from apps.registro.models import SolicitudRegistro
-            # Normalizar CUIT de la empresa (sin guiones ni espacios)
             cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
-            
-            # Buscar solicitud aprobada con CUIT normalizado
+        
             solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
             solicitud = None
             for sol in solicitudes:
@@ -624,32 +695,104 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
                 if cuit_sol == cuit_empresa:
                     solicitud = sol
                     break
-            
+        
             if solicitud:
                 return solicitud.sub_rubro or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error obteniendo sub_rubro_nombre: {str(e)}", exc_info=True)
+    
         return None
     
+    def update(self, instance, validated_data):
+        """
+        Actualizar empresa incluyendo subrubro y redes sociales
+        """
+        import json
+        
+        # 1. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            existing = {}
+            raw = getattr(instance, 'redes_sociales', None)
+            if raw:
+                try:
+                    existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                except Exception:
+                    existing = {}
+            
+            existing.update(redes_updated)
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+        
+        # 2. MANEJAR SUBRUBRO
+        id_subrubro = validated_data.pop('id_subrubro', None)
+        rubro = validated_data.get('id_rubro', instance.id_rubro)
+        
+        # Si se cambia el rubro, limpiar el subrubro si no pertenece al nuevo rubro
+        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
+            if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
+                instance.id_subrubro = None
+        
+        # Si se proporciona un nuevo subrubro, validar y asignar
+        if id_subrubro is not None:
+            if id_subrubro.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
+                })
+            instance.id_subrubro = id_subrubro
+        
+        # 3. ACTUALIZAR OTROS CAMPOS
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
+    
     def create(self, validated_data):
-        """Crear empresa con conversión de códigos geográficos y creación automática de usuario"""
+        """
+        Crear empresa con validación de subrubro y creación automática de usuario
+        """
         from apps.core.models import Usuario, RolUsuario
         from django.db import transaction
+        import json
         
+        # 1. EXTRAER Y VALIDAR SUBRUBRO
+        id_subrubro = validated_data.pop('id_subrubro', None)
+        rubro = validated_data.get('id_rubro')
         
-        # Si no hay id_usuario o el usuario actual es admin/staff, crear usuario automáticamente
+        if id_subrubro:
+            if id_subrubro.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
+                })
+        
+        # 2. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            validated_data['redes_sociales'] = json.dumps(redes_updated, ensure_ascii=False)
+        
+        # 3. CREAR USUARIO AUTOMÁTICAMENTE
         id_usuario = validated_data.get('id_usuario')
         contacto_email = validated_data.get('contacto_principal_email')
         cuit_cuil = validated_data.get('cuit_cuil')
         
-        # Si el usuario actual es admin/staff y hay email de contacto, crear usuario automáticamente
         request = self.context.get('request')
         if request and request.user and (request.user.is_staff or request.user.is_superuser):
             if contacto_email and cuit_cuil and (not id_usuario or id_usuario == request.user):
                 with transaction.atomic():
-                    # Obtener o crear rol de Empresa
                     rol_empresa, _ = RolUsuario.objects.get_or_create(
                         nombre='Empresa',
                         defaults={
@@ -667,19 +810,16 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
                         }
                     )
                     
-                    # Crear o obtener usuario
                     try:
                         usuario_empresa = Usuario.objects.get(email=contacto_email)
-                        # Actualizar usuario existente
                         usuario_empresa.rol = rol_empresa
-                        usuario_empresa.set_password(cuit_cuil)  # Actualizar contraseña
+                        usuario_empresa.set_password(cuit_cuil)
                         usuario_empresa.is_active = True
                         usuario_empresa.save()
                     except Usuario.DoesNotExist:
-                        # Crear nuevo usuario
                         usuario_empresa = Usuario.objects.create_user(
                             email=contacto_email,
-                            password=cuit_cuil,  # Contraseña inicial es el CUIT
+                            password=cuit_cuil,
                             nombre=validated_data.get('contacto_principal_nombre', ''),
                             apellido=validated_data.get('contacto_principal_cargo', ''),
                             rol=rol_empresa,
@@ -689,7 +829,15 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
                     
                     validated_data['id_usuario'] = usuario_empresa
         
-        return super().create(validated_data)
+        # 4. CREAR LA EMPRESA
+        empresa = Empresaservicio.objects.create(**validated_data)
+        
+        # 5. ASIGNAR SUBRUBRO
+        if id_subrubro:
+            empresa.id_subrubro = id_subrubro
+            empresa.save()
+        
+        return empresa
     
     class Meta:
         model = Empresaservicio
@@ -805,7 +953,8 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
-            'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre',  # ← AGREGAR 'tipo_empresa'
+            'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre', 
+            'id_subrubro_producto', 'id_subrubro_servicio',  
             'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
             'actividades_promocion_internacional',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
@@ -849,6 +998,7 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
+
     
     def get_departamento_nombre(self, obj):
         """Obtener nombre del departamento"""
@@ -863,13 +1013,16 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
         return obj.localidad.nombre if obj.localidad else None
     
     def get_sub_rubro_nombre(self, obj):
-        """Obtener nombre del subrubro combinado (para compatibilidad)"""
+        """Obtener nombre del subrubro desde el campo directo o desde la solicitud relacionada"""
+        # Primero intentar usar el campo directo (nuevo)
+        if obj.id_subrubro:
+            return obj.id_subrubro.nombre
+    
+        # Si no existe, usar el método antiguo como fallback (compatibilidad)
         try:
             from apps.registro.models import SolicitudRegistro
-            # Normalizar CUIT de la empresa (sin guiones ni espacios)
             cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
-            
-            # Buscar solicitud aprobada con CUIT normalizado
+        
             solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
             solicitud = None
             for sol in solicitudes:
@@ -877,27 +1030,27 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
                 if cuit_sol == cuit_empresa:
                     solicitud = sol
                     break
-            
+        
             if solicitud:
-                sub_prod = solicitud.sub_rubro_producto or ''
-                sub_serv = solicitud.sub_rubro_servicio or ''
-                if sub_prod and sub_serv:
-                    return f"{sub_prod} / {sub_serv}"
-                return sub_prod or sub_serv or None
+                return solicitud.sub_rubro or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error obteniendo sub_rubro_nombre: {str(e)}", exc_info=True)
+    
         return None
     
     def get_sub_rubro_producto_nombre(self, obj):
         """Obtener nombre del subrubro de productos"""
+        # ✅ PRIMERO: Usar campo directo
+        if obj.id_subrubro_producto:
+            return obj.id_subrubro_producto.nombre
+    
+        # Fallback a solicitud
         try:
             from apps.registro.models import SolicitudRegistro
-            # Normalizar CUIT de la empresa (sin guiones ni espacios)
             cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
-            
-            # Buscar solicitud aprobada con CUIT normalizado
+        
             solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
             solicitud = None
             for sol in solicitudes:
@@ -905,23 +1058,27 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
                 if cuit_sol == cuit_empresa:
                     solicitud = sol
                     break
-            
+        
             if solicitud:
                 return solicitud.sub_rubro_producto or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error obteniendo sub_rubro_producto_nombre: {str(e)}", exc_info=True)
-        return None
     
+        return None
+
     def get_sub_rubro_servicio_nombre(self, obj):
         """Obtener nombre del subrubro de servicios"""
+        # ✅ PRIMERO: Usar campo directo
+        if obj.id_subrubro_servicio:
+            return obj.id_subrubro_servicio.nombre
+    
+            # Fallback a solicitud
         try:
             from apps.registro.models import SolicitudRegistro
-            # Normalizar CUIT de la empresa (sin guiones ni espacios)
             cuit_empresa = str(obj.cuit_cuil).replace('-', '').replace(' ', '').strip()
-            
-            # Buscar solicitud aprobada con CUIT normalizado
+        
             solicitudes = SolicitudRegistro.objects.filter(estado='aprobada')
             solicitud = None
             for sol in solicitudes:
@@ -929,13 +1086,14 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
                 if cuit_sol == cuit_empresa:
                     solicitud = sol
                     break
-            
+        
             if solicitud:
                 return solicitud.sub_rubro_servicio or None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error obteniendo sub_rubro_servicio_nombre: {str(e)}", exc_info=True)
+    
         return None
     
     def get_rubro_producto_nombre(self, obj):
@@ -1027,23 +1185,115 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
             return None
     
     
+    def update(self, instance, validated_data):
+        """
+        Actualizar empresa mixta incluyendo subrubros y redes sociales
+        """
+        import json
+        
+        # 1. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            existing = {}
+            raw = getattr(instance, 'redes_sociales', None)
+            if raw:
+                try:
+                    existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                except Exception:
+                    existing = {}
+            
+            existing.update(redes_updated)
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+        
+        # 2. MANEJAR SUBRUBROS (producto y servicio)
+        id_subrubro_producto = validated_data.pop('id_subrubro_producto', None)
+        id_subrubro_servicio = validated_data.pop('id_subrubro_servicio', None)
+        
+        rubro = validated_data.get('id_rubro', instance.id_rubro)
+        
+        # Si se cambia el rubro, limpiar subrubros que no pertenezcan al nuevo rubro
+        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
+            if instance.id_subrubro_producto and instance.id_subrubro_producto.rubro != validated_data['id_rubro']:
+                instance.id_subrubro_producto = None
+            if instance.id_subrubro_servicio and instance.id_subrubro_servicio.rubro != validated_data['id_rubro']:
+                instance.id_subrubro_servicio = None
+        
+        # Validar y asignar subrubro de productos
+        if id_subrubro_producto is not None:
+            if id_subrubro_producto.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro_producto': 'El subrubro de productos debe pertenecer al rubro seleccionado'
+                })
+            instance.id_subrubro_producto = id_subrubro_producto
+        
+        # Validar y asignar subrubro de servicios
+        if id_subrubro_servicio is not None:
+            if id_subrubro_servicio.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro_servicio': 'El subrubro de servicios debe pertenecer al rubro seleccionado'
+                })
+            instance.id_subrubro_servicio = id_subrubro_servicio
+        
+        # 3. ACTUALIZAR OTROS CAMPOS
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
+    
     def create(self, validated_data):
-        """Crear empresa con conversión de códigos geográficos y creación automática de usuario"""
+        """
+        Crear empresa mixta con validación de subrubros y creación automática de usuario
+        """
         from apps.core.models import Usuario, RolUsuario
         from django.db import transaction
+        import json
         
+        # 1. EXTRAER Y VALIDAR SUBRUBROS
+        id_subrubro_producto = validated_data.pop('id_subrubro_producto', None)
+        id_subrubro_servicio = validated_data.pop('id_subrubro_servicio', None)
+        rubro = validated_data.get('id_rubro')
         
-        # Si no hay id_usuario o el usuario actual es admin/staff, crear usuario automáticamente
+        # Validar subrubro de productos
+        if id_subrubro_producto:
+            if id_subrubro_producto.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro_producto': 'El subrubro de productos debe pertenecer al rubro seleccionado'
+                })
+        
+        # Validar subrubro de servicios
+        if id_subrubro_servicio:
+            if id_subrubro_servicio.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro_servicio': 'El subrubro de servicios debe pertenecer al rubro seleccionado'
+                })
+        
+        # 2. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            validated_data['redes_sociales'] = json.dumps(redes_updated, ensure_ascii=False)
+        
+        # 3. CREAR USUARIO AUTOMÁTICAMENTE
         id_usuario = validated_data.get('id_usuario')
         contacto_email = validated_data.get('contacto_principal_email')
         cuit_cuil = validated_data.get('cuit_cuil')
         
-        # Si el usuario actual es admin/staff y hay email de contacto, crear usuario automáticamente
         request = self.context.get('request')
         if request and request.user and (request.user.is_staff or request.user.is_superuser):
             if contacto_email and cuit_cuil and (not id_usuario or id_usuario == request.user):
                 with transaction.atomic():
-                    # Obtener o crear rol de Empresa
                     rol_empresa, _ = RolUsuario.objects.get_or_create(
                         nombre='Empresa',
                         defaults={
@@ -1061,19 +1311,16 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
                         }
                     )
                     
-                    # Crear o obtener usuario
                     try:
                         usuario_empresa = Usuario.objects.get(email=contacto_email)
-                        # Actualizar usuario existente
                         usuario_empresa.rol = rol_empresa
-                        usuario_empresa.set_password(cuit_cuil)  # Actualizar contraseña
+                        usuario_empresa.set_password(cuit_cuil)
                         usuario_empresa.is_active = True
                         usuario_empresa.save()
                     except Usuario.DoesNotExist:
-                        # Crear nuevo usuario
                         usuario_empresa = Usuario.objects.create_user(
                             email=contacto_email,
-                            password=cuit_cuil,  # Contraseña inicial es el CUIT
+                            password=cuit_cuil,
                             nombre=validated_data.get('contacto_principal_nombre', ''),
                             apellido=validated_data.get('contacto_principal_cargo', ''),
                             rol=rol_empresa,
@@ -1083,7 +1330,19 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
                     
                     validated_data['id_usuario'] = usuario_empresa
         
-        return super().create(validated_data)
+        # 4. CREAR LA EMPRESA
+        empresa = EmpresaMixta.objects.create(**validated_data)
+        
+        # 5. ASIGNAR SUBRUBROS
+        if id_subrubro_producto:
+            empresa.id_subrubro_producto = id_subrubro_producto
+        if id_subrubro_servicio:
+            empresa.id_subrubro_servicio = id_subrubro_servicio
+        
+        if id_subrubro_producto or id_subrubro_servicio:
+            empresa.save()
+        
+        return empresa
     
     class Meta:
         model = EmpresaMixta

@@ -21,7 +21,7 @@ export function getCategoriaColor(categoria: Categoria): string {
     case "Exportadora":
       return "#C3C840"
     case "Potencial Exportadora":
-      return "#F59E0B"
+      return "#C0217E"
     case "Etapa Inicial":
       return "#629BD2"
   }

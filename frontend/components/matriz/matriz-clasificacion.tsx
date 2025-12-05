@@ -46,65 +46,72 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
   }, [empresaId])
   
   const cargarMatrizExistente = async () => {
-    if (!empresaId) return
+  if (!empresaId) return
+  
+  try {
+    setLoading(true)
     
+    // Primero obtener información de la empresa
+    const empresaIdNum = parseInt(empresaId)
+    const empresaData = await api.getEmpresaById(empresaIdNum)
+    
+    setEmpresaInfo({
+      tipo_empresa: empresaData.tipo_empresa_valor || empresaData.tipo_empresa || 'producto',
+      razon_social: empresaData.razon_social || 'Empresa',
+    })
+    
+    // Intentar cargar matriz existente guardada usando la API service
     try {
-      // Primero intentar cargar matriz existente
-      setLoading(true)
+      // Usar el método GET de la API que ya maneja autenticación
+      const matrizExistente = await api.get<any>(`/empresas/matriz-clasificacion/empresa/${empresaId}/`)
       
-      // Hacer la petición directamente con fetch para manejar 404 como caso válido
-      const token = localStorage.getItem('access_token')
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'
-      const response = await fetch(
-        `${apiBaseUrl}/empresas/matriz-clasificacion/empresa/${empresaId}/`,
-        {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json',
-          },
-        }
-      )
+      console.log('[Matriz] ✅ Matriz existente encontrada:', matrizExistente)
       
-      if (response.ok) {
-        const matrizExistente = await response.json()
-        
-        if (matrizExistente) {
-          // Determinar tipo de empresa desde el campo empresa unificado
-          const tipo_empresa = matrizExistente.empresa_tipo || matrizExistente.empresa?.tipo_empresa_valor || 'producto'
-          const razon_social = matrizExistente.empresa_nombre || matrizExistente.empresa?.razon_social || 'Empresa'
-          
-          // Mapear matriz existente a criterios
-          const nuevosCriterios = criteriosIniciales.map((criterio) => {
-            const backendField = criterioToBackendField[criterio.id]
-            const puntaje = matrizExistente[backendField] || 0
-            // Calcular opción basada en el puntaje
-            const opcion = obtenerOpcionDesdePuntaje(criterio.id, puntaje)
-            return { ...criterio, puntaje, opcion }
-          })
-          
-          setCriterios(nuevosCriterios)
-          setEmpresaInfo({
-            tipo_empresa: tipo_empresa,
-            razon_social: razon_social
-          })
-          setLoading(false)
-          return
-        }
-      } else if (response.status === 404) {
-        // 404 es un caso válido: no hay matriz aún, calcular automáticamente
-        console.log('[Matriz] No se encontró matriz existente, calculando automáticamente')
-      } else {
-        // Otro error, intentar calcular de todas formas
-        console.warn('[Matriz] Error al cargar matriz:', response.status, response.statusText)
-      }
+      // Mapear matriz guardada a criterios
+      const nuevosCriterios = criteriosIniciales.map((criterio) => {
+        const backendField = criterioToBackendField[criterio.id]
+        const puntaje = matrizExistente[backendField] || 0
+        // Calcular opción basada en el puntaje
+        const opcion = obtenerOpcionDesdePuntaje(criterio.id, puntaje)
+        return { ...criterio, puntaje, opcion }
+      })
+      
+      setCriterios(nuevosCriterios)
+      toast({
+        title: "Matriz cargada",
+        description: "Se han cargado los datos guardados anteriormente",
+      })
     } catch (error: any) {
-      // Si hay un error de red u otro, calcular automáticamente
-      console.log('[Matriz] Error al cargar matriz existente, calculando automáticamente:', error?.message)
+      // Si es 404, no existe matriz guardada
+      if (error?.message?.includes('404') || error?.message?.includes('No se encontró')) {
+        console.log('[Matriz] ℹ️ No se encontró matriz guardada, calculando automáticamente')
+        toast({
+          title: "Calculando matriz",
+          description: "No hay datos guardados, calculando automáticamente...",
+        })
+        await calcularPuntajesAutomaticos()
+      } else {
+        // Otro error, mostrar advertencia pero intentar calcular
+        console.warn('[Matriz] ⚠️ Error al cargar matriz:', error)
+        toast({
+          title: "Advertencia",
+          description: "Error al cargar matriz guardada, calculando automáticamente",
+          variant: "destructive",
+        })
+        await calcularPuntajesAutomaticos()
+      }
     }
-    
-    // Si no existe matriz o hubo error, calcular automáticamente
-    await calcularPuntajesAutomaticos()
+  } catch (error: any) {
+    console.error('[Matriz] ❌ Error al cargar matriz:', error)
+    toast({
+      title: "Error",
+      description: "Error al cargar la matriz. Por favor, intenta nuevamente.",
+      variant: "destructive",
+    })
+  } finally {
+    setLoading(false)
   }
+}
   
   const obtenerOpcionDesdePuntaje = (criterioId: string, puntaje: number): string => {
     const opcionesConPuntaje = opcionesPorCriterio[criterioId] || []
@@ -113,42 +120,49 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
   }
 
   const calcularPuntajesAutomaticos = async () => {
-    if (!empresaId) return
+  if (!empresaId) return
 
-    try {
-      setLoading(true)
-      const empresaIdNum = parseInt(empresaId)
-      console.log('[Matriz] Calculando puntajes para empresa ID:', empresaIdNum)
-      const resultado = await api.calcularPuntajesMatriz(empresaIdNum)
-      console.log('[Matriz] Resultado recibido:', resultado)
-      
-      setEmpresaInfo({
-        tipo_empresa: resultado.tipo_empresa,
-        razon_social: resultado.razon_social,
-      })
+  try {
+    setLoading(true)
+    const empresaIdNum = parseInt(empresaId)
+    console.log('[Matriz] Calculando puntajes para empresa ID:', empresaIdNum)
+    const resultado = await api.calcularPuntajesMatriz(empresaIdNum)
+    console.log('[Matriz] Resultado recibido:', resultado)
+    
+    setEmpresaInfo({
+      tipo_empresa: resultado.tipo_empresa,
+      razon_social: resultado.razon_social,
+    })
 
-      // Mapear puntajes y opciones del backend a criterios del frontend
-      const nuevosCriterios = criteriosIniciales.map((criterio) => {
-        const backendField = criterioToBackendField[criterio.id]
-        const puntaje = resultado.puntajes[backendField as keyof typeof resultado.puntajes] || 0
-        const opcion = resultado.opciones?.[backendField as keyof typeof resultado.opciones] || criterio.opcion || 'No'
-        return { ...criterio, puntaje, opcion }
-      })
+    // Mapear puntajes y opciones del backend a criterios del frontend
+    const nuevosCriterios = criteriosIniciales.map((criterio) => {
+      const backendField = criterioToBackendField[criterio.id]
+      const puntaje = resultado.puntajes[backendField as keyof typeof resultado.puntajes] || 0
+      const opcion = resultado.opciones?.[backendField as keyof typeof resultado.opciones] || criterio.opcion || 'No'
+      return { ...criterio, puntaje, opcion }
+    })
 
-      setCriterios(nuevosCriterios)
-    } catch (error: any) {
-      console.error("Error calculando puntajes:", error)
-      const errorMessage = error?.message || error?.response?.data?.error || "Error desconocido"
-      console.error('[Matriz] Error completo:', error)
-      toast({
-        title: "Error al calcular puntajes",
-        description: errorMessage,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+    setCriterios(nuevosCriterios)
+    
+    toast({
+      title: "Cálculo completado",
+      description: "Los puntajes se han calculado automáticamente basándose en los datos de la empresa",
+    })
+  } catch (error: any) {
+    console.error("Error calculando puntajes:", error)
+    const errorMessage = error?.message || error?.response?.data?.error || "Error desconocido"
+    console.error('[Matriz] Error completo:', error)
+    toast({
+      title: "Error al calcular puntajes",
+      description: errorMessage,
+      variant: "destructive",
+    })
+    // Si falla el cálculo automático, inicializar con valores por defecto
+    setCriterios(criteriosIniciales)
+  } finally {
+    setLoading(false)
   }
+}
 
   const puntajeTotal = criterios.reduce((sum, criterio) => sum + criterio.puntaje, 0)
   const puntajeMaximo = criterios.reduce((sum, criterio) => sum + criterio.puntajeMaximo, 0)
@@ -195,6 +209,11 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
         certificaciones_nacionales: criterios.find((c) => c.id === "certificaciones-nacionales")?.puntaje || 0,
         certificaciones_internacionales: criterios.find((c) => c.id === "certificaciones-internacionales")?.puntaje || 0,
       }
+
+      console.log('[Matriz] Datos a guardar:', data)
+      console.log('[Matriz] Empresa ID:', empresaId)
+      console.log('[Matriz] Puntaje total calculado:', puntajeTotal)
+      console.log('[Matriz] Categoría calculada:', categoria)
 
       console.log('[Matriz] Guardando evaluación:', data)
       const resultado = await api.guardarEvaluacionMatriz(data)
@@ -266,7 +285,7 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-[#F59E0B]" />
+                  <div className="w-3 h-3 rounded-full bg-[#C0217E]" />
                   <span className="font-semibold text-foreground">Potencial Exportadora (6-11 pts)</span>
                 </div>
                 <p className="text-muted-foreground text-xs leading-relaxed">

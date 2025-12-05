@@ -28,8 +28,8 @@ from apps.empresas.models import Rubro, SubRubro
 RUBROS_DATA = [
     {
         "id": 2,
-        "nombre": "Agrícola",
-        "descripcion": "Rubro agrícola",
+        "nombre": "Agroindustrial",
+        "descripcion": "Rubro Agroindustrial",
         "subrubros": [
             {"id": 1, "nombre": "Vinos", "descripcion": ""},
             {"id": 2, "nombre": "Aceite de Oliva", "descripcion": ""},
@@ -343,6 +343,171 @@ RUBROS_DATA = [
         "descripcion": "",
         "subrubros": [
             {"id": 158, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 29: Apícola (añadido como nuevo rubro)
+    {
+        "id": 29,
+        "nombre": "Apícola",
+        "descripcion": "Producción y derivados de la apicultura",
+        "subrubros": [
+            {"id": 159, "nombre": "Miel fraccionada", "descripcion": ""},
+            {"id": 160, "nombre": "Miel a granel", "descripcion": ""},
+            {"id": 161, "nombre": "Propóleo", "descripcion": ""},
+            {"id": 162, "nombre": "Polen", "descripcion": ""},
+            {"id": 163, "nombre": "Cera", "descripcion": ""},
+            {"id": 164, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 30: Carnes y derivados
+    {
+        "id": 30,
+        "nombre": "Carnes y derivados",
+        "descripcion": "Productos cárnicos y derivados",
+        "subrubros": [
+            {"id": 165, "nombre": "Cortes vacunos", "descripcion": ""},
+            {"id": 166, "nombre": "Fiambres y embutidos", "descripcion": ""},
+            {"id": 167, "nombre": "Chacinados artesanales", "descripcion": ""},
+            {"id": 168, "nombre": "Carne de cerdo", "descripcion": ""},
+            {"id": 169, "nombre": "Carne de cabrito", "descripcion": ""},
+            {"id": 170, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 31: Cervecerías
+    {
+        "id": 31,
+        "nombre": "Cervecerías",
+        "descripcion": "Producción de cerveza artesanal e industrial",
+        "subrubros": [
+            {"id": 171, "nombre": "Cerveza artesanal", "descripcion": ""},
+            {"id": 172, "nombre": "Cerveza industrial", "descripcion": ""},
+            {"id": 173, "nombre": "Hidromiel", "descripcion": "Se usa en ferias regionales"},
+            {"id": 174, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 32: Citrícolas
+    {
+        "id": 32,
+        "nombre": "Citrícolas",
+        "descripcion": "Producción y derivados de cítricos",
+        "subrubros": [
+            {"id": 175, "nombre": "Cítricos frescos", "descripcion": ""},
+            {"id": 176, "nombre": "Jugos y pulpas", "descripcion": ""},
+            {"id": 177, "nombre": "Mermeladas cítricas", "descripcion": ""},
+            {"id": 178, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 33: Delicatessen
+    {
+        "id": 33,
+        "nombre": "Delicatessen",
+        "descripcion": "Productos gourmet y delicatessen",
+        "subrubros": [
+            {"id": 179, "nombre": "Productos gourmet", "descripcion": ""},
+            {"id": 180, "nombre": "Conservas premium", "descripcion": ""},
+            {"id": 181, "nombre": "Salsas y aderezos", "descripcion": ""},
+            {"id": 182, "nombre": "Chocolatería artesanal", "descripcion": ""},
+            {"id": 183, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 34: Especias
+    {
+        "id": 34,
+        "nombre": "Especias",
+        "descripcion": "Condimentos, especias y semillas",
+        "subrubros": [
+            {"id": 184, "nombre": "Condimentos", "descripcion": ""},
+            {"id": 185, "nombre": "Especias y semillas", "descripcion": ""},
+            {"id": 186, "nombre": "Mezclas saborizadas", "descripcion": ""},
+            {"id": 187, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 35: Frutos secos
+    {
+        "id": 35,
+        "nombre": "Frutos secos",
+        "descripcion": "Frutos secos y derivados",
+        "subrubros": [
+            {"id": 188, "nombre": "Frutos secos", "descripcion": ""},
+            {"id": 189, "nombre": "Mix saludables", "descripcion": ""},
+            {"id": 190, "nombre": "Pasta de frutos secos", "descripcion": ""},
+            {"id": 191, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 36: Olivícolas
+    {
+        "id": 36,
+        "nombre": "Olivícolas",
+        "descripcion": "Producción de aceite de oliva y derivados",
+        "subrubros": [
+            {"id": 192, "nombre": "Aceite de oliva", "descripcion": ""},
+            {"id": 193, "nombre": "Aceitunas", "descripcion": ""},
+            {"id": 194, "nombre": "Aceitunas rellenas", "descripcion": ""},
+            {"id": 195, "nombre": "Subproductos del olivo", "descripcion": "Aceites saborizados, cosmética base oliva"},
+            {"id": 196, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 37: Orfebres
+    {
+        "id": 37,
+        "nombre": "Orfebres",
+        "descripcion": "Artesanía metálica típica de Catamarca",
+        "subrubros": [
+            {"id": 197, "nombre": "Joyería artesanal", "descripcion": ""},
+            {"id": 198, "nombre": "Platería criolla", "descripcion": ""},
+            {"id": 199, "nombre": "Accesorios y ornamentos", "descripcion": ""},
+            {"id": 200, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 38: Regionales
+    {
+        "id": 38,
+        "nombre": "Regionales",
+        "descripcion": "Productos típicos regionales",
+        "subrubros": [
+            {"id": 201, "nombre": "Dulces regionales", "descripcion": ""},
+            {"id": 202, "nombre": "Alfajores artesanales", "descripcion": ""},
+            {"id": 203, "nombre": "Licores regionales", "descripcion": ""},
+            {"id": 204, "nombre": "Artesanías regionales", "descripcion": ""},
+            {"id": 205, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 39: Textil (nuevo rubro, diferente al ID 10 existente)
+    {
+        "id": 39,
+        "nombre": "Textil",
+        "descripcion": "Tejidos artesanales y textiles típicos",
+        "subrubros": [
+            {"id": 206, "nombre": "Tejidos artesanales", "descripcion": ""},
+            {"id": 207, "nombre": "Prendas de diseño", "descripcion": ""},
+            {"id": 208, "nombre": "Hilados y fibras naturales", "descripcion": ""},
+            {"id": 209, "nombre": "Accesorios textiles", "descripcion": ""},
+            {"id": 210, "nombre": "Otro", "descripcion": ""}
+        ]
+    },
+    
+    # ID 40: Vitivinícolas
+    {
+        "id": 40,
+        "nombre": "Vitivinícolas",
+        "descripcion": "Producción vitivinícola",
+        "subrubros": [
+            {"id": 211, "nombre": "Vinos finos", "descripcion": ""},
+            {"id": 212, "nombre": "Vinos artesanales", "descripcion": ""},
+            {"id": 213, "nombre": "Mosto", "descripcion": ""},
+            {"id": 214, "nombre": "Espumantes", "descripcion": ""},
+            {"id": 215, "nombre": "Otro", "descripcion": ""}
         ]
     }
 ]

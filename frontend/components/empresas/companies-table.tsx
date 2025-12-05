@@ -57,7 +57,7 @@ function getCategoryColor(category: string) {
     case "Exportadora":
       return "bg-[#C3C840] text-[#222A59]"
     case "Potencial Exportadora":
-      return "bg-[#F59E0B] text-white"
+      return "bg-[#C0217E] text-white"
     case "Etapa Inicial":
       return "bg-[#629BD2] text-white"
     default:
@@ -238,21 +238,19 @@ export function CompaniesTable({
                           </Link>
                         </Button>
                         <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`¿Estás seguro de que deseas eliminar la empresa "${empresa.razon_social}"? Esta acción no se puede deshacer.`)) {
-                              if (onDelete) {
-                                setDeletingId(empresa.id)
-                                onDelete(empresa.id)
-                                setTimeout(() => setDeletingId(null), 2000)
-                              }
-                            }
-                          }}
-                          disabled={deletingId === empresa.id}
-                          title="Eliminar"
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                        >
+  variant="ghost" 
+  size="sm"
+  onClick={() => {
+    if (onDelete) {
+      setDeletingId(empresa.id)
+      onDelete(empresa.id)
+      // No limpiar el deletingId aquí, se limpiará cuando se recargue la tabla
+    }
+  }}
+  disabled={deletingId === empresa.id}
+  title="Eliminar"
+  className="hover:bg-destructive/10 hover:text-destructive"
+>
                           {deletingId === empresa.id ? (
                             <Loader2 className="h-4 w-4 animate-spin text-destructive" />
                           ) : (

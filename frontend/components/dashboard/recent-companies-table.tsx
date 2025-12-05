@@ -23,7 +23,7 @@ function getCategoryColor(category: string) {
     case "Exportadora":
       return "bg-[#C3C840] text-[#222A59]"
     case "Potencial Exportadora":
-      return "bg-[#F59E0B] text-white"
+      return "bg-[#C0217E] text-white"
     case "Etapa Inicial":
       return "bg-[#629BD2] text-white"
     default:

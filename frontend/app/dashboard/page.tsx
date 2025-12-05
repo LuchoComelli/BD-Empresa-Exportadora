@@ -155,7 +155,7 @@ export default function DashboardPage() {
               title="Potencial Exportadora"
               value={stats.potencial_exportadora}
               icon={FileCheck}
-              color="#F59E0B"
+              color="#C0217E"
             />
             <StatsCard
               title="Etapa Inicial"

@@ -11,6 +11,16 @@ import Link from "next/link"
 import api from "@/lib/api"
 import { ExportDialog } from "@/components/empresas/export-dialog"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Empresa {
   id: number
@@ -36,6 +46,8 @@ export default function EmpresasPage() {
   const [loading, setLoading] = useState(true)
   const [selectedEmpresas, setSelectedEmpresas] = useState<number[]>([])
   const [showExportDialog, setShowExportDialog] = useState(false)
+  const [empresaAEliminar, setEmpresaAEliminar] = useState<Empresa | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: 10,
@@ -216,51 +228,61 @@ if (response.results) {
 }
 
   const handleDelete = async (id: number) => {
-    try {
-      // Buscar la empresa para obtener su tipo
-      const empresa = empresas.find(e => e.id === id)
-      if (!empresa) {
-        toast({
-          title: "Empresa no encontrada",
-          description: "No se pudo encontrar la empresa especificada",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!confirm(`¿Estás seguro de que deseas eliminar la empresa "${empresa.razon_social}"? Esta acción no se puede deshacer.`)) {
-        return
-      }
-
-      // Determinar el tipo de empresa desde los datos
-      let tipoEmpresa = empresa.tipo_empresa
-      if (!tipoEmpresa) {
-        // Intentar obtener desde la API
-        try {
-          const empresaDetalle = await api.getEmpresaById(id)
-          tipoEmpresa = empresaDetalle.tipo_empresa_valor || empresaDetalle.tipo_empresa
-        } catch (e) {
-          console.error('Error obteniendo tipo de empresa:', e)
-        }
-      }
-
-      await api.deleteEmpresa(id, tipoEmpresa)
-      toast({
-        title: "Empresa eliminada",
-        description: `La empresa "${empresa.razon_social}" ha sido eliminada exitosamente`,
-        variant: "default",
-      })
-      // Recargar la lista
-      await loadEmpresas()
-    } catch (error: any) {
-      console.error("Error deleting empresa:", error)
-      toast({
-        title: "Error al eliminar",
-        description: error.message || "Error al eliminar la empresa. Por favor, intenta nuevamente.",
-        variant: "destructive",
-      })
-    }
+  // Buscar la empresa para obtener su información
+  const empresa = empresas.find(e => e.id === id)
+  if (!empresa) {
+    toast({
+      title: "Empresa no encontrada",
+      description: "No se pudo encontrar la empresa especificada",
+      variant: "destructive",
+    })
+    return
   }
+
+  // Guardar la empresa y mostrar el diálogo de confirmación
+  setEmpresaAEliminar(empresa)
+  setShowDeleteDialog(true)
+}
+
+const confirmarEliminacion = async () => {
+  if (!empresaAEliminar) return
+
+  try {
+    // Determinar el tipo de empresa desde los datos
+    let tipoEmpresa = empresaAEliminar.tipo_empresa
+    if (!tipoEmpresa) {
+      // Intentar obtener desde la API
+      try {
+        const empresaDetalle = await api.getEmpresaById(empresaAEliminar.id)
+        tipoEmpresa = empresaDetalle.tipo_empresa_valor || empresaDetalle.tipo_empresa
+      } catch (e) {
+        console.error('Error obteniendo tipo de empresa:', e)
+      }
+    }
+
+    await api.deleteEmpresa(empresaAEliminar.id, tipoEmpresa)
+    
+    toast({
+      title: "Empresa eliminada",
+      description: `La empresa "${empresaAEliminar.razon_social}" ha sido eliminada exitosamente`,
+      variant: "default",
+    })
+    
+    // Cerrar diálogo y limpiar estado
+    setShowDeleteDialog(false)
+    setEmpresaAEliminar(null)
+    
+    // Recargar la lista
+    await loadEmpresas()
+  } catch (error: any) {
+    console.error("Error deleting empresa:", error)
+    toast({
+      title: "Error al eliminar",
+      description: error.message || "Error al eliminar la empresa. Por favor, intenta nuevamente.",
+      variant: "destructive",
+    })
+  }
+}
 
   return (
     <MainLayout>
@@ -332,6 +354,42 @@ if (response.results) {
           }}
           empresas={empresas.filter(e => selectedEmpresas.includes(e.id))}
         />
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+  <div className="space-y-2">
+    <p>
+      Estás a punto de eliminar la empresa{" "}
+      <span className="font-semibold text-foreground">
+        {empresaAEliminar?.razon_social}
+      </span>
+      .
+    </p>
+    <p className="text-destructive">
+      Esta acción no se puede deshacer y eliminará permanentemente todos los datos asociados.
+    </p>
+  </div>
+</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setEmpresaAEliminar(null)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmarEliminacion}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Eliminar empresa
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        
       </div>
     </MainLayout>
   )

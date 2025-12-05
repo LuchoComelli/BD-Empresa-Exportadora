@@ -565,6 +565,34 @@ class Empresa(TimestampedModel):
     # Relaciones
     id_usuario = models.ForeignKey('core.Usuario', on_delete=models.CASCADE, verbose_name="Usuario")
     id_rubro = models.ForeignKey(Rubro, on_delete=models.PROTECT, verbose_name="Rubro")
+    id_subrubro = models.ForeignKey(
+    SubRubro,
+    on_delete=models.PROTECT,
+    blank=True,
+    null=True,
+    verbose_name="Sub-Rubro",
+    help_text="Sub-rubro principal de la empresa (para empresas de producto o servicio único)"
+    )
+    # Para empresas mixtas
+    id_subrubro_producto = models.ForeignKey(
+    SubRubro,
+    on_delete=models.PROTECT,
+    blank=True,
+    null=True,
+    related_name='empresas_producto',
+    verbose_name="Sub-Rubro de Productos",
+    help_text="Sub-rubro para productos (solo empresas mixtas)"
+    )
+    id_subrubro_servicio = models.ForeignKey(
+    SubRubro,
+    on_delete=models.PROTECT,
+    blank=True,
+    null=True,
+    related_name='empresas_servicio',
+    verbose_name="Sub-Rubro de Servicios",
+    help_text="Sub-rubro para servicios (solo empresas mixtas)"
+    )
+
     tipo_empresa = models.ForeignKey(TipoEmpresa, on_delete=models.PROTECT, verbose_name="Tipo de Empresa")
     
     # Campo para distinguir el tipo de empresa (producto, servicio, mixta)
@@ -1084,10 +1112,10 @@ class PosicionArancelaria(models.Model):
     """
     Modelo para posiciones arancelarias de productos (UNIVERSALES - Sistema Armonizado SA)
     """
-    producto = models.ForeignKey(
+    producto = models.OneToOneField(  # ✅ DEBE SER OneToOneField
         ProductoEmpresa, 
         on_delete=models.CASCADE, 
-        related_name='posicion_arancelaria',  # ← UNA posición por producto
+        related_name='posicion_arancelaria',
         verbose_name="Producto"
     )
     codigo_arancelario = models.CharField(
@@ -1102,20 +1130,12 @@ class PosicionArancelaria(models.Model):
         verbose_name="Descripción Arancelaria"
     )
     
-    # Campos de auditoría (heredados de TimestampedModel)
-    
     class Meta:
         db_table = 'posicion_arancelaria'
         verbose_name = 'Posición Arancelaria'
         verbose_name_plural = 'Posiciones Arancelarias'
         ordering = ['codigo_arancelario']
-        # Constraint para asegurar UNA posición por producto
-        constraints = [
-            models.UniqueConstraint(
-                fields=['producto'],
-                name='unique_position_per_product'
-            )
-        ]
+        # ✅ Ya no es necesario el UniqueConstraint porque OneToOneField lo garantiza
     
     def __str__(self):
         return f"{self.codigo_arancelario} - {self.producto.nombre_producto}"

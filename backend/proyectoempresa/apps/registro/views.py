@@ -443,6 +443,62 @@ def crear_empresa_desde_solicitud(solicitud):
     if not rubro:
         raise ValueError("No se pudo obtener o crear un rubro para la empresa")
     
+    from apps.empresas.models import SubRubro
+
+    id_subrubro = None
+    id_subrubro_producto = None
+    id_subrubro_servicio = None
+
+    if solicitud.tipo_empresa == 'mixta':
+        # Para empresas mixtas, buscar subrubros de productos y servicios
+        if solicitud.sub_rubro_producto:
+            try:
+                # Buscar subrubro de productos por nombre dentro del rubro
+                id_subrubro_producto = SubRubro.objects.filter(
+                    rubro=rubro,
+                    nombre__iexact=solicitud.sub_rubro_producto,
+                    activo=True
+                ).first()
+                if not id_subrubro_producto:
+                    logger.warning(f"Subrubro de productos '{solicitud.sub_rubro_producto}' no encontrado en rubro '{rubro.nombre}'")
+            except Exception as e:
+                logger.error(f"Error al buscar subrubro de productos: {str(e)}")
+    
+        if solicitud.sub_rubro_servicio:
+            try:
+                # Para servicios, necesitamos el rubro de servicios
+                # Si la solicitud tiene rubro_servicio, buscar ese rubro primero
+                rubro_servicio = None
+                if solicitud.rubro_servicio:
+                    try:
+                        rubro_servicio = Rubro.objects.get(nombre=solicitud.rubro_servicio)
+                    except Rubro.DoesNotExist:
+                        logger.warning(f"Rubro de servicios '{solicitud.rubro_servicio}' no encontrado")
+            
+                if rubro_servicio:
+                    id_subrubro_servicio = SubRubro.objects.filter(
+                        rubro=rubro_servicio,
+                        nombre__iexact=solicitud.sub_rubro_servicio,
+                        activo=True
+                    ).first()
+                    if not id_subrubro_servicio:
+                        logger.warning(f"Subrubro de servicios '{solicitud.sub_rubro_servicio}' no encontrado en rubro '{rubro_servicio.nombre}'")
+            except Exception as e:
+                logger.error(f"Error al buscar subrubro de servicios: {str(e)}")
+    else:
+    # Para empresas de producto o servicio único
+        if solicitud.sub_rubro:
+            try:
+                id_subrubro = SubRubro.objects.filter(
+                    rubro=rubro,
+                    nombre__iexact=solicitud.sub_rubro,
+                    activo=True
+                ).first()
+                if not id_subrubro:
+                    logger.warning(f"Subrubro '{solicitud.sub_rubro}' no encontrado en rubro '{rubro.nombre}'")
+            except Exception as e:
+                logger.error(f"Error al buscar subrubro: {str(e)}")
+    
     # Obtener o crear tipo de empresa
     tipo_empresa_nombre = solicitud.tipo_empresa.title() if solicitud.tipo_empresa else 'Producto'
     tipo_empresa, _ = TipoEmpresa.objects.get_or_create(
@@ -536,6 +592,9 @@ def crear_empresa_desde_solicitud(solicitud):
         'contacto_principal_email': (solicitud.email_contacto or solicitud.correo),
         'id_usuario': usuario_empresa,
         'id_rubro': rubro,
+        'id_subrubro': id_subrubro,
+        'id_subrubro_producto': id_subrubro_producto,
+        'id_subrubro_servicio': id_subrubro_servicio,
         'tipo_empresa': tipo_empresa,
         # Registrar y mapear actividades de promoción desde la solicitud
         'actividades_promocion_internacional': solicitud.actividades_promocion if solicitud.actividades_promocion else None,

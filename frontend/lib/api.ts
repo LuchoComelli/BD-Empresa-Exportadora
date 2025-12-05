@@ -172,7 +172,14 @@ class ApiService {
         throw new Error(errorMessage);
       }
 
-      return response.json();
+      // Si la respuesta es 204 No Content o está vacía, no intentar parsear JSON
+if (response.status === 204 || response.headers.get('content-length') === '0') {
+  return null as T;
+}
+
+// Intentar parsear el texto primero para manejar respuestas vacías
+const text = await response.text();
+return text ? JSON.parse(text) : null;
     } catch (error: any) {
       // No mostrar errores silenciosos en consola (cuando no hay sesión activa)
       if (!error?.silent && !error?.noAuth) {
@@ -201,10 +208,9 @@ class ApiService {
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
-  }
-
+ async delete<T>(endpoint: string): Promise<T | null> {
+  return this.request<T>(endpoint, { method: 'DELETE' });
+}
   // Login
   async login(email: string, password: string): Promise<any> {
     console.log(`[API] Intentando login con email: ${email}`);
@@ -698,18 +704,24 @@ async getEmpresas(params?: {
   }
 
   // Eliminar una empresa por ID
-  async deleteEmpresa(id: number, tipo_empresa?: string): Promise<any> {
-    // Determinar el endpoint según el tipo de empresa
-    if (tipo_empresa === 'producto') {
-      return this.delete<any>(`/empresas/empresas-producto/${id}/`);
-    } else if (tipo_empresa === 'servicio') {
-      return this.delete<any>(`/empresas/empresas-servicio/${id}/`);
-    } else if (tipo_empresa === 'mixta') {
-      return this.delete<any>(`/empresas/empresas-mixta/${id}/`);
-    }
+async deleteEmpresa(id: number, tipo_empresa?: string): Promise<void> {
+  // Determinar el endpoint según el tipo de empresa
+  let endpoint: string;
+  
+  if (tipo_empresa === 'producto') {
+    endpoint = `/empresas/empresas-producto/${id}/`;
+  } else if (tipo_empresa === 'servicio') {
+    endpoint = `/empresas/empresas-servicio/${id}/`;
+  } else if (tipo_empresa === 'mixta') {
+    endpoint = `/empresas/empresas-mixta/${id}/`;
+  } else {
     // Si no se especifica el tipo, intentar eliminar desde el endpoint unificado
-    return this.delete<any>(`/registro/solicitudes/empresas_aprobadas/${id}/eliminar/`);
+    endpoint = `/registro/solicitudes/empresas_aprobadas/${id}/eliminar/`;
   }
+  
+  await this.delete(endpoint);
+  // DELETE no retorna contenido (204 No Content), así que simplemente retornamos void
+}
 
   // Registrar nueva empresa
   async register(data: any): Promise<any> {
