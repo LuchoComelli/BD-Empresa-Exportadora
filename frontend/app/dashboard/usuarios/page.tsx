@@ -11,7 +11,7 @@ import { UserPlus, Search, MoreVertical, Mail, Shield, Eye, Edit, UserX, Loader2
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import api from "@/lib/api"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 import {
   Dialog,
   DialogContent,
@@ -47,7 +47,7 @@ interface Rol {
 
 export default function UsuariosPage() {
   const router = useRouter()
-  const { user, isLoading: authLoading } = useAuth()
+  const { user, isLoading: authLoading } = useDashboardAuth()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [roles, setRoles] = useState<Rol[]>([])
   
@@ -123,8 +123,10 @@ export default function UsuariosPage() {
       
       // El backend ya filtra por rol, solo necesitamos mapear los datos
       setUsuarios(allUsuarios)
-    } catch (error) {
-      console.error("Error loading usuarios:", error)
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error loading usuarios:", error)
+      }
       setUsuarios([])
     } finally {
       setLoading(false)

@@ -86,6 +86,37 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         serializer = UsuarioSerializer(request.user)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['patch', 'put'], permission_classes=[permissions.IsAuthenticated])
+    def update_password(self, request):
+        """Permitir que cualquier usuario autenticado cambie su propia contraseña"""
+        user = request.user
+        new_password = request.data.get('password')
+        
+        if not new_password:
+            return Response(
+                {'error': 'La contraseña es requerida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(new_password) < 8:
+            return Response(
+                {'error': 'La contraseña debe tener al menos 8 caracteres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar la contraseña
+        user.set_password(new_password)
+        
+        # Si el usuario es empresa y debe cambiar la contraseña, marcar como ya cambiada
+        if user.rol and user.rol.nombre == 'Empresa' and user.debe_cambiar_password:
+            user.debe_cambiar_password = False
+        
+        user.save()
+        
+        # Serializar el usuario actualizado
+        serializer = UsuarioSerializer(user)
+        return Response(serializer.data)
+    
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageUsers])
     def toggle_active(self, request, pk=None):
         """Activar/desactivar usuario (soft delete)"""

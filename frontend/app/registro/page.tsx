@@ -707,16 +707,39 @@ useEffect(() => {
         
         // Mostrar detalles del error si están disponibles
         let errorMessage = 'Error al enviar el registro'
+        
+        // Detectar errores específicos y traducirlos al español
         if (errorData.detail) {
-          errorMessage = errorData.detail
+          const detail = String(errorData.detail).toLowerCase()
+          // Detectar si es un error de email duplicado
+          if (detail.includes('email') && (detail.includes('already') || detail.includes('exists') || detail.includes('ya existe') || detail.includes('duplicado'))) {
+            errorMessage = 'Este correo electrónico ya está registrado en el sistema. Por favor, utiliza otro correo o intenta iniciar sesión.'
+          } else if (detail.includes('email') && detail.includes('invalid')) {
+            errorMessage = 'El correo electrónico ingresado no es válido. Por favor, verifica el formato.'
+          } else {
+            errorMessage = errorData.detail
+          }
         } else if (errorData.message) {
-          errorMessage = errorData.message
+          const message = String(errorData.message).toLowerCase()
+          if (message.includes('email') && (message.includes('already') || message.includes('exists') || message.includes('ya existe') || message.includes('duplicado'))) {
+            errorMessage = 'Este correo electrónico ya está registrado en el sistema. Por favor, utiliza otro correo o intenta iniciar sesión.'
+          } else {
+            errorMessage = errorData.message
+          }
         } else if (typeof errorData === 'object') {
           // Si hay errores de validación por campo
           const fieldErrors = Object.entries(errorData)
             .map(([field, errors]: [string, any]) => {
               if (Array.isArray(errors)) {
-                return `${field}: ${errors.join(', ')}`
+                // Traducir errores comunes
+                const translatedErrors = errors.map((err: string) => {
+                  const errLower = String(err).toLowerCase()
+                  if (errLower.includes('email') && (errLower.includes('already') || errLower.includes('exists') || errLower.includes('ya existe'))) {
+                    return 'Este correo electrónico ya está registrado'
+                  }
+                  return err
+                })
+                return `${field}: ${translatedErrors.join(', ')}`
               } else if (typeof errors === 'object') {
                 return `${field}: ${JSON.stringify(errors)}`
               }
@@ -736,7 +759,7 @@ useEffect(() => {
       
       toast({
         title: "Registro exitoso",
-        description: `Tu cuenta ha sido creada. Email: ${contactoPrincipal.email}. Contraseña inicial: ${formData.cuit}. Puedes iniciar sesión ahora. Te recomendamos cambiar tu contraseña después del primer acceso.`,
+        description: `Tu solicitud de registro ha sido enviada correctamente. Tu cuenta será revisada y aprobada por un administrador del sistema. Recibirás un email cuando tu cuenta sea aprobada. Email: ${contactoPrincipal.email}. Contraseña inicial: ${formData.cuit}. Te recomendamos cambiar tu contraseña después del primer acceso.`,
         variant: "default",
       })
       
@@ -747,9 +770,27 @@ useEffect(() => {
     } catch (error: any) {
       console.error("Error en registro:", error)
       console.error("Stack trace:", error.stack)
+      
+      // Mejorar el mensaje de error para casos comunes
+      let errorTitle = "Error al enviar el registro"
+      let errorDescription = error.message || "Por favor, revisa los datos ingresados e intenta nuevamente."
+      
+      // Detectar errores específicos
+      const errorMessage = String(error.message || '').toLowerCase()
+      if (errorMessage.includes('email') && (errorMessage.includes('already') || errorMessage.includes('exists') || errorMessage.includes('ya existe') || errorMessage.includes('duplicado'))) {
+        errorTitle = "Correo electrónico ya registrado"
+        errorDescription = "Este correo electrónico ya está registrado en el sistema. Por favor, utiliza otro correo o intenta iniciar sesión."
+      } else if (errorMessage.includes('cuit') && (errorMessage.includes('already') || errorMessage.includes('exists') || errorMessage.includes('ya existe'))) {
+        errorTitle = "CUIT ya registrado"
+        errorDescription = "Este CUIT ya está registrado en el sistema. Por favor, verifica el número ingresado."
+      } else if (errorMessage.includes('validation') || errorMessage.includes('validación')) {
+        errorTitle = "Error de validación"
+        errorDescription = error.message || "Por favor, verifica que todos los campos estén completos y sean válidos."
+      }
+      
       toast({
-        title: "Error al enviar el registro",
-        description: error.message || "Por favor, revisa la consola del navegador para más detalles e intenta nuevamente.",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       })
     }

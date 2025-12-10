@@ -11,9 +11,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FiltersDropdown } from "@/components/empresas/filters-dropdown"
-
-
-
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 
 interface Empresa {
   id: number
@@ -43,6 +41,7 @@ const getColorPorCantidad = (cantidad: number): string => {
 }
 
 export default function MapaPage() {
+  const { user, isLoading: authLoading, canAccessDashboard } = useDashboardAuth()
   const { toast } = useToast()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null)
@@ -56,15 +55,16 @@ export default function MapaPage() {
   const [empresasPorDepartamento, setEmpresasPorDepartamento] = useState<{[key: string]: number}>({})
   const [filters, setFilters] = useState<any>({})
   const [searchQuery, setSearchQuery] = useState("")
-  const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([]) // Guardar todas las empresas
+  const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([])
   const [selectedDepartamento, setSelectedDepartamento] = useState<string | null>(null)
   const [exportingMap, setExportingMap] = useState(false)
   const [exportingDept, setExportingDept] = useState(false)
 
-  // Agregar estilos CSS para el mapa
+  // Agregar estilos CSS para el mapa - CORREGIDO
   useEffect(() => {
     const style = document.createElement('style')
     style.textContent = `
+      /* Configuración base del contenedor */
       #empresas-map {
         position: relative !important;
         width: 100% !important;
@@ -74,65 +74,85 @@ export default function MapaPage() {
         visibility: visible !important;
         overflow: hidden !important;
       }
+      
+      /* Contenedor principal de Leaflet */
       #empresas-map .leaflet-container {
-        z-index: 0 !important;
+        z-index: 1 !important;
         position: relative !important;
         width: 100% !important;
         height: 100% !important;
         min-height: 500px !important;
-        touch-action: pan-x pan-y !important;
-        pointer-events: auto !important;
-        user-select: none !important;
-        -webkit-user-select: none !important;
-        -moz-user-select: none !important;
-        -ms-user-select: none !important;
-        display: block !important;
-        visibility: visible !important;
+        touch-action: none !important;
         cursor: grab !important;
       }
+      
       #empresas-map .leaflet-container.leaflet-dragging {
         cursor: grabbing !important;
       }
+      
+      /* CRÍTICO: Permitir eventos en tiles para dragging */
       #empresas-map .leaflet-tile-pane {
         pointer-events: auto !important;
+        z-index: 2 !important;
       }
-      #empresas-map .leaflet-control-container {
-        z-index: 1 !important;
+      
+      #empresas-map .leaflet-tile {
+        pointer-events: auto !important;
+      }
+      
+      /* Map pane debe recibir eventos */
+      #empresas-map .leaflet-map-pane {
+        pointer-events: auto !important;
+        z-index: 2 !important;
+      }
+      
+      /* Overlay pane NO debe bloquear el dragging */
+      #empresas-map .leaflet-overlay-pane {
+        pointer-events: none !important;
+        z-index: 3 !important;
+      }
+      
+      /* Pero los polígonos SÍ deben ser clickeables */
+      #empresas-map .leaflet-overlay-pane path {
+        pointer-events: auto !important;
+      }
+      
+      #empresas-map .leaflet-overlay-pane svg {
         pointer-events: none !important;
       }
+      
+      /* Marcadores clickeables pero no bloquean dragging */
+      #empresas-map .leaflet-marker-pane {
+        pointer-events: none !important;
+        z-index: 6 !important;
+      }
+      
+      #empresas-map .leaflet-marker-pane .leaflet-marker-icon {
+        pointer-events: auto !important;
+      }
+      
+      /* Controles siempre accesibles */
+      #empresas-map .leaflet-control-container {
+        pointer-events: none !important;
+      }
+      
       #empresas-map .leaflet-control {
         pointer-events: auto !important;
       }
-      #empresas-map .leaflet-top,
-      #empresas-map .leaflet-bottom {
-        z-index: 1 !important;
+      
+      /* Shadow pane */
+      #empresas-map .leaflet-shadow-pane {
+        pointer-events: none !important;
       }
-      #empresas-map .leaflet-pane {
-        z-index: 0 !important;
+      
+      /* Popup pane */
+      #empresas-map .leaflet-popup-pane {
+        pointer-events: none !important;
+        z-index: 7 !important;
+      }
+      
+      #empresas-map .leaflet-popup {
         pointer-events: auto !important;
-      }
-      #empresas-map .leaflet-map-pane {
-        pointer-events: auto !important;
-      }
-      #empresas-map .leaflet-container {
-        cursor: grab !important;
-      }
-      #empresas-map .leaflet-container:active {
-        cursor: grabbing !important;
-      }
-      #empresas-map .leaflet-dragging .leaflet-container {
-        cursor: grabbing !important;
-      }
-      /* Asegurar que los marcadores sean clickeables */
-      #empresas-map .leaflet-marker-icon {
-        cursor: pointer !important;
-        pointer-events: auto !important;
-      }
-      #empresas-map .custom-marker-icon {
-        pointer-events: auto !important;
-      }
-      #empresas-map .leaflet-interactive {
-        cursor: pointer !important;
       }
     `
     document.head.appendChild(style)
@@ -145,135 +165,128 @@ export default function MapaPage() {
   }, [])
 
   // Cargar empresas
-    useEffect(() => {
-  const loadEmpresas = async () => {
-    try {
-      setLoading(true)
-      const params: any = {}
+  useEffect(() => {
+    const loadEmpresas = async () => {
+      try {
+        setLoading(true)
+        const params: any = {}
 
-      // Búsqueda
-      if (searchQuery) {
-        params.search = searchQuery
-      }
+        // Búsqueda
+        if (searchQuery) {
+          params.search = searchQuery
+        }
 
-      // Filtros
-if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
-        params.tipo_empresa = filters.tipo_empresa
-      }
+        // Filtros
+        if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
+          params.tipo_empresa = filters.tipo_empresa
+        }
 
-      if (filters.rubro && filters.rubro !== 'all') {
-        params.rubro = filters.rubro
-      }
+        if (filters.rubro && filters.rubro !== 'all') {
+          params.rubro = filters.rubro
+        }
 
-      if (filters.subRubro && filters.subRubro !== 'all') {
-        params.sub_rubro = filters.subRubro
-      }
+        if (filters.subRubro && filters.subRubro !== 'all') {
+          params.sub_rubro = filters.subRubro
+        }
 
-      if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
-        params.categoria_matriz = filters.categoria_matriz
-      }
+        if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
+          params.categoria_matriz = filters.categoria_matriz
+        }
 
-      if (filters.exporta && filters.exporta !== 'all') {
-        params.exporta = filters.exporta === 'si' ? 'Sí' : ''
-      }
+        if (filters.exporta && filters.exporta !== 'all') {
+          params.exporta = filters.exporta === 'si' ? 'Sí' : ''
+        }
 
-      const response = await api.getEmpresas(params)
-      const empresasData = Array.isArray(response) ? response : (response.results || [])
-      
-      console.log('[Mapa] Total empresas recibidas:', empresasData.length)
-      
-      // Filtrar empresas con geolocalización válida y parsear coordenadas
-      const empresasConCoords = empresasData
-        .map((empresa: any) => {
-          if (!empresa.geolocalizacion) {
-            return null
-          }
-          
-          try {
-            const coords = empresa.geolocalizacion.split(',').map((c: string) => parseFloat(c.trim()))
-            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-              return {
-                ...empresa,
-                lat: coords[0],
-                lng: coords[1],
-              }
+        // Obtener todas las empresas (sin límite de paginación)
+        params.page_size = 1000
+
+        const response = await api.getEmpresas(params)
+        const empresasData = Array.isArray(response) ? response : (response.results || [])
+        
+        console.log('[Mapa] Total empresas recibidas:', empresasData.length)
+        
+        // Filtrar empresas con geolocalización válida y parsear coordenadas
+        const empresasConCoords = empresasData
+          .map((empresa: any) => {
+            if (!empresa.geolocalizacion) {
+              return null
             }
-          } catch (error) {
-            console.error('Error parsing coordinates for empresa:', empresa.id, error)
-          }
-          return null
-        })
-        .filter((e: Empresa | null) => e !== null) as Empresa[]
-      
-      console.log('[Mapa] Empresas con coordenadas válidas:', empresasConCoords.length)
-      
-      setAllEmpresas(empresasData) // Guardar todas para estadísticas
-      setEmpresas(empresasConCoords)
-      
-      if (empresasConCoords.length > 0) {
-        setSelectedEmpresa(empresasConCoords[0])
-      } else {
-        setSelectedEmpresa(null)
+            
+            try {
+              const coords = empresa.geolocalizacion.split(',').map((c: string) => parseFloat(c.trim()))
+              if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                return {
+                  ...empresa,
+                  lat: coords[0],
+                  lng: coords[1],
+                }
+              }
+            } catch (error) {
+              console.error('Error parsing coordinates for empresa:', empresa.id, error)
+            }
+            return null
+          })
+          .filter((e: Empresa | null) => e !== null) as Empresa[]
+        
+        console.log('[Mapa] Empresas con coordenadas válidas:', empresasConCoords.length)
+        
+        setAllEmpresas(empresasData)
+        setEmpresas(empresasConCoords)
+        
+        if (empresasConCoords.length > 0) {
+          setSelectedEmpresa(empresasConCoords[0])
+        } else {
+          setSelectedEmpresa(null)
+        }
+      } catch (error: any) {
+        if (!handleAuthError(error)) {
+          console.error('Error loading empresas:', error)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar las empresas",
+            variant: "destructive",
+          })
+        }
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error loading empresas:', error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar las empresas",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
     }
-  }
-  
-  loadEmpresas()
-}, [toast, filters, searchQuery])
+    
+    loadEmpresas()
+  }, [toast, filters, searchQuery])
 
   // Calcular empresas por departamento
-useEffect(() => {
-  if (empresas.length === 0) return
-  
-  // Función para normalizar nombres (quitar tildes y pasar a minúsculas)
-  const normalizar = (str: string): string => {
-    return str
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-  }
-  
-  const conteo: {[key: string]: number} = {}
-  const mapeoNombres: {[key: string]: string} = {} // Para guardar el nombre original
-  
-  empresas.forEach(empresa => {
-    const dept = empresa.departamento_nombre || 'Sin departamento'
-    const deptNormalizado = normalizar(dept)
-    conteo[deptNormalizado] = (conteo[deptNormalizado] || 0) + 1
-    mapeoNombres[deptNormalizado] = dept // Guardar el nombre original
-  })
-  
-  console.log('[Departamentos] Conteo por departamento:', conteo)
-  console.log('[Departamentos] Nombres originales:', mapeoNombres)
-  setEmpresasPorDepartamento(conteo)
-}, [empresas])
+  useEffect(() => {
+    if (empresas.length === 0) return
+    
+    const normalizar = (str: string): string => {
+      return str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+    }
+    
+    const conteo: {[key: string]: number} = {}
+    const mapeoNombres: {[key: string]: string} = {}
+    
+    empresas.forEach(empresa => {
+      const dept = empresa.departamento_nombre || 'Sin departamento'
+      const deptNormalizado = normalizar(dept)
+      conteo[deptNormalizado] = (conteo[deptNormalizado] || 0) + 1
+      mapeoNombres[deptNormalizado] = dept
+    })
+    
+    console.log('[Departamentos] Conteo por departamento:', conteo)
+    setEmpresasPorDepartamento(conteo)
+  }, [empresas])
 
-  // Función para obtener color según cantidad de empresas
-const getColorPorCantidad = (cantidad: number): string => {
-  if (cantidad === 0) return '#e5e7eb'      // gris claro - sin empresas
-  if (cantidad <= 5) return '#10b981'       // verde - pocas
-  if (cantidad <= 20) return '#fbbf24'      // amarillo - moderado
-  if (cantidad <= 40) return '#f97316'      // naranja - bastantes
-  return '#ef4444'                          // rojo - muchas
-}
-
-  // Cargar y configurar el mapa
+  // Cargar y configurar el mapa - SIMPLIFICADO
   useEffect(() => {
     if (loading || empresas.length === 0) return
 
     const loadMap = async () => {
       try {
-        // Dynamically import Leaflet
         const leafletModule = await import("leaflet")
         const L = (leafletModule as any).default || leafletModule
         const heatModule = await import("leaflet.heat")
@@ -283,16 +296,16 @@ const getColorPorCantidad = (cantidad: number): string => {
           return
         }
 
-        
-// Cargar Leaflet CSS desde CDN
-if (!document.querySelector('link[href*="leaflet.css"]')) {
-  const link = document.createElement("link")
-  link.rel = "stylesheet"
-  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  link.crossOrigin = "anonymous"
-  document.head.appendChild(link)
-}
-        // Fix default marker icon issue
+        // Cargar Leaflet CSS
+        if (!document.querySelector('link[href*="leaflet.css"]')) {
+          const link = document.createElement("link")
+          link.rel = "stylesheet"
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          link.crossOrigin = "anonymous"
+          document.head.appendChild(link)
+        }
+
+        // Fix default marker icon
         if (L.Icon && L.Icon.Default) {
           delete (L.Icon.Default.prototype as any)._getIconUrl
           L.Icon.Default.mergeOptions({
@@ -302,26 +315,21 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
           })
         }
 
-        // Wait a bit for CSS to load
         await new Promise(resolve => setTimeout(resolve, 100))
 
-        // Initialize map
         const mapElement = document.getElementById("empresas-map")
         if (!mapElement) {
           console.error('Map element not found')
           return
         }
 
-        // Verificar si el mapa ya está inicializado y limpiarlo
+        // Limpiar mapa anterior si existe
         if (map) {
           try {
-            // Remover todas las capas primero
             map.eachLayer((layer: any) => {
               try {
                 map.removeLayer(layer)
-              } catch (e) {
-                // Ignorar errores al remover capas
-              }
+              } catch (e) {}
             })
             map.remove()
           } catch (e) {
@@ -331,185 +339,83 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
           setMarkers([])
         }
 
-        // Limpiar cualquier instancia previa de Leaflet en el contenedor
-        // Verificar si el contenedor ya tiene una instancia de Leaflet
-        if ((mapElement as any)._leaflet_id) {
-          try {
-            // Intentar obtener la instancia del mapa desde Leaflet si está disponible
-            if ((L as any).map && (L as any).map._instances) {
-              const leafletMap = (L as any).map._instances[(mapElement as any)._leaflet_id]
-              if (leafletMap) {
-                try {
-                  // Remover todas las capas
-                  leafletMap.eachLayer((layer: any) => {
-                    try {
-                      leafletMap.removeLayer(layer)
-                    } catch (e) {
-                      // Ignorar errores
-                    }
-                  })
-                  leafletMap.remove()
-                } catch (e) {
-                  console.warn('Error removing Leaflet map instance:', e)
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('Error accessing Leaflet instances:', e)
-          }
-        }
-        
-        // Limpiar TODAS las propiedades de Leaflet del contenedor
-        // Esto es crucial para evitar el error "Map container is already initialized"
-        const leafletProps = ['_leaflet_id', '_leaflet', 'leaflet']
+        // Limpiar contenedor más agresivamente
+        const leafletProps = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet']
         leafletProps.forEach(prop => {
-          try {
+          if ((mapElement as any)[prop]) {
             delete (mapElement as any)[prop]
-          } catch (e) {
-            // Ignorar errores
           }
         })
-        
-        // Limpiar el contenido del contenedor para asegurar un inicio limpio
-        // Esto ayuda a prevenir conflictos con instancias previas
         mapElement.innerHTML = ''
         
-        // Asegurar que el contenedor tenga un tamaño antes de inicializar el mapa
-        // Esto es crucial para que el mapa sea interactivo desde el inicio
-        const rect = mapElement.getBoundingClientRect()
-        if (rect.width === 0 || rect.height === 0) {
-          console.warn('Map container has no size, waiting...')
-          await new Promise(resolve => setTimeout(resolve, 100))
-        }
-        
-        // Esperar un momento para asegurar que la limpieza se complete
-        // Esto es importante para que Leaflet no detecte el contenedor como ya inicializado
         await new Promise(resolve => setTimeout(resolve, 100))
-        
-        // Verificar una vez más que el contenedor esté limpio
-        if ((mapElement as any)._leaflet_id) {
-          console.warn('Container still has _leaflet_id, attempting to clear again...')
-          delete (mapElement as any)._leaflet_id
-          await new Promise(resolve => setTimeout(resolve, 50))
-        }
 
-        // Centrar el mapa en Catamarca (San Fernando del Valle de Catamarca)
         const catamarcaCenter: [number, number] = [-28.2, -66.0]
         
-        // Intentar crear el mapa, si falla por contenedor ya inicializado, limpiar y reintentar
-        let mapInstance: any
-        try {
-          mapInstance = L.map("empresas-map", {
-            preferCanvas: false,
-            dragging: true,
-            touchZoom: true,
-            scrollWheelZoom: true,
-            doubleClickZoom: true,
-            boxZoom: true,
-            keyboard: true,
-            tap: true,
-            zoomControl: true
-          }).setView(catamarcaCenter, 8)
-        } catch (error: any) {
-          // Si el error es "Map container is already initialized", limpiar y reintentar
-          if (error.message && error.message.includes('already initialized')) {
-            console.warn('Map container was already initialized, cleaning and retrying...')
-            // Limpiar completamente el contenedor
-            mapElement.innerHTML = ''
-            delete (mapElement as any)._leaflet_id
-            // Esperar un momento
-            await new Promise(resolve => setTimeout(resolve, 100))
-            // Reintentar
-            mapInstance = L.map("empresas-map", {
-              preferCanvas: false,
-              dragging: true,
-              touchZoom: true,
-              scrollWheelZoom: true,
-              doubleClickZoom: true,
-              boxZoom: true,
-              keyboard: true,
-              tap: true,
-              zoomControl: true
-            }).setView(catamarcaCenter, 8)
-          } else {
-            throw error
+        // Limpieza final antes de crear el mapa
+        const leafletPropsCheck = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet', '_leaflet_map']
+        leafletPropsCheck.forEach(prop => {
+          if ((mapElement as any)[prop]) {
+            try {
+              if (prop === '_leaflet_map' && (mapElement as any)[prop].remove) {
+                (mapElement as any)[prop].remove()
+              }
+              delete (mapElement as any)[prop]
+            } catch (e) {}
           }
-        }
+        })
+        mapElement.innerHTML = ''
+        await new Promise(resolve => setTimeout(resolve, 50))
+
+        // Crear mapa
+        const mapInstance = L.map("empresas-map", {
+          preferCanvas: false,
+          dragging: true,
+          touchZoom: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: true,
+          tap: true,
+          zoomControl: true,
+          trackResize: true
+        }).setView(catamarcaCenter, 8)
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(mapInstance)
 
-        // Forzar que el mapa calcule su tamaño correctamente
-        // Esto es crucial para que el mapa sea interactivo desde el inicio
-        // Llamar múltiples veces para asegurar que funcione
+        // Forzar tamaño correcto
         mapInstance.invalidateSize()
-        
-        // Esperar a que el mapa se renderice completamente
         await new Promise(resolve => setTimeout(resolve, 100))
-        
-        // Llamar invalidateSize de nuevo después de que el DOM se actualice
         mapInstance.invalidateSize()
-        
-        // Habilitar explícitamente todas las interacciones del mapa
-        // Forzar habilitación del dragging después de un pequeño delay
-        setTimeout(() => {
-          if (mapInstance.dragging) {
-            mapInstance.dragging.enable()
-            // Forzar que el dragging esté activo
-            if (!mapInstance.dragging._enabled) {
-              mapInstance.dragging._enabled = true
-            }
-          }
-          if (mapInstance.touchZoom) {
-            mapInstance.touchZoom.enable()
-          }
-          if (mapInstance.scrollWheelZoom) {
-            mapInstance.scrollWheelZoom.enable()
-          }
-          if (mapInstance.doubleClickZoom) {
-            mapInstance.doubleClickZoom.enable()
-          }
-          if (mapInstance.boxZoom) {
-            mapInstance.boxZoom.enable()
-          }
-        }, 200)
-        if (mapInstance.keyboard) {
-          mapInstance.keyboard.enable()
-        }
-        if (mapInstance.tap) {
-          mapInstance.tap.enable()
-        }
-        
-        // Esperar un poco más antes de agregar marcadores
-        await new Promise(resolve => setTimeout(resolve, 100))
 
-        // Crear marcadores para cada empresa
+        // Habilitar dragging después de crear el mapa
+        setTimeout(() => {
+          mapInstance.dragging.enable()
+          mapInstance.invalidateSize()
+        }, 200)
+
+        // Crear marcadores
         const newMarkers: any[] = []
         empresas.forEach((empresa) => {
           if (empresa.lat && empresa.lng) {
-            console.log(`[Marker] Empresa: ${empresa.razon_social}, Tipo: "${empresa.tipo_empresa}"`)
-
-            // Obtener color según el tipo de empresa
             const getTipoColor = (tipo: string): string => {
               switch(tipo?.toLowerCase()) {
                 case 'producto':
-                  return '#3b82f6' // Azul para productos
+                  return '#3b82f6'
                 case 'servicio':
-                  return '#10b981' // Verde para servicios
+                  return '#10b981'
                 case 'mixta':
-                  return '#f59e0b' // Amarillo/Naranja para mixta
+                  return '#f59e0b'
                 default:
-                  return '#6b7280' // Gris para tipo desconocido
+                  return '#6b7280'
               }
             }
             
             const tipoColor = getTipoColor(empresa.tipo_empresa || '')
             const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
-
-            console.log('[Marker] tipoInfo:', tipoInfo)
             
-            // Actualiza la creación del customIcon:
             const customIcon = L.divIcon({
               className: 'custom-marker-icon',
               html: `
@@ -562,8 +468,6 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
                 </div>
               `)
             
-            // Usar 'click' y también asegurar que el evento funcione
-            // Usar once: false para que el evento se mantenga incluso después de reinicializar
             marker.on('click', (e) => {
               if (e.originalEvent) {
                 e.originalEvent.stopPropagation()
@@ -571,41 +475,15 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
               setSelectedEmpresa(empresa)
             })
             
-            // También agregar evento de popup para asegurar que funcione
             marker.on('popupopen', () => {
               setSelectedEmpresa(empresa)
             })
-            
-            // Asegurar que el marcador sea clickeable
-            if (marker.getElement) {
-              const markerElement = marker.getElement()
-              if (markerElement) {
-                markerElement.style.pointerEvents = 'auto'
-                markerElement.style.cursor = 'pointer'
-              }
-            }
 
             newMarkers.push(marker)
           }
         })
         
-        // Forzar otro invalidateSize después de agregar marcadores
         mapInstance.invalidateSize()
-
-        // Asegurar que el dragging esté habilitado después de agregar todos los marcadores
-        setTimeout(() => {
-          if (mapInstance.dragging) {
-            mapInstance.dragging.enable()
-            // Forzar que el dragging esté activo
-            if (!mapInstance.dragging._enabled) {
-              mapInstance.dragging._enabled = true
-            }
-            // Asegurar que los handlers estén registrados
-            if (mapInstance.dragging._draggable) {
-              mapInstance.dragging._draggable._enabled = true
-            }
-          }
-        }, 100)
         
         setMap(mapInstance)
         setMarkers(newMarkers)
@@ -624,19 +502,15 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
     loadMap()
 
     return () => {
-      // Cleanup: remover mapa y marcadores
       const currentMap = map
       const currentMarkers = markers
       
       if (currentMap) {
         try {
-          // Remover todas las capas primero
           currentMap.eachLayer((layer: any) => {
             try {
               currentMap.removeLayer(layer)
-            } catch (e) {
-              // Ignorar errores al remover capas
-            }
+            } catch (e) {}
           })
           currentMap.remove()
         } catch (e) {
@@ -651,940 +525,819 @@ if (!document.querySelector('link[href*="leaflet.css"]')) {
             if (marker && typeof marker.remove === 'function') {
               marker.remove()
             }
-          } catch (e) {
-            console.warn('Error removing marker:', e)
-          }
+          } catch (e) {}
         })
         setMarkers([])
       }
       
-      // Limpiar el contenedor del mapa
       const mapElement = document.getElementById("empresas-map")
       if (mapElement) {
-        // Limpiar cualquier instancia de Leaflet
         if ((mapElement as any)._leaflet_id) {
-          try {
-            // Intentar obtener la instancia del mapa desde Leaflet si está disponible
-            const L = (window as any).L
-            if (L && L.map && L.map._instances) {
-              const leafletMap = L.map._instances[(mapElement as any)._leaflet_id]
-              if (leafletMap) {
-                leafletMap.remove()
-              }
-            }
-          } catch (e) {
-            console.warn('Error cleaning Leaflet instance:', e)
-          }
           delete (mapElement as any)._leaflet_id
         }
-        // Limpiar el contenido del contenedor
         mapElement.innerHTML = ''
       }
     }
   }, [loading, empresas, toast])
 
-  // Actualizar capa de departamentos cuando cambie el conteo
-useEffect(() => {
-  if (!map || Object.keys(empresasPorDepartamento).length === 0) return
+  // Actualizar capa de departamentos
+  useEffect(() => {
+    if (!map || Object.keys(empresasPorDepartamento).length === 0) return
 
-  const updateDepartamentosLayer = async () => {
-    try {
-      const leafletModule = await import("leaflet")
-      const L = (leafletModule as any).default || leafletModule
+    const updateDepartamentosLayer = async () => {
+      try {
+        const leafletModule = await import("leaflet")
+        const L = (leafletModule as any).default || leafletModule
 
-      const response = await fetch('/catamarca_departamentos.geojson')
-      const geojsonData = await response.json()
-      
-      console.log('[GeoJSON Update] Actualizando capa con conteo:', empresasPorDepartamento)
-      
-      // Si ya existe una capa, removerla
-      if (departamentosLayer) {
-        map.removeLayer(departamentosLayer)
-      }
-      
-      // Crear nueva capa de polígonos con colores según cantidad
-      const deptLayer = L.geoJSON(geojsonData, {
-        style: (feature: any) => {
-          const nombreDept = feature.properties.nombre
-          const nombreNormalizado = nombreDept
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .trim()
-          
-          const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-          const color = getColorPorCantidad(cantidad)
-          
-          console.log(`[GeoJSON] Dept: ${nombreDept} -> Normalizado: ${nombreNormalizado} -> Cantidad: ${cantidad}`)
-          
-          return {
-            fillColor: color,
-            weight: 2,
-            opacity: 1,
-            color: '#ffffff',
-            fillOpacity: 0.7
-          }
-        },
-        onEachFeature: (feature: any, layer: any) => {
-          const nombreDept = feature.properties.nombre
-          const nombreNormalizado = nombreDept
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .trim()
-          const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-          
-          layer.bindPopup(`
-            <div style="min-width: 150px;">
-              <h3 style="font-weight: bold; margin-bottom: 8px;">${nombreDept}</h3>
-              <p style="margin: 4px 0;"><strong>Empresas:</strong> ${cantidad}</p>
-            </div>
-          `)
-          
-          layer.on('mouseover', function(e: any) {
-            const layer = e.target
-            layer.setStyle({
-              weight: 3,
-              fillOpacity: 0.9
-            })
-          })
-          
-          layer.on('mouseout', function(e: any) {
-            deptLayer.resetStyle(e.target)
-          })
+        const response = await fetch('/catamarca_departamentos.geojson')
+        const geojsonData = await response.json()
+        
+        if (departamentosLayer) {
+          map.removeLayer(departamentosLayer)
         }
-      })
-      
-      setDepartamentosLayer(deptLayer)
-      console.log('[GeoJSON Update] Capa de departamentos actualizada')
-    } catch (error) {
-      console.error('[GeoJSON Update] Error actualizando departamentos:', error)
+        
+        const deptLayer = L.geoJSON(geojsonData, {
+          style: (feature: any) => {
+            const nombreDept = feature.properties.nombre
+            const nombreNormalizado = nombreDept
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .trim()
+            
+            const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
+            const color = getColorPorCantidad(cantidad)
+            
+            return {
+              fillColor: color,
+              weight: 2,
+              opacity: 1,
+              color: '#ffffff',
+              fillOpacity: 0.7
+            }
+          },
+          onEachFeature: (feature: any, layer: any) => {
+            const nombreDept = feature.properties.nombre
+            const nombreNormalizado = nombreDept
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .trim()
+            const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
+            
+            layer.bindPopup(`
+              <div style="min-width: 150px;">
+                <h3 style="font-weight: bold; margin-bottom: 8px;">${nombreDept}</h3>
+                <p style="margin: 4px 0;"><strong>Empresas:</strong> ${cantidad}</p>
+              </div>
+            `)
+            
+            layer.on('mouseover', function(e: any) {
+              const layer = e.target
+              layer.setStyle({
+                weight: 3,
+                fillOpacity: 0.9
+              })
+            })
+            
+            layer.on('mouseout', function(e: any) {
+              deptLayer.resetStyle(e.target)
+            })
+          }
+        })
+        
+        setDepartamentosLayer(deptLayer)
+      } catch (error) {
+        console.error('[GeoJSON Update] Error actualizando departamentos:', error)
+      }
+    }
+
+    updateDepartamentosLayer()
+  }, [map, empresasPorDepartamento])
+
+  const toggleHeatmap = () => {
+    if (!map || !departamentosLayer) return
+    
+    if (showHeatmap) {
+      map.removeLayer(departamentosLayer)
+      markers.forEach(marker => marker.addTo(map))
+      setShowHeatmap(false)
+    } else {
+      markers.forEach(marker => map.removeLayer(marker))
+      departamentosLayer.addTo(map)
+      setShowHeatmap(true)
     }
   }
 
-  updateDepartamentosLayer()
-}, [map, empresasPorDepartamento])
+  const exportarMapaCompleto = async (formato: 'png' | 'pdf') => {
+    if (!map) return
+    
+    setExportingMap(true)
+    
+    try {
+      const domtoimage = (await import('dom-to-image-more')).default
+      const jsPDF = formato === 'pdf' ? (await import('jspdf')).default : null
+      const leafletModule = await import("leaflet")
+      const L = (leafletModule as any).default || leafletModule
+      
+      const exportDiv = document.createElement('div')
+      exportDiv.id = 'export-map'
+      exportDiv.style.width = '1200px'
+      exportDiv.style.height = '1400px'
+      exportDiv.style.position = 'absolute'
+      exportDiv.style.left = '-99999px'
+      exportDiv.style.top = '0'
+      exportDiv.style.zIndex = '-1'
+      exportDiv.style.backgroundColor = '#f8f9fa'
+      document.body.appendChild(exportDiv)
 
-  const toggleHeatmap = () => {
-  console.log('[Toggle] Map:', !!map)
-  console.log('[Toggle] DepartamentosLayer:', !!departamentosLayer)
-  console.log('[Toggle] ShowHeatmap actual:', showHeatmap)
-  
-  if (!map || !departamentosLayer) {
-    console.log('[Toggle] No hay map o departamentosLayer, abortando')
-    return
-  }
-  
-  if (showHeatmap) {
-    console.log('[Toggle] Removiendo mapa de calor y mostrando markers')
-    map.removeLayer(departamentosLayer)
-    markers.forEach(marker => marker.addTo(map))
-    setShowHeatmap(false)
-  } else {
-    console.log('[Toggle] Removiendo markers y mostrando mapa de calor')
-    markers.forEach(marker => map.removeLayer(marker))
-    departamentosLayer.addTo(map)
-    setShowHeatmap(true)
-  }
-}
-
-const exportarMapaCompleto = async (formato: 'png' | 'pdf') => {
-  if (!map) return
-  
-  setExportingMap(true)
-  
-  try {
-    const domtoimage = (await import('dom-to-image-more')).default
-    const jsPDF = formato === 'pdf' ? (await import('jspdf')).default : null
-    const leafletModule = await import("leaflet")
-    const L = (leafletModule as any).default || leafletModule
-    
-    // Crear un div temporal para el mapa de exportación
-    const exportDiv = document.createElement('div')
-    exportDiv.id = 'export-map'
-    exportDiv.style.width = '1200px'
-    exportDiv.style.height = '1400px'  // Más alto porque Catamarca es vertical
-    exportDiv.style.position = 'absolute'
-    exportDiv.style.left = '-99999px'
-    exportDiv.style.top = '0'
-    exportDiv.style.zIndex = '-1'
-    exportDiv.style.backgroundColor = '#f8f9fa'  // Fondo gris claro
-    document.body.appendChild(exportDiv)
-
-// Agregar estilos para eliminar recuadros
-const styleOverride = document.createElement('style')
-styleOverride.id = 'export-map-override'
-styleOverride.textContent = `
-  #export-map * {
-    box-sizing: border-box;
-  }
-  #export-map .leaflet-marker-icon {
-    background: none !important;
-    border: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  #export-map .leaflet-div-icon {
-    background: transparent !important;
-    border: none !important;
-  }
-  #export-map .leaflet-marker-pane * {
-    background: transparent !important;
-    border: none !important;
-  }
-  #export-map .leaflet-overlay-pane * {
-    background: transparent !important;
-  }
-  #export-map [class*="leaflet"] {
-    background: transparent !important;
-    border: none !important;
-  }
-`
-document.head.appendChild(styleOverride)
-    
-    // Bounds precisos de SOLO Catamarca
-    const catamarcaBounds: [[number, number], [number, number]] = [
-      [-29.2, -67.8],  // Suroeste
-      [-25.2, -64.5]   // Noreste
-    ]
-    
-
-    const exportMap = L.map(exportDiv, {
-      zoomControl: false,
-      attributionControl: false,
-      dragging: false,
-      touchZoom: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      tap: false
-    })
-    
-    // Ajustar vista a Catamarca
-    exportMap.fitBounds(catamarcaBounds, { 
-      padding: [50, 50]
-    })
-    
-    // Forzar que el mapa calcule su tamaño
-    exportMap.invalidateSize()
-    
-    // Esperar a que se ajuste la vista
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
-    // Cargar GeoJSON de departamentos de Catamarca
-    const response = await fetch('/catamarca_departamentos.geojson')
-    const geojsonData = await response.json()
-    
-    if (showHeatmap) {
-      // Modo heatmap: mostrar departamentos con colores
-      L.geoJSON(geojsonData, {
-        style: (feature: any) => {
-          const nombreDept = feature.properties.nombre
-          const nombreNormalizado = nombreDept
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .trim()
-          
-          const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-          const color = getColorPorCantidad(cantidad)
-          
-          return {
-            fillColor: color,
-            weight: 2,
-            opacity: 1,
-            color: '#ffffff',
-            fillOpacity: 0.8
+      const styleOverride = document.createElement('style')
+      styleOverride.id = 'export-map-override'
+      styleOverride.textContent = `
+        #export-map * {
+          box-sizing: border-box;
+        }
+        #export-map .leaflet-marker-icon {
+          background: none !important;
+          border: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        #export-map .leaflet-div-icon {
+          background: transparent !important;
+          border: none !important;
+        }
+        #export-map .leaflet-marker-pane * {
+          background: transparent !important;
+          border: none !important;
+        }
+        #export-map .leaflet-overlay-pane * {
+          background: transparent !important;
+        }
+        #export-map [class*="leaflet"] {
+          background: transparent !important;
+          border: none !important;
+        }
+      `
+      document.head.appendChild(styleOverride)
+      
+      const catamarcaBounds: [[number, number], [number, number]] = [
+        [-29.2, -67.8],
+        [-25.2, -64.5]
+      ]
+      
+      const exportMap = L.map(exportDiv, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        touchZoom: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        tap: false
+      })
+      
+      exportMap.fitBounds(catamarcaBounds, { 
+        padding: [50, 50]
+      })
+      
+      exportMap.invalidateSize()
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      const response = await fetch('/catamarca_departamentos.geojson')
+      const geojsonData = await response.json()
+      
+      if (showHeatmap) {
+        L.geoJSON(geojsonData, {
+          style: (feature: any) => {
+            const nombreDept = feature.properties.nombre
+            const nombreNormalizado = nombreDept
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .trim()
+            
+            const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
+            const color = getColorPorCantidad(cantidad)
+            
+            return {
+              fillColor: color,
+              weight: 2,
+              opacity: 1,
+              color: '#ffffff',
+              fillOpacity: 0.8
+            }
+          },
+          onEachFeature: (feature: any, layer: any) => {
+            const nombreDept = feature.properties.nombre
+            const nombreNormalizado = nombreDept
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .trim()
+            const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
+            
+            const bounds = layer.getBounds()
+            const center = bounds.getCenter()
+            
+            const label = L.marker(center, {
+              icon: L.divIcon({
+                className: 'dept-label',
+                html: `
+                  <div style="
+                    background: rgba(255, 255, 255, 0.9);
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #222A59;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    white-space: nowrap;
+                    text-align: center;
+                    border: 1px solid #ddd;
+                  ">
+                    ${nombreDept}<br/>
+                    <span style="font-size: 10px; color: #666;">${cantidad} emp.</span>
+                  </div>
+                `,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+              })
+            })
+            label.addTo(exportMap)
           }
-        },
-        onEachFeature: (feature: any, layer: any) => {
-          // Agregar etiquetas de departamentos
-          const nombreDept = feature.properties.nombre
-          const nombreNormalizado = nombreDept
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .trim()
-          const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-          
-          const bounds = layer.getBounds()
-          const center = bounds.getCenter()
-          
-          const label = L.marker(center, {
-            icon: L.divIcon({
-              className: 'dept-label',
+        }).addTo(exportMap)
+      } else {
+        L.geoJSON(geojsonData, {
+          style: {
+            fillColor: '#ffffff',
+            weight: 2,
+            opacity: 0.6,
+            color: '#94a3b8',
+            fillOpacity: 0.3
+          }
+        }).addTo(exportMap)
+        
+        empresas.forEach((empresa) => {
+          if (empresa.lat && empresa.lng) {
+            const getTipoColor = (tipo: string): string => {
+              switch(tipo?.toLowerCase()) {
+                case 'producto':
+                  return '#3b82f6'
+                case 'servicio':
+                  return '#10b981'
+                case 'mixta':
+                  return '#f59e0b'
+                default:
+                  return '#6b7280'
+              }
+            }
+            
+            const tipoColor = getTipoColor(empresa.tipo_empresa || '')
+            const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
+            
+            const customIcon = L.divIcon({
+              className: '',
               html: `
                 <div style="
-                  background: rgba(255, 255, 255, 0.9);
-                  padding: 4px 8px;
-                  border-radius: 4px;
-                  font-size: 11px;
-                  font-weight: 600;
-                  color: #222A59;
-                  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                  white-space: nowrap;
-                  text-align: center;
-                  border: 1px solid #ddd;
+                  background-color: ${tipoColor}; 
+                  width: 20px;
+                  height: 20px;
+                  border-radius: ${tipoInfo.borderRadius}; 
+                  border: 2px solid white; 
+                  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  position: absolute;
+                  left: -10px;
+                  top: -10px;
+                  ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
                 ">
-                  ${nombreDept}<br/>
-                  <span style="font-size: 10px; color: #666;">${cantidad} emp.</span>
+                  <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
+                    ${tipoInfo.iconSvg.replace('width="14" height="14"', 'width="11" height="11"')}
+                  </div>
                 </div>
               `,
               iconSize: [0, 0],
-              iconAnchor: [0, 0]
+              iconAnchor: [0, 0],
             })
-          })
-          label.addTo(exportMap)
-        }
-      }).addTo(exportMap)
-    } else {
-      // Modo marcadores: mostrar solo bordes de departamentos
-      L.geoJSON(geojsonData, {
-        style: {
-          fillColor: '#ffffff',
-          weight: 2,
-          opacity: 0.6,
-          color: '#94a3b8',
-          fillOpacity: 0.3
-        }
-      }).addTo(exportMap)
+            
+            L.marker([empresa.lat, empresa.lng], { icon: customIcon }).addTo(exportMap)
+          }
+        })
+      }
       
-      // Agregar todos los marcadores de empresas
-      empresas.forEach((empresa) => {
+      const titleDiv = document.createElement('div')
+      titleDiv.style.cssText = `
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        padding: 18px 24px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        width: 320px;
+      `
+
+      const filtrosAplicados = []
+      if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
+        const tipoTexto = filters.tipo_empresa === 'producto' ? 'Productos' : 
+                          filters.tipo_empresa === 'servicio' ? 'Servicios' : 'Mixtas'
+        filtrosAplicados.push(`Tipo: ${tipoTexto}`)
+      }
+      if (filters.rubro && filters.rubro !== 'all') {
+        filtrosAplicados.push(`Rubro aplicado`)
+      }
+      if (filters.subRubro && filters.subRubro !== 'all') {
+        filtrosAplicados.push(`Subrubro aplicado`)
+      }
+      if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
+        const catTexto = filters.categoria_matriz === 'exportadora' ? 'Exportadora' :
+                         filters.categoria_matriz === 'potencial_exportadora' ? 'Potencial Exportadora' : 'Etapa Inicial'
+        filtrosAplicados.push(`Categoría: ${catTexto}`)
+      }
+      if (filters.exporta && filters.exporta !== 'all') {
+        filtrosAplicados.push(filters.exporta === 'si' ? 'Solo exportadoras' : 'No exportadoras')
+      }
+      if (searchQuery) {
+        filtrosAplicados.push(`Búsqueda: "${searchQuery}"`)
+      }
+
+      const filtrosHtml = filtrosAplicados.length > 0 ? `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+          <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 6px;">
+            FILTROS APLICADOS
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            ${filtrosAplicados.map(filtro => `
+              <div style="font-size: 11px; color: #374151;">• ${filtro}</div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''
+
+      const legendHtml = showHeatmap ? `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+          <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 10px;">DENSIDAD DE EMPRESAS</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; border-radius: 3px; background: #10b981; flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #374151;">Baja</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; border-radius: 3px; background: #fbbf24; flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #374151;">Media</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; border-radius: 3px; background: #f97316; flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #374151;">Alta</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; border-radius: 3px; background: #ef4444; flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #374151; white-space: nowrap;">Muy Alta</span>
+            </div>
+          </div>
+        </div>
+      ` : `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+          <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">TIPOS DE EMPRESA</div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <div style="width: 16px; height: 16px; background: #3259B5; border-radius: 3px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
+              <span style="font-size: 11px; color: #6b7280;">Productos</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <div style="width: 16px; height: 16px; background: #3259B5; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
+              <span style="font-size: 11px; color: #6b7280;">Servicios</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <div style="width: 16px; height: 16px; background: #3259B5; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transform: rotate(45deg);"></div>
+              <span style="font-size: 11px; color: #6b7280;">Mixta</span>
+            </div>
+          </div>
+        </div>
+      `
+
+      titleDiv.innerHTML = `
+        <div style="font-size: 20px; font-weight: 700; color: #222A59; margin-bottom: 4px;">
+          Mapa de Empresas
+        </div>
+        <div style="font-size: 14px; color: #6b7280; margin-bottom: 2px;">
+          Provincia de Catamarca
+        </div>
+        <div style="font-size: 12px; color: #9ca3af;">
+          ${empresas.length} empresa${empresas.length !== 1 ? 's' : ''} ${filtrosAplicados.length > 0 ? 'filtradas' : 'registradas'}
+        </div>
+        ${filtrosHtml}
+        ${legendHtml}
+      `
+      
+      exportDiv.appendChild(titleDiv)
+      
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const dataUrl = await domtoimage.toPng(exportDiv, {
+        quality: 1,
+        bgcolor: '#f8f9fa',
+        width: 1200,
+        height: 1400,
+        cacheBust: true,
+        skipFonts: true,
+        filter: (node: any) => {
+          if (node.className && typeof node.className === 'string') {
+            return !node.className.includes('leaflet-control')
+          }
+          return true
+        },
+        onclone: (clonedDoc: any) => {
+          try {
+            const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]')
+            links.forEach((link: any) => {
+              if (link.href && (link.href.includes('leaflet.css') || link.href.includes('unpkg.com'))) {
+                link.remove()
+              }
+            })
+          } catch (e) {}
+          return clonedDoc
+        }
+      })
+      
+      exportMap.remove()
+      document.body.removeChild(exportDiv)
+      
+      if (formato === 'png') {
+        const link = document.createElement('a')
+        link.download = `mapa-catamarca-${showHeatmap ? 'densidad' : 'empresas'}-${new Date().toISOString().split('T')[0]}.png`
+        link.href = dataUrl
+        link.click()
+      } else if (jsPDF) {
+        const img = new Image()
+        img.src = dataUrl
+        
+        img.onload = () => {
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+          })
+          
+          const pageWidth = pdf.internal.pageSize.getWidth()
+          const pageHeight = pdf.internal.pageSize.getHeight()
+          const imgAspectRatio = img.width / img.height
+          
+          let finalWidth = pageWidth - 20
+          let finalHeight = finalWidth / imgAspectRatio
+          
+          if (finalHeight > pageHeight - 20) {
+            finalHeight = pageHeight - 20
+            finalWidth = finalHeight * imgAspectRatio
+          }
+          
+          const xOffset = (pageWidth - finalWidth) / 2
+          const yOffset = 10
+          
+          pdf.addImage(dataUrl, 'PNG', xOffset, yOffset, finalWidth, finalHeight)
+          pdf.save(`mapa-catamarca-${showHeatmap ? 'densidad' : 'empresas'}-${new Date().toISOString().split('T')[0]}.pdf`)
+        }
+      }
+      
+      toast({
+        title: "Éxito",
+        description: `Mapa de Catamarca exportado como ${formato.toUpperCase()}`,
+      })
+    } catch (error) {
+      console.error('Error exportando mapa:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo exportar el mapa. Intenta de nuevo.",
+        variant: "destructive",
+      })
+    } finally {
+      const styleOverride = document.getElementById('export-map-override')
+      if (styleOverride) {
+        document.head.removeChild(styleOverride)
+      }
+      setExportingMap(false)
+    }
+  }
+
+  const exportarDepartamento = async (nombreDepartamento: string) => {
+    if (!map) return
+    
+    setExportingDept(true)
+    
+    try {
+      const domtoimage = (await import('dom-to-image-more')).default
+      const leafletModule = await import("leaflet")
+      const L = (leafletModule as any).default || leafletModule
+      
+      const response = await fetch('/catamarca_departamentos.geojson')
+      const geojsonData = await response.json()
+      
+      let targetFeature: any = null
+      
+      geojsonData.features.forEach((feature: any) => {
+        if (feature.properties.nombre === nombreDepartamento) {
+          targetFeature = feature
+        }
+      })
+      
+      if (!targetFeature) {
+        throw new Error("Departamento no encontrado en GeoJSON")
+      }
+      
+      const exportDiv = document.createElement('div')
+      exportDiv.id = 'export-dept-map'
+      exportDiv.style.width = '900px'
+      exportDiv.style.height = '900px'
+      exportDiv.style.position = 'absolute'
+      exportDiv.style.left = '-99999px'
+      exportDiv.style.top = '0'
+      exportDiv.style.zIndex = '-1'
+      exportDiv.style.backgroundColor = '#f8f9fa'
+      document.body.appendChild(exportDiv)
+
+      const styleOverride = document.createElement('style')
+      styleOverride.id = 'export-dept-override'
+      styleOverride.textContent = `
+        #export-dept-map * {
+          box-sizing: border-box;
+        }
+        #export-dept-map .leaflet-marker-icon {
+          background: none !important;
+          border: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        #export-dept-map .leaflet-div-icon {
+          background: transparent !important;
+          border: none !important;
+        }
+        #export-dept-map .leaflet-marker-pane * {
+          background: transparent !important;
+          border: none !important;
+        }
+        #export-dept-map .leaflet-overlay-pane * {
+          background: transparent !important;
+        }
+        #export-dept-map [class*="leaflet"] {
+          background: transparent !important;
+          border: none !important;
+        }
+      `
+      document.head.appendChild(styleOverride)
+      
+      const tempMap = L.map(exportDiv, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        touchZoom: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        tap: false
+      })
+      
+      const nombreNormalizado = nombreDepartamento
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+      
+      const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
+      const color = getColorPorCantidad(cantidad)
+      
+      const deptGeoJSON = L.geoJSON(targetFeature, {
+        style: {
+          fillColor: color,
+          weight: 3,
+          opacity: 1,
+          color: '#222A59',
+          fillOpacity: 0.7
+        }
+      }).addTo(tempMap)
+      
+      tempMap.fitBounds(deptGeoJSON.getBounds(), { 
+        padding: [80, 80]
+      })
+      
+      tempMap.invalidateSize()
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      const empresasDept = empresas.filter(e => e.departamento_nombre === nombreDepartamento)
+      
+      empresasDept.forEach((empresa) => {
         if (empresa.lat && empresa.lng) {
-          // Obtener color según el tipo de empresa
           const getTipoColor = (tipo: string): string => {
             switch(tipo?.toLowerCase()) {
               case 'producto':
-                return '#3b82f6' // Azul para productos
+                return '#3b82f6'
               case 'servicio':
-                return '#10b981' // Verde para servicios
+                return '#10b981'
               case 'mixta':
-                return '#f59e0b' // Amarillo/Naranja para mixta
+                return '#f59e0b'
               default:
-                return '#6b7280' // Gris para tipo desconocido
+                return '#6b7280'
             }
           }
           
           const tipoColor = getTipoColor(empresa.tipo_empresa || '')
           const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
           
-const customIcon = L.divIcon({
-  className: '',
-  html: `
-    <div style="
-      background-color: ${tipoColor}; 
-      width: 20px;
-      height: 20px;
-      border-radius: ${tipoInfo.borderRadius}; 
-      border: 2px solid white; 
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: absolute;
-      left: -10px;
-      top: -10px;
-      ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
-    ">
-      <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
-        ${tipoInfo.iconSvg.replace('width="14" height="14"', 'width="11" height="11"')}
-      </div>
-    </div>
-  `,
-  iconSize: [0, 0],
-  iconAnchor: [0, 0],
-})
+          const customIcon = L.divIcon({
+            className: '',
+            html: `
+              <div style="
+                background-color: ${tipoColor}; 
+                width: 20px;
+                height: 20px;
+                border-radius: ${tipoInfo.borderRadius}; 
+                border: 2px solid white; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: absolute;
+                left: -10px;
+                top: -10px;
+                ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
+              ">
+                <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
+                  ${tipoInfo.iconSvg.replace('width="16" height="16"', 'width="11" height="11"').replace('width="14" height="14"', 'width="11" height="11"')}
+                </div>
+              </div>
+            `,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0],
+          })
           
-          L.marker([empresa.lat, empresa.lng], { icon: customIcon }).addTo(exportMap)
+          L.marker([empresa.lat, empresa.lng], { icon: customIcon }).addTo(tempMap)
         }
       })
-    }
-    
-    // Agregar título y información de filtros
-const titleDiv = document.createElement('div')
-titleDiv.style.cssText = `
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: white;
-  padding: 18px 24px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  z-index: 1000;
-  width: 320px;
-`
-
-// Construir información de filtros aplicados
-const filtrosAplicados = []
-if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
-  const tipoTexto = filters.tipo_empresa === 'producto' ? 'Productos' : 
-                    filters.tipo_empresa === 'servicio' ? 'Servicios' : 'Mixtas'
-  filtrosAplicados.push(`Tipo: ${tipoTexto}`)
-}
-if (filters.rubro && filters.rubro !== 'all') {
-  // Aquí podrías obtener el nombre del rubro si lo tienes disponible
-  filtrosAplicados.push(`Rubro aplicado`)
-}
-if (filters.subRubro && filters.subRubro !== 'all') {
-  filtrosAplicados.push(`Subrubro aplicado`)
-}
-if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
-  const catTexto = filters.categoria_matriz === 'exportadora' ? 'Exportadora' :
-                   filters.categoria_matriz === 'potencial_exportadora' ? 'Potencial Exportadora' : 'Etapa Inicial'
-  filtrosAplicados.push(`Categoría: ${catTexto}`)
-}
-if (filters.exporta && filters.exporta !== 'all') {
-  filtrosAplicados.push(filters.exporta === 'si' ? 'Solo exportadoras' : 'No exportadoras')
-}
-if (searchQuery) {
-  filtrosAplicados.push(`Búsqueda: "${searchQuery}"`)
-}
-
-const filtrosHtml = filtrosAplicados.length > 0 ? `
-  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-    <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 6px;">
-      FILTROS APLICADOS
-    </div>
-    <div style="display: flex; flex-direction: column; gap: 3px;">
-      ${filtrosAplicados.map(filtro => `
-        <div style="font-size: 11px; color: #374151;">• ${filtro}</div>
-      `).join('')}
-    </div>
-  </div>
-` : ''
-
-const legendHtml = showHeatmap ? `
-  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-    <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 10px;">DENSIDAD DE EMPRESAS</div>
-    <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; border-radius: 3px; background: #10b981; flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #374151;">Baja</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; border-radius: 3px; background: #fbbf24; flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #374151;">Media</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; border-radius: 3px; background: #f97316; flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #374151;">Alta</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; border-radius: 3px; background: #ef4444; flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #374151; white-space: nowrap;">Muy Alta</span>
-      </div>
-    </div>
-  </div>
-` : `
-  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-    <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">TIPOS DE EMPRESA</div>
-    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-      <div style="display: flex; align-items: center; gap: 5px;">
-        <div style="width: 16px; height: 16px; background: #3259B5; border-radius: 3px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
-        <span style="font-size: 11px; color: #6b7280;">Productos</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 5px;">
-        <div style="width: 16px; height: 16px; background: #3259B5; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
-        <span style="font-size: 11px; color: #6b7280;">Servicios</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 5px;">
-        <div style="width: 16px; height: 16px; background: #3259B5; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transform: rotate(45deg);"></div>
-        <span style="font-size: 11px; color: #6b7280;">Mixta</span>
-      </div>
-    </div>
-  </div>
-`
-
-titleDiv.innerHTML = `
-  <div style="font-size: 20px; font-weight: 700; color: #222A59; margin-bottom: 4px;">
-    Mapa de Empresas
-  </div>
-  <div style="font-size: 14px; color: #6b7280; margin-bottom: 2px;">
-    Provincia de Catamarca
-  </div>
-  <div style="font-size: 12px; color: #9ca3af;">
-    ${empresas.length} empresa${empresas.length !== 1 ? 's' : ''} ${filtrosAplicados.length > 0 ? 'filtradas' : 'registradas'}
-  </div>
-  ${filtrosHtml}
-  ${legendHtml}
-`
-    
-    exportDiv.appendChild(titleDiv)
-    
-    // Esperar que todo se renderice
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Capturar la imagen
-    const dataUrl = await domtoimage.toPng(exportDiv, {
-      quality: 1,
-      bgcolor: '#f8f9fa',
-      width: 1200,
-      height: 1400,
-      cacheBust: true,
-      skipFonts: true,
-      filter: (node: any) => {
-        if (node.className && typeof node.className === 'string') {
-          return !node.className.includes('leaflet-control')
-        }
-        return true
-      },
-      onclone: (clonedDoc: any) => {
-        // Remover referencias a CSS externos que causan problemas de seguridad
-        try {
-          const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]')
-          links.forEach((link: any) => {
-            if (link.href && (link.href.includes('leaflet.css') || link.href.includes('unpkg.com'))) {
-              link.remove()
-            }
-          })
-        } catch (e) {
-          // Ignorar errores al remover links
-        }
-        return clonedDoc
-      }
-    })
-    
-    // Limpiar
-    exportMap.remove()
-    document.body.removeChild(exportDiv)
-    
-    if (formato === 'png') {
-      const link = document.createElement('a')
-      link.download = `mapa-catamarca-${showHeatmap ? 'densidad' : 'empresas'}-${new Date().toISOString().split('T')[0]}.png`
-      link.href = dataUrl
-      link.click()
-    } else if (jsPDF) {
-      const img = new Image()
-      img.src = dataUrl
       
-      img.onload = () => {
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        })
-        
-        const pageWidth = pdf.internal.pageSize.getWidth()
-        const pageHeight = pdf.internal.pageSize.getHeight()
-        const imgAspectRatio = img.width / img.height
-        
-        let finalWidth = pageWidth - 20
-        let finalHeight = finalWidth / imgAspectRatio
-        
-        if (finalHeight > pageHeight - 20) {
-          finalHeight = pageHeight - 20
-          finalWidth = finalHeight * imgAspectRatio
-        }
-        
-        const xOffset = (pageWidth - finalWidth) / 2
-        const yOffset = 10
-        
-        pdf.addImage(dataUrl, 'PNG', xOffset, yOffset, finalWidth, finalHeight)
-        pdf.save(`mapa-catamarca-${showHeatmap ? 'densidad' : 'empresas'}-${new Date().toISOString().split('T')[0]}.pdf`)
-      }
-    }
-    
-    toast({
-      title: "Éxito",
-      description: `Mapa de Catamarca exportado como ${formato.toUpperCase()}`,
-    })
-  } catch (error) {
-    console.error('Error exportando mapa:', error)
-    toast({
-      title: "Error",
-      description: "No se pudo exportar el mapa. Intenta de nuevo.",
-      variant: "destructive",
-    })
-  } finally {
-// Limpiar el style override si existe
-  const styleOverride = document.getElementById('export-map-override')
-  if (styleOverride) {
-    document.head.removeChild(styleOverride)
-  }
-  setExportingMap(false)
-}
-}
+      const infoDiv = document.createElement('div')
+      infoDiv.style.cssText = `
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        padding: 18px 24px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        width: 320px;
+      `
 
-// Función para exportar polígono de un departamento
-const exportarDepartamento = async (nombreDepartamento: string) => {
-  if (!map) return
-  
-  setExportingDept(true)
-  
-  try {
-    const domtoimage = (await import('dom-to-image-more')).default
-    const leafletModule = await import("leaflet")
-    const L = (leafletModule as any).default || leafletModule
-    
-    // Buscar el feature del departamento en el GeoJSON
-    const response = await fetch('/catamarca_departamentos.geojson')
-    const geojsonData = await response.json()
-    
-    let targetFeature: any = null
-    
-    geojsonData.features.forEach((feature: any) => {
-      if (feature.properties.nombre === nombreDepartamento) {
-        targetFeature = feature
+      const filtrosAplicados = []
+      if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
+        const tipoTexto = filters.tipo_empresa === 'producto' ? 'Productos' : 
+                          filters.tipo_empresa === 'servicio' ? 'Servicios' : 'Mixtas'
+        filtrosAplicados.push(`Tipo: ${tipoTexto}`)
       }
-    })
-    
-    if (!targetFeature) {
-      throw new Error("Departamento no encontrado en GeoJSON")
-    }
-    
-    // Crear un div temporal para el mapa de exportación
-    const exportDiv = document.createElement('div')
-    exportDiv.id = 'export-dept-map'
-    exportDiv.style.width = '900px'
-    exportDiv.style.height = '900px'
-    exportDiv.style.position = 'absolute'
-    exportDiv.style.left = '-99999px'
-    exportDiv.style.top = '0'
-    exportDiv.style.zIndex = '-1'
-    exportDiv.style.backgroundColor = '#f8f9fa'  // Fondo gris claro
-    document.body.appendChild(exportDiv)
-
-
-
-// AGREGAR ESTO: Inyectar estilos para eliminar recuadros
-const styleOverride = document.createElement('style')
-styleOverride.id = 'export-dept-override'
-styleOverride.textContent = `
-  #export-dept-map * {
-    box-sizing: border-box;
-  }
-  #export-dept-map .leaflet-marker-icon {
-    background: none !important;
-    border: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  #export-dept-map .leaflet-div-icon {
-    background: transparent !important;
-    border: none !important;
-  }
-  #export-dept-map .leaflet-marker-pane * {
-    background: transparent !important;
-    border: none !important;
-  }
-  #export-dept-map .leaflet-overlay-pane * {
-    background: transparent !important;
-  }
-  /* Eliminar cualquier borde/sombra no deseado */
-  #export-dept-map [class*="leaflet"] {
-    background: transparent !important;
-    border: none !important;
-  }
-`
-document.head.appendChild(styleOverride)
-    
-    // Crear mapa temporal SIN capa base
-    const tempMap = L.map(exportDiv, {
-      zoomControl: false,
-      attributionControl: false,
-      dragging: false,
-      touchZoom: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      tap: false
-    })
-    
-    // Normalizar nombre para buscar cantidad de empresas
-    const nombreNormalizado = nombreDepartamento
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-    
-    const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-    const color = getColorPorCantidad(cantidad)
-    
-    // Agregar el polígono del departamento
-    const deptGeoJSON = L.geoJSON(targetFeature, {
-      style: {
-        fillColor: color,
-        weight: 3,
-        opacity: 1,
-        color: '#222A59',
-        fillOpacity: 0.7
+      if (filters.rubro && filters.rubro !== 'all') {
+        filtrosAplicados.push(`Rubro aplicado`)
       }
-    }).addTo(tempMap)
-    
-    // Ajustar vista al departamento con padding
-    tempMap.fitBounds(deptGeoJSON.getBounds(), { 
-      padding: [80, 80]
-    })
-    
-    // Forzar tamaño
-    tempMap.invalidateSize()
-    
-    // Esperar ajuste de vista
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
-    // Filtrar empresas de este departamento
-    const empresasDept = empresas.filter(e => e.departamento_nombre === nombreDepartamento)
-    
-    // Agregar marcadores de empresas
-empresasDept.forEach((empresa) => {
-  if (empresa.lat && empresa.lng) {
-    // Obtener color según el tipo de empresa
-    const getTipoColor = (tipo: string): string => {
-      switch(tipo?.toLowerCase()) {
-        case 'producto':
-          return '#3b82f6' // Azul para productos
-        case 'servicio':
-          return '#10b981' // Verde para servicios
-        case 'mixta':
-          return '#f59e0b' // Amarillo/Naranja para mixta
-        default:
-          return '#6b7280' // Gris para tipo desconocido
+      if (filters.subRubro && filters.subRubro !== 'all') {
+        filtrosAplicados.push(`Subrubro aplicado`)
       }
-    }
-    
-    const tipoColor = getTipoColor(empresa.tipo_empresa || '')
-    const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
-    
-    const customIcon = L.divIcon({
-      className: '',  // ← VACÍO
-      html: `
-        <div style="
-          background-color: ${tipoColor}; 
-          width: 20px;
-          height: 20px;
-          border-radius: ${tipoInfo.borderRadius}; 
-          border: 2px solid white; 
-          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          position: absolute;
-          left: -10px;
-          top: -10px;
-          ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
-        ">
-          <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
-            ${tipoInfo.iconSvg.replace('width="16" height="16"', 'width="11" height="11"').replace('width="14" height="14"', 'width="11" height="11"')}
+      if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
+        const catTexto = filters.categoria_matriz === 'exportadora' ? 'Exportadora' :
+                         filters.categoria_matriz === 'potencial_exportadora' ? 'Potencial Exportadora' : 'Etapa Inicial'
+        filtrosAplicados.push(`Categoría: ${catTexto}`)
+      }
+      if (filters.exporta && filters.exporta !== 'all') {
+        filtrosAplicados.push(filters.exporta === 'si' ? 'Solo exportadoras' : 'No exportadoras')
+      }
+      if (searchQuery) {
+        filtrosAplicados.push(`Búsqueda: "${searchQuery}"`)
+      }
+
+      const filtrosHtml = filtrosAplicados.length > 0 ? `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+          <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 6px;">
+            FILTROS APLICADOS
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            ${filtrosAplicados.map(filtro => `
+              <div style="font-size: 11px; color: #374151;">• ${filtro}</div>
+            `).join('')}
           </div>
         </div>
-      `,
-      iconSize: [0, 0],      // ← IMPORTANTE: [0, 0]
-      iconAnchor: [0, 0],    // ← IMPORTANTE: [0, 0]
-    })
-    
-    L.marker([empresa.lat, empresa.lng], { icon: customIcon }).addTo(tempMap)
-  }
-})
-    
-    // Contar empresas por categoría
-    const categorias = {
-      'Exportadora': empresasDept.filter(e => e.categoria === 'Exportadora').length,
-      'Potencial Exportadora': empresasDept.filter(e => e.categoria === 'Potencial Exportadora').length,
-      'Etapa Inicial': empresasDept.filter(e => e.categoria === 'Etapa Inicial').length,
-    }
-    
- // Agregar título, información y leyenda
-const infoDiv = document.createElement('div')
-infoDiv.style.cssText = `
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: white;
-  padding: 18px 24px;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 1000;
-  width: 320px;
-`
+      ` : ''
 
-// Construir información de filtros aplicados
-const filtrosAplicados = []
-if (filters.tipo_empresa && filters.tipo_empresa !== 'all') {
-  const tipoTexto = filters.tipo_empresa === 'producto' ? 'Productos' : 
-                    filters.tipo_empresa === 'servicio' ? 'Servicios' : 'Mixtas'
-  filtrosAplicados.push(`Tipo: ${tipoTexto}`)
-}
-if (filters.rubro && filters.rubro !== 'all') {
-  filtrosAplicados.push(`Rubro aplicado`)
-}
-if (filters.subRubro && filters.subRubro !== 'all') {
-  filtrosAplicados.push(`Subrubro aplicado`)
-}
-if (filters.categoria_matriz && filters.categoria_matriz !== 'all') {
-  const catTexto = filters.categoria_matriz === 'exportadora' ? 'Exportadora' :
-                   filters.categoria_matriz === 'potencial_exportadora' ? 'Potencial Exportadora' : 'Etapa Inicial'
-  filtrosAplicados.push(`Categoría: ${catTexto}`)
-}
-if (filters.exporta && filters.exporta !== 'all') {
-  filtrosAplicados.push(filters.exporta === 'si' ? 'Solo exportadoras' : 'No exportadoras')
-}
-if (searchQuery) {
-  filtrosAplicados.push(`Búsqueda: "${searchQuery}"`)
-}
-
-const filtrosHtml = filtrosAplicados.length > 0 ? `
-  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-    <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 6px;">
-      FILTROS APLICADOS
-    </div>
-    <div style="display: flex; flex-direction: column; gap: 3px;">
-      ${filtrosAplicados.map(filtro => `
-        <div style="font-size: 11px; color: #374151;">• ${filtro}</div>
-      `).join('')}
-    </div>
-  </div>
-` : ''
-
-infoDiv.innerHTML = `
-  <div style="font-size: 20px; font-weight: 700; color: #222A59; margin-bottom: 6px;">
-    ${nombreDepartamento}
-  </div>
-  <div style="font-size: 13px; color: #6b7280; margin-bottom: 3px;">
-    Departamento - Catamarca
-  </div>
-  <div style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
-    ${empresasDept.length} empresa${empresasDept.length !== 1 ? 's' : ''} ${filtrosAplicados.length > 0 ? 'filtradas' : 'registradas'}
-  </div>
-  
-  ${filtrosHtml}
-  
-  <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-    <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">
-      TIPOS DE EMPRESA
-    </div>
-    <div style="display: flex; flex-direction: column; gap: 6px;">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; background: #3259B5; border-radius: 3px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #6b7280;">Productos</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; background: #3259B5; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #6b7280;">Servicios</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="width: 18px; height: 18px; background: #3259B5; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transform: rotate(45deg); flex-shrink: 0;"></div>
-        <span style="font-size: 13px; color: #6b7280;">Mixta</span>
-      </div>
-    </div>
-  </div>
-`
-    
-    exportDiv.appendChild(infoDiv)
-    
-    // Agregar etiqueta del nombre del departamento en el centro del polígono
-    const bounds = deptGeoJSON.getBounds()
-    const center = bounds.getCenter()
-    
-    // NO crear el centerLabel como marker, sino como un div HTML puro
-const centerLabelDiv = document.createElement('div')
-centerLabelDiv.style.cssText = `
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(34, 42, 89, 0.15);
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 24px;
-  font-weight: 700;
-  color: rgba(34, 42, 89, 0.4);
-  text-align: center;
-  pointer-events: none;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  z-index: 500;
-`
-//centerLabelDiv.textContent = nombreDepartamento
-//exportDiv.appendChild(centerLabelDiv)
-    
-    // Esperar renderización completa
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    // Capturar como imagen
-    const dataUrl = await domtoimage.toPng(exportDiv, {
-      quality: 1,
-      bgcolor: '#f8f9fa',
-      width: 900,  // o 1200/1400 según la función
-      height: 900, // o 1400 según la función
-      cacheBust: true,
-      skipFonts: true,
-      useCORS: true,
-      allowTaint: false,
-      imagePlaceholder: undefined,
-      filter: (node: any) => {
-        // Filtrar controles de Leaflet
-        if (node.className && typeof node.className === 'string') {
-          if (node.className.includes('leaflet-control')) return false
-        }
-        // Filtrar elementos con recursos externos
-        if (node.tagName === 'LINK' && node.href?.includes('_next')) return false
-        if (node.tagName === 'STYLE' && node.textContent?.includes('@font-face')) return false
-    return true
-  },
-  onclone: (clonedDoc: any) => {
-    // Remover todas las referencias a fuentes en el documento clonado
-    const styles = clonedDoc.querySelectorAll('style')
-    styles.forEach((style: any) => {
-      if (style.textContent?.includes('@font-face')) {
-        style.textContent = style.textContent.replace(/@font-face[^}]+}/g, '')
-      }
-    })
-    // Remover referencias a CSS externos que causan problemas de seguridad
-    try {
-      const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]')
-      links.forEach((link: any) => {
-        if (link.href && (link.href.includes('leaflet.css') || link.href.includes('unpkg.com'))) {
-          link.remove()
+      infoDiv.innerHTML = `
+        <div style="font-size: 20px; font-weight: 700; color: #222A59; margin-bottom: 6px;">
+          ${nombreDepartamento}
+        </div>
+        <div style="font-size: 13px; color: #6b7280; margin-bottom: 3px;">
+          Departamento - Catamarca
+        </div>
+        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
+          ${empresasDept.length} empresa${empresasDept.length !== 1 ? 's' : ''} ${filtrosAplicados.length > 0 ? 'filtradas' : 'registradas'}
+        </div>
+        
+        ${filtrosHtml}
+        
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+          <div style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">
+            TIPOS DE EMPRESA
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; background: #3259B5; border-radius: 3px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #6b7280;">Productos</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; background: #3259B5; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #6b7280;">Servicios</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 18px; height: 18px; background: #3259B5; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transform: rotate(45deg); flex-shrink: 0;"></div>
+              <span style="font-size: 13px; color: #6b7280;">Mixta</span>
+            </div>
+          </div>
+        </div>
+      `
+      
+      exportDiv.appendChild(infoDiv)
+      
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      const dataUrl = await domtoimage.toPng(exportDiv, {
+        quality: 1,
+        bgcolor: '#f8f9fa',
+        width: 900,
+        height: 900,
+        cacheBust: true,
+        skipFonts: true,
+        useCORS: true,
+        allowTaint: false,
+        imagePlaceholder: undefined,
+        filter: (node: any) => {
+          if (node.className && typeof node.className === 'string') {
+            if (node.className.includes('leaflet-control')) return false
+          }
+          if (node.tagName === 'LINK' && node.href?.includes('_next')) return false
+          if (node.tagName === 'STYLE' && node.textContent?.includes('@font-face')) return false
+          return true
+        },
+        onclone: (clonedDoc: any) => {
+          const styles = clonedDoc.querySelectorAll('style')
+          styles.forEach((style: any) => {
+            if (style.textContent?.includes('@font-face')) {
+              style.textContent = style.textContent.replace(/@font-face[^}]+}/g, '')
+            }
+          })
+          try {
+            const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]')
+            links.forEach((link: any) => {
+              if (link.href && (link.href.includes('leaflet.css') || link.href.includes('unpkg.com'))) {
+                link.remove()
+              }
+            })
+          } catch (e) {}
+          return clonedDoc
         }
       })
-    } catch (e) {
-      // Ignorar errores al remover links
+      
+      const link = document.createElement('a')
+      link.download = `departamento-${nombreDepartamento.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.png`
+      link.href = dataUrl
+      link.click()
+      
+      tempMap.remove()
+      document.body.removeChild(exportDiv)
+      
+      toast({
+        title: "Éxito",
+        description: `Departamento "${nombreDepartamento}" exportado con ${empresasDept.length} empresa${empresasDept.length !== 1 ? 's' : ''}`,
+      })
+    } catch (error) {
+      console.error('Error exportando departamento:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo exportar el departamento",
+        variant: "destructive",
+      })
+    } finally {
+      const styleOverride = document.getElementById('export-dept-override')
+      if (styleOverride) {
+        document.head.removeChild(styleOverride)
+      }
+      setExportingDept(false)
     }
-    return clonedDoc
   }
-})
-    
-    // Descargar
-    const link = document.createElement('a')
-    link.download = `departamento-${nombreDepartamento.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.png`
-    link.href = dataUrl
-    link.click()
-    
-    // Limpiar
-    tempMap.remove()
-    document.body.removeChild(exportDiv)
-    
-    toast({
-      title: "Éxito",
-      description: `Departamento "${nombreDepartamento}" exportado con ${empresasDept.length} empresa${empresasDept.length !== 1 ? 's' : ''}`,
-    })
-  } catch (error) {
-    console.error('Error exportando departamento:', error)
-    toast({
-      title: "Error",
-      description: "No se pudo exportar el departamento",
-      variant: "destructive",
-    })
-  } finally {
-    // Limpiar el style override si existe
-  const styleOverride = document.getElementById('export-dept-override')
-  if (styleOverride) {
-    document.head.removeChild(styleOverride)
-  }
-  setExportingDept(false)
-}
-}
 
   const getCategoriaColor = (categoria: string): string => {
     switch (categoria) {
       case "Exportadora":
         return "#C3C840"
       case "Potencial Exportadora":
-        return "#F59E0B"
+        return "#C0217E"
       case "Etapa Inicial":
         return "#629BD2"
       default:
@@ -1593,47 +1346,47 @@ centerLabelDiv.style.cssText = `
   }
 
   const getTipoEmpresaInfo = (tipo: string): { iconSvg: string; shape: string; borderRadius: string } => {
-  const icons = {
-    producto: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.55 4.24"></path><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg>',
-    servicio: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
-    mixta: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>',
-    default: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>'
-  }
+    const icons = {
+      producto: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.55 4.24"></path><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg>',
+      servicio: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
+      mixta: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>',
+      default: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>'
+    }
 
-  switch (tipo) {
-    case "producto":
-      return { 
-        iconSvg: icons.producto,
-        shape: "square",
-        borderRadius: "4px"  // Cambiar de 3px a 4px para que sea más cuadrado
-      }
-    case "servicio":
-      return { 
-        iconSvg: icons.servicio,
-        shape: "circle",
-        borderRadius: "50%"
-      }
-    case "mixta":
-      return { 
-        iconSvg: icons.mixta,
-        shape: "diamond",
-        borderRadius: "4px"  // Cambiar de 3px a 4px
-      }
-    default:
-      return { 
-        iconSvg: icons.default,
-        shape: "circle",
-        borderRadius: "50%"
-      }
+    switch (tipo) {
+      case "producto":
+        return { 
+          iconSvg: icons.producto,
+          shape: "square",
+          borderRadius: "4px"
+        }
+      case "servicio":
+        return { 
+          iconSvg: icons.servicio,
+          shape: "circle",
+          borderRadius: "50%"
+        }
+      case "mixta":
+        return { 
+          iconSvg: icons.mixta,
+          shape: "diamond",
+          borderRadius: "4px"
+        }
+      default:
+        return { 
+          iconSvg: icons.default,
+          shape: "circle",
+          borderRadius: "50%"
+        }
+    }
   }
-}
 
   const getCategoriaBadgeColor = (categoria: string) => {
     switch (categoria) {
       case "Exportadora":
         return "bg-[#C3C840] text-[#222A59]"
       case "Potencial Exportadora":
-        return "bg-[#F59E0B] text-white"
+        return "bg-[#C0217E] text-white"
       case "Etapa Inicial":
         return "bg-[#629BD2] text-white"
       default:
@@ -1642,17 +1395,35 @@ centerLabelDiv.style.cssText = `
   }
 
   const handleFilterChange = (newFilters: any) => {
-  setFilters({ ...filters, ...newFilters })
-}
+    setFilters({ ...filters, ...newFilters })
+  }
 
-const handleClearFilters = () => {
-  setFilters({})
-  setSearchQuery("")
-}
+  const handleClearFilters = () => {
+    setFilters({})
+    setSearchQuery("")
+  }
 
-const handleSearchChange = (value: string) => {
-  setSearchQuery(value)
-}
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+  }
+
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-[#6B7280]">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar permisos final
+  if (!canAccessDashboard) {
+    return null
+  }
 
   return (
     <MainLayout>
@@ -1664,28 +1435,26 @@ const handleSearchChange = (value: string) => {
           </p>
         </div>
 
-        {/* AGREGAR AQUÍ - Barra de búsqueda y filtros */}
-<div className="flex flex-col sm:flex-row gap-3">
-  <div className="flex-1 relative">
-    {searchQuery && (
-      <button
-        onClick={() => handleSearchChange("")}
-        className="absolute right-3 top-1/2 transform -translate-y-1/2"
-      >
-        <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-      </button>
-    )}
-  </div>
-  <FiltersDropdown 
-    onFilterChange={handleFilterChange} 
-    onClearFilters={handleClearFilters}
-    filters={filters}
-  />
-  <div className="text-sm text-muted-foreground flex items-center">
-    Mostrando {empresas.length} de {allEmpresas.length} empresas
-  </div>
-</div>
-
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            {searchQuery && (
+              <button
+                onClick={() => handleSearchChange("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2"
+              >
+                <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+          <FiltersDropdown 
+            onFilterChange={handleFilterChange} 
+            onClearFilters={handleClearFilters}
+            filters={filters}
+          />
+          <div className="text-sm text-muted-foreground flex items-center">
+            Mostrando {empresas.length} de {allEmpresas.length} empresas
+          </div>
+        </div>
 
         {loading ? (
           <Card>
@@ -1709,90 +1478,87 @@ const handleSearchChange = (value: string) => {
           <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
-<CardHeader>
-  <div className="space-y-3">
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-  <div>
-    <CardTitle className="text-[#222A59]">Mapa Interactivo</CardTitle>
-    <CardDescription>
-      {empresas.length} empresa{empresas.length !== 1 ? 's' : ''} con ubicación geográfica
-    </CardDescription>
-  </div>
-  <div className="flex flex-wrap gap-2">
-    <Button
-      variant={showHeatmap ? "default" : "outline"}
-      size="sm"
-      onClick={toggleHeatmap}
-      disabled={!mapLoaded}
-      className={showHeatmap ? "bg-[#3259B5]" : ""}
-    >
-      {showHeatmap ? <MapPinned className="h-4 w-4 mr-2" /> : <Flame className="h-4 w-4 mr-2" />}
-      {showHeatmap ? "Ver Marcadores" : "Ver Mapa de Calor"}
-    </Button>
-    
-    {/* Botones de exportación */}
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => exportarMapaCompleto('png')}
-      disabled={!mapLoaded || exportingMap}
-    >
-      {exportingMap ? (
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-      ) : (
-        <FileImage className="h-4 w-4 mr-2" />
-      )}
-      Exportar PNG
-    </Button>
-    
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => exportarMapaCompleto('pdf')}
-      disabled={!mapLoaded || exportingMap}
-    >
-      {exportingMap ? (
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-      ) : (
-        <FileDown className="h-4 w-4 mr-2" />
-      )}
-      Exportar PDF
-    </Button>
-  </div>
-</div>
-    
-    {/* Leyenda horizontal compacta */}
-    {showHeatmap && (
-      <div className="hidden lg:flex items-center gap-4 text-xs bg-muted/50 px-4 py-2 rounded-md">
-        <span className="font-semibold text-[#222A59]">Densidad:</span>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#10b981' }} />
-          <span className="text-muted-foreground">Baja</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#fbbf24' }} />
-          <span className="text-muted-foreground">Media</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f97316' }} />
-          <span className="text-muted-foreground">Alta</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }} />
-          <span className="text-muted-foreground">Muy Alta</span>
-        </div>
-      </div>
-    )}
-  </div>
-</CardHeader>
+                <CardHeader>
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-[#222A59]">Mapa Interactivo</CardTitle>
+                        <CardDescription>
+                          {empresas.length} empresa{empresas.length !== 1 ? 's' : ''} con ubicación geográfica
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant={showHeatmap ? "default" : "outline"}
+                          size="sm"
+                          onClick={toggleHeatmap}
+                          disabled={!mapLoaded}
+                          className={showHeatmap ? "bg-[#3259B5]" : ""}
+                        >
+                          {showHeatmap ? <MapPinned className="h-4 w-4 mr-2" /> : <Flame className="h-4 w-4 mr-2" />}
+                          {showHeatmap ? "Ver Marcadores" : "Ver Mapa de Calor"}
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportarMapaCompleto('png')}
+                          disabled={!mapLoaded || exportingMap}
+                        >
+                          {exportingMap ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <FileImage className="h-4 w-4 mr-2" />
+                          )}
+                          Exportar PNG
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportarMapaCompleto('pdf')}
+                          disabled={!mapLoaded || exportingMap}
+                        >
+                          {exportingMap ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <FileDown className="h-4 w-4 mr-2" />
+                          )}
+                          Exportar PDF
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {showHeatmap && (
+                      <div className="hidden lg:flex items-center gap-4 text-xs bg-muted/50 px-4 py-2 rounded-md">
+                        <span className="font-semibold text-[#222A59]">Densidad:</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#10b981' }} />
+                          <span className="text-muted-foreground">Baja</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#fbbf24' }} />
+                          <span className="text-muted-foreground">Media</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f97316' }} />
+                          <span className="text-muted-foreground">Alta</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }} />
+                          <span className="text-muted-foreground">Muy Alta</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
                 <CardContent className="relative">
                   <div 
                     id="empresas-map" 
                     className="h-[500px] md:h-[600px] lg:h-[700px] rounded-lg border shadow-sm w-full relative z-0"
-                    style={{ isolation: 'isolate' }}
                   />
                   {!mapLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-lg z-10" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/50 rounded-lg z-10 pointer-events-none">
                       <div className="text-center space-y-2">
                         <Loader2 className="h-6 w-6 animate-spin text-[#3259B5] mx-auto" />
                         <p className="text-sm text-muted-foreground">Cargando mapa...</p>
@@ -1921,7 +1687,7 @@ const handleSearchChange = (value: string) => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 md:gap-3">
-                      <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-[#F59E0B] flex-shrink-0" />
+                      <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-[#C0217E] flex-shrink-0" />
                       <div className="min-w-0">
                         <p className="font-semibold text-xs md:text-sm">Potencial Exportadora</p>
                         <p className="text-xs text-muted-foreground">6-11 puntos</p>
@@ -1939,94 +1705,93 @@ const handleSearchChange = (value: string) => {
               </Card>
 
               <Card>
-  <CardHeader>
-    <CardTitle className="text-[#222A59]">Leyenda - Tipos de Empresa</CardTitle>
-  </CardHeader>
-  <CardContent>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-      <div className="flex items-center gap-2 md:gap-3">
-        <div className="w-6 h-6 rounded bg-[#3259B5] flex items-center justify-center flex-shrink-0 border-2 border-white shadow-md">
-          <Package className="h-3.5 w-3.5 text-white" />
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-xs md:text-sm">Productos</p>
-          <p className="text-xs text-muted-foreground">Cuadrado</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 md:gap-3">
-        <div className="w-6 h-6 rounded-full bg-[#3259B5] flex items-center justify-center flex-shrink-0 border-2 border-white shadow-md">
-          <Wrench className="h-3.5 w-3.5 text-white" />
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-xs md:text-sm">Servicios</p>
-          <p className="text-xs text-muted-foreground">Círculo</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 md:gap-3">
-        <div className="w-6 h-6 rounded bg-[#3259B5] flex items-center justify-center flex-shrink-0 border-2 border-white shadow-md" style={{ transform: 'rotate(45deg)' }}>
-          <div style={{ transform: 'rotate(-45deg)' }}>
-            <Building className="h-3.5 w-3.5 text-white" />
-          </div>
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-xs md:text-sm">Mixta</p>
-          <p className="text-xs text-muted-foreground">Diamante</p>
-        </div>
-      </div>
-    </div>
-  </CardContent>
-</Card>
+                <CardHeader>
+                  <CardTitle className="text-[#222A59]">Leyenda - Tipos de Empresa</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-6 h-6 rounded bg-[#3259B5] flex items-center justify-center flex-shrink-0 border-2 border-white shadow-md">
+                        <Package className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-xs md:text-sm">Productos</p>
+                        <p className="text-xs text-muted-foreground">Cuadrado</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-6 h-6 rounded-full bg-[#3259B5] flex items-center justify-center flex-shrink-0 border-2 border-white shadow-md">
+                        <Wrench className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-xs md:text-sm">Servicios</p>
+                        <p className="text-xs text-muted-foreground">Círculo</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-6 h-6 rounded bg-[#3259B5] flex items-center justify-center flex-shrink-0 border-2 border-white shadow-md" style={{ transform: 'rotate(45deg)' }}>
+                        <div style={{ transform: 'rotate(-45deg)' }}>
+                          <Building className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-xs md:text-sm">Mixta</p>
+                        <p className="text-xs text-muted-foreground">Diamante</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-{/* Nueva Card para exportar departamentos individuales */}
-<Card className="lg:col-span-2">
-  <CardHeader>
-    <CardTitle className="text-[#222A59]">Exportar Departamentos</CardTitle>
-    <CardDescription>
-      Haz clic en un departamento para exportarlo
-    </CardDescription>
-  </CardHeader>
-  <CardContent>
-    <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2">
-      {Object.entries(empresasPorDepartamento)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([deptNormalizado, cantidad]) => {
-          const empresaDelDept = empresas.find(
-            e => e.departamento_nombre && 
-            e.departamento_nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() === deptNormalizado
-          )
-          const nombreOriginal = empresaDelDept?.departamento_nombre || deptNormalizado
-          
-          return (
-            <Button
-              key={deptNormalizado}
-              variant="outline"
-              onClick={() => exportarDepartamento(nombreOriginal)}
-              disabled={exportingDept}
-              className="w-full justify-between h-auto py-3"
-            >
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-4 h-4 rounded flex-shrink-0" 
-                  style={{ backgroundColor: getColorPorCantidad(cantidad) }}
-                />
-                <div className="text-left">
-                  <p className="font-medium">{nombreOriginal}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {cantidad} empresa{cantidad !== 1 ? 's' : ''}
-                  </p>
-                </div>
-              </div>
-              {exportingDept ? (
-                <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-              ) : (
-                <Download className="h-4 w-4 flex-shrink-0" />
-              )}
-            </Button>
-          )
-        })}
-    </div>
-  </CardContent>
-</Card>
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-[#222A59]">Exportar Departamentos</CardTitle>
+                  <CardDescription>
+                    Haz clic en un departamento para exportarlo
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2">
+                    {Object.entries(empresasPorDepartamento)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([deptNormalizado, cantidad]) => {
+                        const empresaDelDept = empresas.find(
+                          e => e.departamento_nombre && 
+                          e.departamento_nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() === deptNormalizado
+                        )
+                        const nombreOriginal = empresaDelDept?.departamento_nombre || deptNormalizado
+                        
+                        return (
+                          <Button
+                            key={deptNormalizado}
+                            variant="outline"
+                            onClick={() => exportarDepartamento(nombreOriginal)}
+                            disabled={exportingDept}
+                            className="w-full justify-between h-auto py-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div 
+                                className="w-4 h-4 rounded flex-shrink-0" 
+                                style={{ backgroundColor: getColorPorCantidad(cantidad) }}
+                              />
+                              <div className="text-left">
+                                <p className="font-medium">{nombreOriginal}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {cantidad} empresa{cantidad !== 1 ? 's' : ''}
+                                </p>
+                              </div>
+                            </div>
+                            {exportingDept ? (
+                              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                            ) : (
+                              <Download className="h-4 w-4 flex-shrink-0" />
+                            )}
+                          </Button>
+                        )
+                      })}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </>
         )}

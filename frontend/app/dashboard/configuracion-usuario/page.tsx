@@ -8,15 +8,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
+import { handleAuthError } from "@/hooks/use-dashboard-auth"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-import { Save, Lock, Eye, EyeOff, Shield } from "lucide-react"
+import { Save, Lock, Eye, EyeOff, Shield, Mail } from "lucide-react"
 
 interface UserProfile {
   id: number
   email: string
   is_active: boolean
-  rol?: {
+  rol?: number  // ID del rol
+  rol_detalle?: {
     id: number
     nombre: string
   }
@@ -30,6 +32,12 @@ export default function ConfiguracionUsuarioPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  
+  // Estados para cambio de email
+  const [emailData, setEmailData] = useState({
+    newEmail: "",
+    confirmEmail: "",
+  })
   
   // Estados para cambio de contraseña
   const [passwordData, setPasswordData] = useState({
@@ -54,15 +62,105 @@ export default function ConfiguracionUsuarioPage() {
       setLoading(true)
       const data = await api.getCurrentUser()
       setUserProfile(data)
-    } catch (error) {
-      console.error("Error cargando perfil:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo cargar la información del usuario",
-        variant: "destructive",
+      // Inicializar el email en el formulario
+      setEmailData({
+        newEmail: data.email || "",
+        confirmEmail: data.email || "",
       })
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error cargando perfil:", error)
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la información del usuario",
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleChangeEmail = async () => {
+    if (!emailData.newEmail || !emailData.confirmEmail) {
+      toast({
+        title: "Campos requeridos",
+        description: "Por favor completa todos los campos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (emailData.newEmail !== emailData.confirmEmail) {
+      toast({
+        title: "Error",
+        description: "Los emails no coinciden",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(emailData.newEmail)) {
+      toast({
+        title: "Email inválido",
+        description: "Por favor ingresa un email válido",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Verificar que el email sea diferente al actual
+    if (emailData.newEmail === userProfile?.email) {
+      toast({
+        title: "Sin cambios",
+        description: "El nuevo email es igual al actual",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setSaving(true)
+      
+      if (!userProfile?.id) {
+        throw new Error("No se pudo identificar al usuario")
+      }
+
+      // Actualizar el email usando el endpoint de actualización de usuario
+      await api.updateUsuario(userProfile.id, {
+        email: emailData.newEmail,
+      })
+
+      // Recargar el perfil para obtener los datos actualizados
+      const updatedData = await api.getCurrentUser()
+      setUserProfile(updatedData)
+      
+      // Refrescar el usuario en el contexto de autenticación
+      await refreshUser()
+
+      // Actualizar el formulario con el nuevo email
+      setEmailData({
+        newEmail: updatedData.email || "",
+        confirmEmail: updatedData.email || "",
+      })
+
+      toast({
+        title: "Éxito",
+        description: "Email actualizado correctamente. Por favor, inicia sesión nuevamente con tu nuevo email.",
+      })
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error cambiando email:", error)
+        toast({
+          title: "Error",
+          description: error.message || "No se pudo cambiar el email. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -117,12 +215,14 @@ export default function ConfiguracionUsuarioPage() {
         description: "Contraseña actualizada correctamente",
       })
     } catch (error: any) {
-      console.error("Error cambiando contraseña:", error)
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo cambiar la contraseña. Por favor, intenta nuevamente.",
-        variant: "destructive",
-      })
+      if (!handleAuthError(error)) {
+        console.error("Error cambiando contraseña:", error)
+        toast({
+          title: "Error",
+          description: error.message || "No se pudo cambiar la contraseña. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setSaving(false)
     }
@@ -147,6 +247,67 @@ export default function ConfiguracionUsuarioPage() {
             Gestiona la configuración de tu cuenta y preferencias
           </p>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[#222A59] flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Cambiar Email
+            </CardTitle>
+            <CardDescription>
+              Actualiza tu dirección de correo electrónico
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 md:space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="currentEmail">Email Actual</Label>
+                <Input
+                  id="currentEmail"
+                  type="email"
+                  value={userProfile.email}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="newEmail">Nuevo Email</Label>
+                <Input
+                  id="newEmail"
+                  type="email"
+                  value={emailData.newEmail}
+                  onChange={(e) =>
+                    setEmailData({ ...emailData, newEmail: e.target.value })
+                  }
+                  placeholder="nuevo@email.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmEmail">Confirmar Nuevo Email</Label>
+                <Input
+                  id="confirmEmail"
+                  type="email"
+                  value={emailData.confirmEmail}
+                  onChange={(e) =>
+                    setEmailData({ ...emailData, confirmEmail: e.target.value })
+                  }
+                  placeholder="Confirma tu nuevo email"
+                />
+              </div>
+            </div>
+
+            <Button
+              onClick={handleChangeEmail}
+              disabled={saving || !emailData.newEmail || !emailData.confirmEmail || emailData.newEmail !== emailData.confirmEmail || emailData.newEmail === userProfile.email}
+              className="bg-[#3259B5] hover:bg-[#222A59]"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? "Guardando..." : "Cambiar Email"}
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -259,7 +420,7 @@ export default function ConfiguracionUsuarioPage() {
             <div className="space-y-2">
               <Label className="text-muted-foreground">Rol</Label>
               <p className="text-sm font-medium">
-                {userProfile.rol?.nombre || "Sin rol asignado"}
+                {userProfile.rol_detalle?.nombre || "Sin rol asignado"}
               </p>
             </div>
             {userProfile.is_superuser && (

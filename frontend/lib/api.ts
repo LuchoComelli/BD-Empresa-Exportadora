@@ -431,173 +431,190 @@ async getEmpresas(params?: {
   if (params?.promo2idiomas) queryParams.append('promo2idiomas', params.promo2idiomas);
   if (params?.certificadopyme) queryParams.append('certificadopyme', params.certificadopyme);
   
-  // NO enviar paginación al backend cuando consultamos múltiples endpoints
-  // La paginación la haremos en el frontend después de combinar resultados
-  
-  const query = queryParams.toString();
-  
-  let endpoints: string[] = []
+  // ✅ Usar el nuevo endpoint unificado /empresas/
+  // Si se especifica tipo_empresa, agregarlo como filtro
   if (params?.tipo_empresa && params.tipo_empresa !== 'all') {
-    if (params.tipo_empresa === 'producto') {
-      endpoints = [`/empresas/empresas-producto/${query ? `?${query}` : ''}`]
-    } else if (params.tipo_empresa === 'servicio') {
-      endpoints = [`/empresas/empresas-servicio/${query ? `?${query}` : ''}`]
-    } else if (params.tipo_empresa === 'mixta') {
-      endpoints = [`/empresas/empresas-mixta/${query ? `?${query}` : ''}`]
-    }
+    queryParams.append('tipo_empresa_valor', params.tipo_empresa)
   }
   
-  if (endpoints.length === 0) {
-    endpoints = [
-      `/empresas/empresas-producto/${query ? `?${query}` : ''}`,
-      `/empresas/empresas-servicio/${query ? `?${query}` : ''}`,
-      `/empresas/empresas-mixta/${query ? `?${query}` : ''}`,
-    ]
-  }
-  
-  endpoints = endpoints.map(ep => ep.replace(/\/$/, ''))
-  
-  const resultados = await Promise.allSettled(
-    endpoints.map(endpoint => this.get<any>(endpoint))
-  );
-  
-  const allResults = resultados
-    .filter(r => r.status === 'fulfilled')
-    .map(r => (r as PromiseFulfilledResult<any>).value)
-  
-  // Combinar TODOS los resultados
-  const allEmpresas = allResults.flatMap(result => 
-    result.results || (Array.isArray(result) ? result : [])
-  );
-  
-  const total = allEmpresas.length;
-  
-  // APLICAR PAGINACIÓN EN EL FRONTEND
+  // Obtener todas las empresas del backend (usar page_size grande para evitar paginación)
+  // El backend tiene paginación por defecto de 20, así que pedimos más
   const page = params?.page || 1;
   const pageSize = params?.page_size || 10;
+  
+  // Pedir un page_size grande para obtener todas las empresas
+  queryParams.append('page_size', '1000'); // Suficientemente grande para obtener todas
+  
+  const query = queryParams.toString()
+  const endpoint = `/empresas/${query ? `?${query}` : ''}`.replace(/\/$/, '')
+  
+  const response = await this.get<any>(endpoint);
+  
+  // El backend devuelve { results: [...], count: N } cuando hay paginación
+  let allEmpresas: any[] = [];
+  let total = 0;
+  
+  if (response.results) {
+    // Respuesta paginada del backend
+    allEmpresas = response.results;
+    total = response.count || response.results.length;
+  } else if (Array.isArray(response)) {
+    // Respuesta directa como array
+    allEmpresas = response;
+    total = response.length;
+  }
+  
+  // Eliminar duplicados por ID (por si acaso)
+  const empresasMap = new Map<number, any>();
+  allEmpresas.forEach(empresa => {
+    if (empresa.id && !empresasMap.has(empresa.id)) {
+      empresasMap.set(empresa.id, empresa);
+    }
+  });
+  const empresasUnicas = Array.from(empresasMap.values());
+  
+  // Aplicar paginación en el frontend sobre todas las empresas obtenidas
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedEmpresas = allEmpresas.slice(startIndex, endIndex);
+  const paginatedEmpresas = empresasUnicas.slice(startIndex, endIndex);
   
-  console.log('[API] Total empresas:', total);
+  console.log('[API] Total empresas del backend:', total);
+  console.log('[API] Total empresas únicas:', empresasUnicas.length);
   console.log('[API] Página:', page, 'Tamaño:', pageSize);
   console.log('[API] Mostrando empresas desde', startIndex, 'hasta', endIndex);
   console.log('[API] Empresas en esta página:', paginatedEmpresas.length);
   
   return {
     results: paginatedEmpresas,
-    count: total,
+    count: empresasUnicas.length, // Usar el total real de empresas únicas
   };
 }
 
   // Obtener una empresa por ID (sin importar tipo)
   async getEmpresaById(id: number): Promise<any> {
-    // Intentar obtener de cada tipo hasta encontrar la empresa.
-    // Nota: el backend a veces responde 404 con cuerpos de error tipo
-    // "No Empresaproducto matches the given query." que llegan como
-    // mensajes y se muestran al usuario. Aquí los tratamos como "no encontrado"
-    // y seguimos intentando con los otros endpoints para no romper la UX.
+    // ✅ Usar el nuevo endpoint unificado
+    try {
+      return await this.get<any>(`/empresas/${id}/`);
+    } catch (error: any) {
+      // Fallback a endpoints antiguos por compatibilidad
+      const endpoints = [
+        `/empresas/empresas-producto/${id}/`,
+        `/empresas/empresas-servicio/${id}/`,
+        `/empresas/empresas-mixta/${id}/`,
+      ];
 
-    const endpoints = [
-      `/empresas/empresas-producto/${id}/`,
-      `/empresas/empresas-servicio/${id}/`,
-      `/empresas/empresas-mixta/${id}/`,
-    ];
+      const notFoundPattern = /No \w+ matches the given query\.|does not exist|Not found/i;
 
-    const notFoundPattern = /No \w+ matches the given query\.|does not exist|Not found/i;
-
-    for (const ep of endpoints) {
-      try {
-        // Usar fetch directamente para manejar 404 sin lanzar errores
-        const token = this.getAccessToken();
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        const response = await fetch(`${this.baseURL}${ep}`, {
-          method: 'GET',
-          headers,
-        });
-
-        if (response.ok) {
-          const empresa = await response.json();
-          // Normalizar: asegurar que siempre retornamos un objeto con id
-          if (empresa && empresa.id) {
-            // Normalizar nombres de relación: algunos serializers usan `servicios` o `productos`,
-            // otros pueden exponer `servicios_empresa` o `productos_empresa`. Unificar mínimamente.
-            if (!empresa.servicios && empresa.servicios_empresa) {
-              empresa.servicios = empresa.servicios_empresa;
-            }
-            if (!empresa.servicios && empresa.servicios_mixta) {
-              empresa.servicios = empresa.servicios_mixta;
-            }
-            if (!empresa.productos && empresa.productos_empresa) {
-              empresa.productos = empresa.productos_empresa;
-            }
-            if (!empresa.productos && empresa.productos_mixta) {
-              empresa.productos = empresa.productos_mixta;
-            }
-            return empresa;
+      for (const ep of endpoints) {
+        try {
+          // Usar fetch directamente para manejar 404 sin lanzar errores
+          const token = this.getAccessToken();
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          };
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
           }
-        } else if (response.status === 404) {
-          // 404 es esperado cuando intentamos el endpoint incorrecto, continuar con el siguiente
-          continue;
-        } else {
-          // Para otros errores HTTP, intentar parsear el error pero no lanzarlo aún
-          try {
-            const errorText = await response.text();
-            const error = JSON.parse(errorText);
-            const msg = error.detail || error.message || response.statusText;
-            if (notFoundPattern.test(msg)) {
-              // Es un "not found" esperado, continuar
+          
+          const response = await fetch(`${this.baseURL}${ep}`, {
+            method: 'GET',
+            headers,
+          });
+
+          if (response.ok) {
+            const empresa = await response.json();
+            // Normalizar: asegurar que siempre retornamos un objeto con id
+            if (empresa && empresa.id) {
+              // Normalizar nombres de relación: algunos serializers usan `servicios` o `productos`,
+              // otros pueden exponer `servicios_empresa` o `productos_empresa`. Unificar mínimamente.
+              if (!empresa.servicios && empresa.servicios_empresa) {
+                empresa.servicios = empresa.servicios_empresa;
+              }
+              if (!empresa.servicios && empresa.servicios_mixta) {
+                empresa.servicios = empresa.servicios_mixta;
+              }
+              if (!empresa.productos && empresa.productos_empresa) {
+                empresa.productos = empresa.productos_empresa;
+              }
+              if (!empresa.productos && empresa.productos_mixta) {
+                empresa.productos = empresa.productos_mixta;
+              }
+              return empresa;
+            }
+          } else if (response.status === 404) {
+            // 404 es esperado cuando intentamos el endpoint incorrecto, continuar con el siguiente
+            continue;
+          } else {
+            // Para otros errores HTTP, intentar parsear el error pero no lanzarlo aún
+            try {
+              const errorText = await response.text();
+              const error = JSON.parse(errorText);
+              const msg = error.detail || error.message || response.statusText;
+              if (notFoundPattern.test(msg)) {
+                // Es un "not found" esperado, continuar
+                continue;
+              }
+              // Es un error real, lanzarlo
+              throw new Error(msg);
+            } catch (parseErr) {
+              // Si no se puede parsear, continuar con el siguiente endpoint
               continue;
             }
-            // Es un error real, lanzarlo
-            throw new Error(msg);
-          } catch (parseErr) {
-            // Si no se puede parsear, continuar con el siguiente endpoint
+          }
+        } catch (err: any) {
+          // Si el error es un "not found" típico del serializer/DRF, lo ignoramos y probamos siguiente endpoint.
+          const msg = err && err.message ? String(err.message) : '';
+          if (notFoundPattern.test(msg)) {
+            // continuar con el siguiente endpoint sin propagar el error
             continue;
           }
+          // Para otros errores más serios, re-lanzamos
+          throw err;
         }
-      } catch (err: any) {
-        // Si el error es un "not found" típico del serializer/DRF, lo ignoramos y probamos siguiente endpoint.
-        const msg = err && err.message ? String(err.message) : '';
-        if (notFoundPattern.test(msg)) {
-          // continuar con el siguiente endpoint sin propagar el error
-          continue;
-        }
-        // Para otros errores más serios, re-lanzamos
-        throw err;
       }
-    }
 
-    throw new Error('Empresa no encontrada');
+      throw new Error('Empresa no encontrada');
+    }
   }
 
   // Actualizar una empresa por ID
   async updateEmpresa(id: number, data: any): Promise<any> {
-    // Determinar el tipo de empresa desde los datos o intentar cada endpoint
-    const tipoEmpresa = data.tipo_empresa || data.tipo_empresa_valor;
-    
-    if (tipoEmpresa === 'producto' || tipoEmpresa === 'productos') {
-      return this.patch<any>(`/empresas/empresas-producto/${id}/`, data);
-    } else if (tipoEmpresa === 'servicio' || tipoEmpresa === 'servicios') {
-      return this.patch<any>(`/empresas/empresas-servicio/${id}/`, data);
-    } else if (tipoEmpresa === 'mixta' || tipoEmpresa === 'ambos') {
-      return this.patch<any>(`/empresas/empresas-mixta/${id}/`, data);
-    }
-    
-    // Si no se especifica, intentar cada uno
+    // ✅ Usar el nuevo endpoint unificado primero
     try {
-      return await this.patch<any>(`/empresas/empresas-producto/${id}/`, data);
+      return await this.patch<any>(`/empresas/${id}/`, data);
     } catch (e) {
+      // Fallback a endpoints antiguos por compatibilidad
+      const tipoEmpresa = data.tipo_empresa || data.tipo_empresa_valor;
+      
+      if (tipoEmpresa === 'producto' || tipoEmpresa === 'productos') {
+        try {
+          return await this.patch<any>(`/empresas/empresas-producto/${id}/`, data);
+        } catch (e2) {
+          throw e; // Re-lanzar el error original si falla
+        }
+      } else if (tipoEmpresa === 'servicio' || tipoEmpresa === 'servicios') {
+        try {
+          return await this.patch<any>(`/empresas/empresas-servicio/${id}/`, data);
+        } catch (e2) {
+          throw e; // Re-lanzar el error original si falla
+        }
+      } else if (tipoEmpresa === 'mixta' || tipoEmpresa === 'ambos') {
+        try {
+          return await this.patch<any>(`/empresas/empresas-mixta/${id}/`, data);
+        } catch (e2) {
+          throw e; // Re-lanzar el error original si falla
+        }
+      }
+      
+      // Si no hay tipo, intentar todos los endpoints antiguos
       try {
-        return await this.patch<any>(`/empresas/empresas-servicio/${id}/`, data);
+        return await this.patch<any>(`/empresas/empresas-producto/${id}/`, data);
       } catch (e2) {
-        return await this.patch<any>(`/empresas/empresas-mixta/${id}/`, data);
+        try {
+          return await this.patch<any>(`/empresas/empresas-servicio/${id}/`, data);
+        } catch (e3) {
+          return await this.patch<any>(`/empresas/empresas-mixta/${id}/`, data);
+        }
       }
     }
   }
@@ -705,22 +722,23 @@ async getEmpresas(params?: {
 
   // Eliminar una empresa por ID
 async deleteEmpresa(id: number, tipo_empresa?: string): Promise<void> {
-  // Determinar el endpoint según el tipo de empresa
-  let endpoint: string;
-  
-  if (tipo_empresa === 'producto') {
-    endpoint = `/empresas/empresas-producto/${id}/`;
-  } else if (tipo_empresa === 'servicio') {
-    endpoint = `/empresas/empresas-servicio/${id}/`;
-  } else if (tipo_empresa === 'mixta') {
-    endpoint = `/empresas/empresas-mixta/${id}/`;
-  } else {
-    // Si no se especifica el tipo, intentar eliminar desde el endpoint unificado
-    endpoint = `/registro/solicitudes/empresas_aprobadas/${id}/eliminar/`;
+  // ✅ Usar el nuevo endpoint unificado
+  try {
+    await this.delete(`/empresas/${id}/`);
+  } catch (e) {
+    // Fallback a endpoints antiguos por compatibilidad
+    let endpoint: string;
+    if (tipo_empresa === 'producto') {
+      endpoint = `/empresas/empresas-producto/${id}/`;
+    } else if (tipo_empresa === 'servicio') {
+      endpoint = `/empresas/empresas-servicio/${id}/`;
+    } else if (tipo_empresa === 'mixta') {
+      endpoint = `/empresas/empresas-mixta/${id}/`;
+    } else {
+      endpoint = `/registro/solicitudes/empresas_aprobadas/${id}/eliminar/`;
+    }
+    await this.delete(endpoint);
   }
-  
-  await this.delete(endpoint);
-  // DELETE no retorna contenido (204 No Content), así que simplemente retornamos void
 }
 
   // Registrar nueva empresa
@@ -780,6 +798,11 @@ async deleteEmpresa(id: number, tipo_empresa?: string): Promise<void> {
   }
 
   // Actualizar un usuario
+  // Cambiar contraseña del usuario actual (sin requerir permisos de admin)
+  async updatePassword(password: string): Promise<any> {
+    return this.patch<any>('/core/usuarios/update_password/', { password });
+  }
+
   async updateUsuario(id: number, data: any): Promise<any> {
     return this.patch<any>(`/core/usuarios/${id}/`, data);
   }

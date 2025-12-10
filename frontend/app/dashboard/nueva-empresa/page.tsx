@@ -15,7 +15,7 @@ import { ArrowLeft, CheckCircle2, ArrowRight, Plus, X } from "lucide-react"
 import { LocationPicker } from "@/components/map/location-picker"
 import { api } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/lib/auth-context"
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 import Link from "next/link"
 
 interface ContactoSecundario {
@@ -61,7 +61,7 @@ interface ServicioOfrecido {
 export default function NuevaEmpresaPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, isLoading: authLoading, canAccessDashboard } = useDashboardAuth()
   const [step, setStep] = useState(1)
   const [tipoNegocio, setTipoNegocio] = useState<"productos" | "servicios" | "ambos">("productos")
   const [loading, setLoading] = useState(false)
@@ -300,21 +300,21 @@ useEffect(() => {
 }, [formData.municipio, municipios])
 
   // Cargar rubros según el tipo de negocio
-useEffect(() => {
-  const loadRubros = async () => {
-    try {
-      setLoadingRubros(true)
+  useEffect(() => {
+    const loadRubros = async () => {
+      try {
+        setLoadingRubros(true)
       // ✅ CAMBIAR: Obtener todos los rubros y luego dividir/usar según disponibilidad
       const data = await api.getRubros()
       const allRubros = Array.isArray(data) ? data : (data.results || data)
       const productosList = (allRubros || []).filter((r: any) => r.tipo === 'producto' || r.tipo === 'mixto')
       const serviciosList = (allRubros || []).filter((r: any) => r.tipo === 'servicio' || r.tipo === 'mixto')
 
-      if (tipoNegocio === 'productos') {
+        if (tipoNegocio === 'productos') {
         setRubrosProductos(productosList || [])
-        setRubrosServicios([])
+          setRubrosServicios([])
         setRubros(productosList || [])
-      } else if (tipoNegocio === 'servicios') {
+        } else if (tipoNegocio === 'servicios') {
         // Si no hay rubros específicamente de servicio, caemos a los de producto
         if (serviciosList.length > 0) {
           setRubrosServicios(serviciosList || [])
@@ -323,8 +323,8 @@ useEffect(() => {
           setRubrosServicios(productosList || [])
           setRubros(productosList || [])
         }
-        setRubrosProductos([])
-      } else if (tipoNegocio === 'ambos') {
+          setRubrosProductos([])
+        } else if (tipoNegocio === 'ambos') {
         setRubrosProductos(productosList || [])
         // Si no hay rubros específicamente de servicio, usar los mismos que productos (incluyendo mixtos)
         if (serviciosList.length > 0) {
@@ -333,33 +333,33 @@ useEffect(() => {
           // Si no hay rubros de servicio, mostrar los mismos que productos para que el usuario pueda seleccionar
           setRubrosServicios(productosList || [])
         }
-        setRubros([])
-      }
+          setRubros([])
+        }
 
       // Limpiar selecciones
-      setFormData(prev => ({ 
-        ...prev, 
-        rubro: "", 
-        subRubro: "",
-        rubroProducto: "",
-        subRubroProducto: "",
-        rubroServicio: "",
-        subRubroServicio: ""
-      }))
-      setSubrubros([])
-      setSubrubrosProductos([])
-      setSubrubrosServicios([])
-    } catch (error) {
-      console.error('Error cargando rubros:', error)
-      setRubros([])
-      setRubrosProductos([])
-      setRubrosServicios([])
-    } finally {
-      setLoadingRubros(false)
+        setFormData(prev => ({ 
+          ...prev, 
+          rubro: "", 
+          subRubro: "",
+          rubroProducto: "",
+          subRubroProducto: "",
+          rubroServicio: "",
+          subRubroServicio: ""
+        }))
+        setSubrubros([])
+        setSubrubrosProductos([])
+        setSubrubrosServicios([])
+      } catch (error) {
+        console.error('Error cargando rubros:', error)
+        setRubros([])
+        setRubrosProductos([])
+        setRubrosServicios([])
+      } finally {
+        setLoadingRubros(false)
+      }
     }
-  }
-  loadRubros()
-}, [tipoNegocio])
+    loadRubros()
+  }, [tipoNegocio])
 
   // Cargar subrubros cuando se selecciona un rubro (para productos o servicios únicos)
   useEffect(() => {
@@ -431,14 +431,14 @@ useEffect(() => {
   }, [formData.rubroServicio, tipoNegocio])
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setLoading(true)
-  
-  try {
+    e.preventDefault()
+    setLoading(true)
+    
+    try {
     // Validar usuario autenticado
     if (!user || !user.id) {
-      toast({
-        title: "Error",
+        toast({
+          title: "Error",
         description: "Debes estar autenticado para crear una empresa",
         variant: "destructive",
       })
@@ -457,80 +457,80 @@ useEffect(() => {
     if (!formData.direccion || formData.direccion.trim() === '') {
       toast({
         title: "Campo requerido",
-        description: "Por favor, completa el campo de Dirección",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-    if (!formData.departamento || formData.departamento.trim() === '') {
-      toast({
+          description: "Por favor, completa el campo de Dirección",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+      if (!formData.departamento || formData.departamento.trim() === '') {
+        toast({
         title: "Campo requerido",
-        description: "Por favor, completa el campo de Departamento",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-    
+          description: "Por favor, completa el campo de Departamento",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+      
     // ✅ Validar rubros según el tipo de empresa
-    if (tipoNegocio === 'ambos') {
-      if (!formData.rubroProducto) {
-        toast({
+      if (tipoNegocio === 'ambos') {
+        if (!formData.rubroProducto) {
+          toast({
           title: "Campo requerido",
-          description: "Por favor, selecciona el rubro de productos",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-      if (!formData.subRubroProducto) {
-        toast({
+            description: "Por favor, selecciona el rubro de productos",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+        if (!formData.subRubroProducto) {
+          toast({
           title: "Campo requerido",
-          description: "Por favor, selecciona el sub-rubro de productos",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-      if (!formData.rubroServicio) {
-        toast({
+            description: "Por favor, selecciona el sub-rubro de productos",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+        if (!formData.rubroServicio) {
+          toast({
           title: "Campo requerido",
-          description: "Por favor, selecciona el rubro de servicios",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-      if (!formData.subRubroServicio) {
-        toast({
+            description: "Por favor, selecciona el rubro de servicios",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+        if (!formData.subRubroServicio) {
+          toast({
           title: "Campo requerido",
-          description: "Por favor, selecciona el sub-rubro de servicios",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-    } else {
-      if (!formData.rubro) {
-        toast({
+            description: "Por favor, selecciona el sub-rubro de servicios",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+      } else {
+        if (!formData.rubro) {
+          toast({
           title: "Campo requerido",
-          description: "Por favor, selecciona el rubro",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-      if (!formData.subRubro) {
-        toast({
+            description: "Por favor, selecciona el rubro",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+        if (!formData.subRubro) {
+          toast({
           title: "Campo requerido",
-          description: "Por favor, selecciona el sub-rubro",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
+            description: "Por favor, selecciona el sub-rubro",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
       }
-    }
     
     // ✅ Preparar FormData para enviar archivos
     const formDataToSend = new FormData()
@@ -684,12 +684,12 @@ useEffect(() => {
     
     // ✅ CREAR EMPRESA DIRECTAMENTE (sin pasar por solicitudes)
 console.log("Creando empresa desde dashboard del administrador...")
-
-// Preparar datos base de la empresa
-const rubroId = tipoNegocio === 'ambos' 
+      
+      // Preparar datos base de la empresa
+      const rubroId = tipoNegocio === 'ambos' 
   ? formData.rubroProducto 
-  : formData.rubro
-
+        : formData.rubro
+      
 // Obtener TipoEmpresa
 let tipoEmpresaId: number = 1
 try {
@@ -724,35 +724,35 @@ if (formData.paginaWeb && formData.paginaWeb.trim() !== '') {
     sitioWebValido = null
   }
 }
-
-const baseEmpresaData: any = {
-  razon_social: formData.razonSocial,
-  nombre_fantasia: formData.nombreFantasia || null,
-  tipo_sociedad: formData.tipoSociedad || null,
-  cuit_cuil: formData.cuit,
+      
+      const baseEmpresaData: any = {
+        razon_social: formData.razonSocial,
+        nombre_fantasia: formData.nombreFantasia || null,
+        tipo_sociedad: formData.tipoSociedad || null,
+        cuit_cuil: formData.cuit,
   id_rubro: parseInt(String(rubroId)),
-  direccion: formData.direccion.trim(),
-  codigo_postal: formData.codigoPostal || null,
+        direccion: formData.direccion.trim(),
+        codigo_postal: formData.codigoPostal || null,
   direccion_comercial: formData.direccionComercial || null,
   codigo_postal_comercial: formData.codigoPostalComercial || null,
   departamento: formData.departamento ? String(formData.departamento).trim() : null,
   municipio: formData.municipio ? String(formData.municipio).trim() : null,
   localidad: formData.localidad ? String(formData.localidad).trim() : null,
-  geolocalizacion: formData.geolocalizacion || null,
-  telefono: contactoPrincipal.telefono,
-  correo: contactoPrincipal.email,
+        geolocalizacion: formData.geolocalizacion || null,
+        telefono: contactoPrincipal.telefono,
+        correo: contactoPrincipal.email,
   sitioweb: sitioWebValido,
-  instagram: formData.instagram || null,
-  facebook: formData.facebook || null,
-  linkedin: formData.linkedin || null,
-  exporta: formData.exporta === 'si' ? 'Sí' : (formData.exporta === 'en-proceso' ? 'En proceso' : 'No, solo ventas nacionales'),
-  destinoexporta: formData.destinoExportacion || null,
+        instagram: formData.instagram || null,
+        facebook: formData.facebook || null,
+        linkedin: formData.linkedin || null,
+        exporta: formData.exporta === 'si' ? 'Sí' : (formData.exporta === 'en-proceso' ? 'En proceso' : 'No, solo ventas nacionales'),
+        destinoexporta: formData.destinoExportacion || null,
   interes_exportar: formData.exporta === 'no' ? (formData.interesExportar === 'si') : null,
-  importa: formData.importa === 'si',
-  certificadopyme: formData.certificadoMiPyme === 'si' || formData.certificadoMiPyme === 'vigente',
-  certificaciones: formData.certificaciones || null,
-  promo2idiomas: formData.materialPromocion === 'si',
-  observaciones: formData.observaciones || null,
+        importa: formData.importa === 'si',
+        certificadopyme: formData.certificadoMiPyme === 'si' || formData.certificadoMiPyme === 'vigente',
+        certificaciones: formData.certificaciones || null,
+        promo2idiomas: formData.materialPromocion === 'si',
+        observaciones: formData.observaciones || null,
   contacto_principal_nombre: contactoPrincipal.nombre,
   contacto_principal_cargo: contactoPrincipal.cargo,
   contacto_principal_telefono: contactoPrincipal.telefono,
@@ -760,47 +760,47 @@ const baseEmpresaData: any = {
   tipo_empresa_valor: tipoNegocio === 'productos' ? 'producto' : (tipoNegocio === 'servicios' ? 'servicio' : 'mixta'),
   tipo_empresa: tipoEmpresaId,
   id_usuario: user.id,
-}
-
-// Crear empresa según el tipo
-let empresaCreada: any
-
-if (tipoNegocio === 'productos') {
-  // Crear empresa de productos
-  empresaCreada = await api.post<any>('/empresas/empresas-producto/', baseEmpresaData)
-  
-  // Crear productos
-  if (productos.length > 0 && productos[0].nombre) {
-    for (const producto of productos) {
-      if (producto.nombre) {
-        const productoData: any = {
-          empresa: empresaCreada.id,
-          nombre_producto: producto.nombre,
-          descripcion: producto.descripcion || '',
+      }
+      
+      // Crear empresa según el tipo
+      let empresaCreada: any
+      
+      if (tipoNegocio === 'productos') {
+  // ✅ Usar el nuevo endpoint unificado
+  empresaCreada = await api.post<any>('/empresas/', { ...baseEmpresaData, tipo_empresa_valor: 'producto' })
+        
+        // Crear productos
+        if (productos.length > 0 && productos[0].nombre) {
+          for (const producto of productos) {
+            if (producto.nombre) {
+              const productoData: any = {
+                empresa: empresaCreada.id,
+                nombre_producto: producto.nombre,
+                descripcion: producto.descripcion || '',
           capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
           unidad_medida: producto.unidadMedida || "kg",
+              }
+              const productoCreado = await api.post<any>('/empresas/productos/', productoData)
+              
+              // Crear posición arancelaria si existe
+              if (producto.posicionArancelaria) {
+                await api.post<any>('/empresas/posiciones-arancelarias/', {
+                  producto: productoCreado.id,
+                  codigo_arancelario: producto.posicionArancelaria,
+                })
+              }
+            }
+          }
         }
-        const productoCreado = await api.post<any>('/empresas/productos/', productoData)
+      } else if (tipoNegocio === 'servicios') {
+  // ✅ Usar el nuevo endpoint unificado
+  empresaCreada = await api.post<any>('/empresas/', { ...baseEmpresaData, tipo_empresa_valor: 'servicio' })
         
-        // Crear posición arancelaria si existe
-        if (producto.posicionArancelaria) {
-          await api.post<any>('/empresas/posiciones-arancelarias/', {
-            producto: productoCreado.id,
-            codigo_arancelario: producto.posicionArancelaria,
-          })
-        }
-      }
-    }
-  }
-} else if (tipoNegocio === 'servicios') {
-  // Crear empresa de servicios
-  empresaCreada = await api.post<any>('/empresas/empresas-servicio/', baseEmpresaData)
-  
   // Crear servicios
-// Crear servicios
-if (servicios.length > 0 && servicios[0].descripcion) {
-  for (const servicio of servicios) {
-    if (servicio.descripcion) {
+        // Crear servicios
+        if (servicios.length > 0 && servicios[0].descripcion) {
+          for (const servicio of servicios) {
+            if (servicio.descripcion) {
       // ✅ Mapear tipo de servicio
       const mapTipoServicio = (tipo: string) => {
         const mapa: Record<string, string> = {
@@ -841,37 +841,37 @@ if (servicios.length > 0 && servicios[0].descripcion) {
         return mapa[forma] || 'otro'
       }
       
-      const servicioData: any = {
-        empresa: empresaCreada.id,
-        nombre_servicio: servicio.descripcion,
-        descripcion: servicio.descripcion,
+              const servicioData: any = {
+                empresa: empresaCreada.id,
+                nombre_servicio: servicio.descripcion,
+                descripcion: servicio.descripcion,
         tipo_servicio: mapTipoServicio(servicio.tipoServicio[0]) || 'otro',
         sector_atendido: mapSector(servicio.sectores[0]) || 'otro',
-        alcance_servicio: servicio.alcanceGeografico || 'local',
-        paises_trabaja: servicio.paisesDestino || null,
-        exporta_servicios: servicio.exportaServicios === 'si',
-        interes_exportar_servicios: servicio.interesExportar === 'si',
-        idiomas_trabajo: servicio.idiomas.join(', ') || null,
+                alcance_servicio: servicio.alcanceGeografico || 'local',
+                paises_trabaja: servicio.paisesDestino || null,
+                exporta_servicios: servicio.exportaServicios === 'si',
+                interes_exportar_servicios: servicio.interesExportar === 'si',
+                idiomas_trabajo: servicio.idiomas.join(', ') || null,
         forma_contratacion: mapFormaContratacion(servicio.formaContratacion[0]) || null,
-        certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
-        tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
-      }
-      await api.post<any>('/empresas/servicios/', servicioData)
-    }
-  }
-}
-} else {
-  // Crear empresa mixta
-  empresaCreada = await api.post<any>('/empresas/empresas-mixta/', baseEmpresaData)
-  
-  // Crear productos
-  if (productos.length > 0 && productos[0].nombre) {
-    for (const producto of productos) {
-      if (producto.nombre) {
-        const productoData: any = {
-          empresa: empresaCreada.id,
-          nombre_producto: producto.nombre,
-          descripcion: producto.descripcion || '',
+                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
+                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+              }
+              await api.post<any>('/empresas/servicios/', servicioData)
+            }
+          }
+        }
+      } else {
+  // ✅ Usar el nuevo endpoint unificado
+  empresaCreada = await api.post<any>('/empresas/', { ...baseEmpresaData, tipo_empresa_valor: 'mixta' })
+        
+        // Crear productos
+        if (productos.length > 0 && productos[0].nombre) {
+          for (const producto of productos) {
+            if (producto.nombre) {
+              const productoData: any = {
+                empresa: empresaCreada.id,
+                nombre_producto: producto.nombre,
+                descripcion: producto.descripcion || '',
           capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
           unidad_medida: producto.unidadMedida || "kg",
         }
@@ -889,9 +889,9 @@ if (servicios.length > 0 && servicios[0].descripcion) {
   }
   
 // Crear servicios (en empresas mixtas)
-if (servicios.length > 0 && servicios[0].descripcion) {
-  for (const servicio of servicios) {
-    if (servicio.descripcion) {
+        if (servicios.length > 0 && servicios[0].descripcion) {
+          for (const servicio of servicios) {
+            if (servicio.descripcion) {
       // ✅ Mapear tipo de servicio
       const mapTipoServicio = (tipo: string) => {
         const mapa: Record<string, string> = {
@@ -932,24 +932,24 @@ if (servicios.length > 0 && servicios[0].descripcion) {
         return mapa[forma] || 'otro'
       }
       
-      const servicioData: any = {
-        empresa: empresaCreada.id,
-        nombre_servicio: servicio.descripcion,
-        descripcion: servicio.descripcion,
+              const servicioData: any = {
+                empresa: empresaCreada.id,
+                nombre_servicio: servicio.descripcion,
+                descripcion: servicio.descripcion,
         tipo_servicio: mapTipoServicio(servicio.tipoServicio[0]) || 'otro',
         sector_atendido: mapSector(servicio.sectores[0]) || 'otro',
-        alcance_servicio: servicio.alcanceGeografico || 'local',
-        paises_trabaja: servicio.paisesDestino || null,
-        exporta_servicios: servicio.exportaServicios === 'si',
-        interes_exportar_servicios: servicio.interesExportar === 'si',
-        idiomas_trabajo: servicio.idiomas.join(', ') || null,
+                alcance_servicio: servicio.alcanceGeografico || 'local',
+                paises_trabaja: servicio.paisesDestino || null,
+                exporta_servicios: servicio.exportaServicios === 'si',
+                interes_exportar_servicios: servicio.interesExportar === 'si',
+                idiomas_trabajo: servicio.idiomas.join(', ') || null,
         forma_contratacion: mapFormaContratacion(servicio.formaContratacion[0]) || null,
-        certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
-        tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
-      }
-      await api.post<any>('/empresas/servicios-mixta/', servicioData)
-    }
-  }
+                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
+                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+              }
+              await api.post<any>('/empresas/servicios-mixta/', servicioData)
+            }
+          }
 }
 }
 
@@ -976,14 +976,14 @@ for (const actividad of actividadesPromocion) {
       anio: parseInt(actividad.anio),
       observaciones: actividad.observaciones || null,
     })
-  }
-}
-
-toast({
-  title: "Éxito",
-  description: "Empresa creada exitosamente",
-})
-
+        }
+      }
+      
+      toast({
+        title: "Éxito",
+        description: "Empresa creada exitosamente",
+      })
+      
 // Resetear el formulario
 setFormData({
   rubro: "",
@@ -1034,17 +1034,19 @@ setTipoNegocio("productos")
 
 // Redirigir a la lista de empresas
 router.push('/dashboard/empresas')
-  } catch (error: any) {
-    console.error("Error al crear empresa:", error)
-    toast({
-      title: "Error",
-      description: error.message || "Error al crear la empresa. Por favor, revisa los datos e intenta nuevamente.",
-      variant: "destructive",
-    })
-  } finally {
-    setLoading(false)
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error al crear empresa:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Error al crear la empresa. Por favor, revisa los datos e intenta nuevamente.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   const nextStep = () => setStep(step + 1)
   const prevStep = () => setStep(step - 1)
@@ -1142,6 +1144,24 @@ router.push('/dashboard/empresas')
   // Reutilizar el mismo JSX del formulario de registro
   // Por ahora, voy a crear una versión simplificada que incluya todos los pasos
   // El código completo es muy largo, así que lo haré por partes
+
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-[#6B7280]">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar permisos final
+  if (!canAccessDashboard) {
+    return null
+  }
 
   return (
     <MainLayout>

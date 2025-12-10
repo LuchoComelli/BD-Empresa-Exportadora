@@ -14,6 +14,7 @@ import { ArrowLeft, Edit, Save, X, Loader2, Mail, Phone, Shield, User, Calendar 
 import Link from "next/link"
 import api from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/hooks/use-toast"
 
 interface Usuario {
   id: number
@@ -41,26 +42,16 @@ interface Usuario {
   localidad?: string
 }
 
-interface Provincia {
-  id: string
-  nombre: string
-  nombre_completo?: string
-}
-
 interface Departamento {
   id: string
   nombre: string
   nombre_completo?: string
-  provincia: string
-  provincia_nombre?: string
 }
 
 interface Municipio {
   id: string
   nombre: string
   nombre_completo?: string
-  provincia: string
-  provincia_nombre?: string
   departamento?: string
   departamento_nombre?: string
 }
@@ -68,8 +59,6 @@ interface Municipio {
 interface Localidad {
   id: string
   nombre: string
-  provincia: string
-  provincia_nombre?: string
   departamento: string
   departamento_nombre?: string
   municipio?: string
@@ -84,6 +73,7 @@ interface Rol {
 
 export default function UsuarioProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
+  const { toast } = useToast()
   const resolvedParams = use(params)
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [roles, setRoles] = useState<Rol[]>([])
@@ -93,53 +83,20 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
   const [saving, setSaving] = useState(false)
   
   // Estados para datos geográficos
-  const [provincias, setProvincias] = useState<Provincia[]>([])
   const [departamentos, setDepartamentos] = useState<Departamento[]>([])
   const [municipios, setMunicipios] = useState<Municipio[]>([])
   const [localidades, setLocalidades] = useState<Localidad[]>([])
-  const [selectedProvincia, setSelectedProvincia] = useState<string>('')
   const [selectedDepartamento, setSelectedDepartamento] = useState<string>('')
   const [selectedMunicipio, setSelectedMunicipio] = useState<string>('')
   const [selectedLocalidad, setSelectedLocalidad] = useState<string>('')
   const [loadingGeo, setLoadingGeo] = useState(false)
-  const [provinciaSearched, setProvinciaSearched] = useState(false)
 
-  // Cargar provincias al montar el componente
-  useEffect(() => {
-    const loadProvincias = async () => {
-      try {
-        setLoadingGeo(true)
-        const data = await api.getProvincias()
-        const provinciasArray = Array.isArray(data) ? data : (data.results || data)
-        setProvincias(provinciasArray || [])
-        // Si solo hay una provincia, seleccionarla automáticamente
-        if (provinciasArray && provinciasArray.length === 1) {
-          setSelectedProvincia(provinciasArray[0].id)
-        }
-      } catch (error) {
-        console.error('Error cargando provincias:', error)
-        setProvincias([])
-      } finally {
-        setLoadingGeo(false)
-      }
-    }
-    loadProvincias()
-    loadUsuario()
-    loadRoles()
-  }, [resolvedParams.id])
-  
-  // Cargar departamentos cuando se selecciona una provincia
+  // Cargar departamentos al montar el componente
   useEffect(() => {
     const loadDepartamentos = async () => {
-      if (!selectedProvincia) {
-        setDepartamentos([])
-        setMunicipios([])
-        setLocalidades([])
-        return
-      }
       try {
         setLoadingGeo(true)
-        const data = await api.getDepartamentosPorProvincia(selectedProvincia)
+        const data = await api.getDepartamentos()
         const departamentosArray = Array.isArray(data) ? data : (data.results || data)
         setDepartamentos(departamentosArray || [])
         
@@ -159,13 +116,6 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
             setMunicipios([])
             setLocalidades([])
           }
-        } else {
-          // Limpiar selecciones dependientes
-          setSelectedDepartamento('')
-          setSelectedMunicipio('')
-          setSelectedLocalidad('')
-          setMunicipios([])
-          setLocalidades([])
         }
       } catch (error) {
         console.error('Error cargando departamentos:', error)
@@ -175,7 +125,38 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
       }
     }
     loadDepartamentos()
-  }, [selectedProvincia, usuario])
+    loadUsuario()
+    loadRoles()
+  }, [resolvedParams.id])
+  
+  // Cargar departamentos cuando se carga el usuario
+  useEffect(() => {
+    const loadDepartamentosForUsuario = async () => {
+      if (!usuario?.departamento) return
+      
+      try {
+        setLoadingGeo(true)
+        const data = await api.getDepartamentos()
+        const departamentosArray = Array.isArray(data) ? data : (data.results || data)
+        
+        // Intentar encontrar el departamento del usuario
+        if (departamentosArray.length > 0) {
+          const depto = departamentosArray.find((d: any) => 
+            d.nombre === usuario.departamento || 
+            d.nombre_completo === usuario.departamento
+          )
+          if (depto) {
+            setSelectedDepartamento(depto.id.toString())
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando departamentos:', error)
+      } finally {
+        setLoadingGeo(false)
+      }
+    }
+    loadDepartamentosForUsuario()
+  }, [usuario])
   
   // Cargar municipios cuando se selecciona un departamento
   useEffect(() => {
@@ -267,62 +248,18 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
       const data = await api.getUsuarioById(parseInt(resolvedParams.id))
       setUsuario(data)
       setEditedData(data)
-      
-      // Si el usuario tiene datos geográficos, intentar encontrar y seleccionar la provincia
-      // Esto se hará después de que las provincias se carguen
-      if (data.departamento && provincias.length > 0) {
-        // Buscar la provincia basándose en el departamento del usuario
-        // Primero necesitamos cargar los departamentos para encontrar la provincia
-        // Esto se manejará en el useEffect de departamentos
-      }
     } catch (error: any) {
       console.error("Error loading usuario:", error)
-      alert("Error al cargar el usuario. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error",
+        description: "Error al cargar el usuario. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
       router.push("/dashboard/usuarios")
     } finally {
       setLoading(false)
     }
   }
-  
-  // Efecto para inicializar la selección geográfica cuando se carga el usuario
-  useEffect(() => {
-    const findProvinciaForUsuario = async () => {
-      // Solo ejecutar si tenemos usuario, provincias cargadas, no hay provincia seleccionada y no hemos buscado ya
-      if (!usuario || provincias.length === 0 || selectedProvincia || provinciaSearched) {
-        return
-      }
-      
-      setProvinciaSearched(true)
-      
-      // Si el usuario tiene departamento, buscar en qué provincia está
-      if (usuario.departamento) {
-        // Buscar en todas las provincias hasta encontrar el departamento
-        for (const provincia of provincias) {
-          try {
-            const deptos = await api.getDepartamentosPorProvincia(provincia.id)
-            const deptosArray = Array.isArray(deptos) ? deptos : (deptos.results || deptos)
-            const found = deptosArray.find((d: any) => 
-              d.nombre === usuario.departamento || 
-              d.nombre_completo === usuario.departamento
-            )
-            if (found) {
-              setSelectedProvincia(provincia.id)
-              return // Salir del efecto
-            }
-          } catch (error) {
-            console.error(`Error buscando departamento en provincia ${provincia.id}:`, error)
-          }
-        }
-      }
-      
-      // Si no encontramos el departamento en ninguna provincia pero solo hay una, seleccionarla
-      if (provincias.length === 1) {
-        setSelectedProvincia(provincias[0].id)
-      }
-    }
-    
-    findProvinciaForUsuario()
-  }, [usuario, provincias, selectedProvincia, provinciaSearched])
 
   const loadRoles = async () => {
     try {
@@ -387,18 +324,34 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
         localidad: locNombre,
       }
 
+      // Corregir fecha de nacimiento para evitar problemas de zona horaria
       if (editedData.fecha_nacimiento) {
-        updateData.fecha_nacimiento = editedData.fecha_nacimiento
+        // Si la fecha viene como string, asegurarse de que se envíe correctamente
+        // Sin conversión de zona horaria que pueda cambiar el día
+        const fecha = editedData.fecha_nacimiento
+        if (typeof fecha === 'string' && fecha.includes('T')) {
+          // Si tiene hora, tomar solo la fecha
+          updateData.fecha_nacimiento = fecha.split('T')[0]
+        } else {
+          updateData.fecha_nacimiento = fecha
+        }
       }
 
       const updated = await api.updateUsuario(usuario.id, updateData)
       setUsuario(updated)
       setEditedData(updated)
       setIsEditing(false)
-      alert("Usuario actualizado exitosamente")
+      toast({
+        title: "Éxito",
+        description: "Usuario actualizado exitosamente",
+      })
     } catch (error: any) {
       console.error("Error saving usuario:", error)
-      alert(error.message || "Error al guardar los cambios. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error",
+        description: error.message || "Error al guardar los cambios. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     } finally {
       setSaving(false)
     }
@@ -415,10 +368,17 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
       setSaving(true)
       await api.toggleActiveUsuario(usuario.id)
       await loadUsuario()
-      alert(`Usuario ${usuario.is_active ? 'desactivado' : 'activado'} exitosamente`)
+      toast({
+        title: "Éxito",
+        description: `Usuario ${usuario.is_active ? 'desactivado' : 'activado'} exitosamente`,
+      })
     } catch (error: any) {
       console.error("Error toggling active:", error)
-      alert(error.message || "Error al cambiar el estado del usuario. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error",
+        description: error.message || "Error al cambiar el estado del usuario. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     } finally {
       setSaving(false)
     }
@@ -444,7 +404,24 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A"
     try {
-      return new Date(dateString).toLocaleDateString("es-AR", {
+      // Para evitar problemas de zona horaria, parsear la fecha manualmente
+      // Si es una fecha ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss), usar solo la parte de fecha
+      let date: Date
+      if (dateString.includes('T')) {
+        // Fecha con hora: usar solo la parte de fecha para evitar cambios de día por zona horaria
+        const dateOnly = dateString.split('T')[0]
+        const [year, month, day] = dateOnly.split('-').map(Number)
+        date = new Date(year, month - 1, day)
+      } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Fecha en formato YYYY-MM-DD
+        const [year, month, day] = dateString.split('-').map(Number)
+        date = new Date(year, month - 1, day)
+      } else {
+        // Otro formato, intentar parsear normalmente
+        date = new Date(dateString)
+      }
+      
+      return date.toLocaleDateString("es-AR", {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -678,7 +655,7 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
                   {isEditing ? (
                     <Input
                       type="date"
-                      value={displayData?.fecha_nacimiento || ''}
+                      value={displayData?.fecha_nacimiento ? (displayData.fecha_nacimiento.includes('T') ? displayData.fecha_nacimiento.split('T')[0] : displayData.fecha_nacimiento) : ''}
                       onChange={(e) => setEditedData(displayData ? { ...displayData, fecha_nacimiento: e.target.value } : null)}
                     />
                   ) : (
@@ -717,36 +694,6 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
                   )}
                 </div>
                 <div>
-                  <Label>Provincia</Label>
-                  {isEditing ? (
-                    <Select
-                      value={selectedProvincia}
-                      onValueChange={(value) => {
-                        setSelectedProvincia(value)
-                        setSelectedDepartamento('')
-                        setSelectedMunicipio('')
-                        setSelectedLocalidad('')
-                      }}
-                      disabled={loadingGeo}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar provincia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {provincias.map((prov) => (
-                          <SelectItem key={prov.id} value={prov.id}>
-                            {prov.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="mt-1 font-semibold">
-                      {provincias.find(p => p.id === selectedProvincia)?.nombre || 'N/A'}
-                    </p>
-                  )}
-                </div>
-                <div>
                   <Label>Departamento</Label>
                   {isEditing ? (
                     <Select
@@ -756,7 +703,7 @@ export default function UsuarioProfilePage({ params }: { params: Promise<{ id: s
                         setSelectedMunicipio('')
                         setSelectedLocalidad('')
                       }}
-                      disabled={loadingGeo || !selectedProvincia}
+                      disabled={loadingGeo}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar departamento" />

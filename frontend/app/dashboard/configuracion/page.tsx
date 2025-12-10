@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Save, Globe, Loader2, AlertCircle } from "lucide-react"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/lib/auth-context"
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 import { useRouter } from "next/navigation"
 
 interface Configuracion {
@@ -32,7 +32,7 @@ interface Configuracion {
 
 export default function ConfiguracionPage() {
   const router = useRouter()
-  const { user, isLoading: authLoading } = useAuth()
+  const { user, isLoading: authLoading } = useDashboardAuth()
   const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -100,12 +100,14 @@ export default function ConfiguracionPage() {
         beneficio3_descripcion: data.beneficio3_descripcion || ""
       })
     } catch (error: any) {
-      console.error("Error cargando configuración:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo cargar la configuración del sistema",
-        variant: "destructive"
-      })
+      if (!handleAuthError(error)) {
+        console.error("Error cargando configuración:", error)
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la configuración del sistema",
+          variant: "destructive"
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -138,9 +140,10 @@ export default function ConfiguracionPage() {
         description: "Configuración guardada correctamente",
       })
     } catch (error: any) {
-      console.error("Error guardando configuración:", error)
-      const errorMessage = error?.message || error?.detail || "No se pudo guardar la configuración"
-      toast({
+      if (!handleAuthError(error)) {
+        console.error("Error guardando configuración:", error)
+        const errorMessage = error?.message || error?.detail || "No se pudo guardar la configuración"
+        toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive"

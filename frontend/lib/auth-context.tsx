@@ -14,6 +14,7 @@ interface User {
   status?: "activa" | "pendiente" | "rechazada"
   is_superuser?: boolean
   is_staff?: boolean
+  debe_cambiar_password?: boolean
   rol?: {
     id: number
     nombre: string
@@ -125,14 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Intentar obtener usuario (el token puede estar en memoria o cookie)
         const userData = await api.getCurrentUser()
         
-        // Debug: log para ver qué datos se reciben
-        console.log('[Auth] Loading user data:', {
-          email: userData.email,
-          is_superuser: userData.is_superuser,
-          is_staff: userData.is_staff,
-          rol: userData.rol,
-          fullData: userData
-        })
         
         // Determinar tipo de usuario basado en el rol y permisos
         let userType: "admin" | "empresa" | "staff" = "empresa"
@@ -145,22 +138,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                            String(userData.is_superuser).toLowerCase() === "true"
         
         if (isSuperuser) {
-          console.log('[Auth] User is superuser, setting type to admin')
           userType = "admin"
         }
         // Si tiene rol de Administrador, Analista o Consulta, puede acceder al dashboard
-        else if (userData.rol?.nombre) {
-          const rolNombre = userData.rol.nombre.toLowerCase()
+        else if (userData.rol_detalle?.nombre) {
+          const rolNombre = userData.rol_detalle.nombre.toLowerCase()
           if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
-            console.log('[Auth] User has admin role, setting type to admin')
             userType = "admin"
           } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
-            console.log('[Auth] User has staff role, setting type to staff')
             userType = "staff"
           }
         }
-        
-        console.log('[Auth] Final user type (load):', userType)
         
         const user: User = {
           id: userData.id,
@@ -171,7 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           type: userType,
           is_superuser: userData.is_superuser,
           is_staff: userData.is_staff,
-          rol: userData.rol,
+          debe_cambiar_password: userData.debe_cambiar_password || false,
+          rol: userData.rol_detalle || userData.rol, // Usar rol_detalle si está disponible, sino rol
           empresaData: userData.empresa,
         }
         setUser(user)
@@ -205,10 +194,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      const publicRoutes = ["/", "/login", "/registro", "/recuperar-contrasena"]
-      if (!publicRoutes.includes(pathname)) {
-        router.push("/login")
+    if (!isLoading) {
+      // Si no hay usuario, redirigir al login (excepto rutas públicas)
+      if (!user) {
+        const publicRoutes = ["/", "/login", "/registro", "/recuperar-contrasena"]
+        if (!publicRoutes.includes(pathname)) {
+          router.push("/login")
+        }
+      }
+      // Si el usuario es empresa y debe cambiar la contraseña, asegurarse de que esté en /perfil-empresa
+      else if (user.type === "empresa" && user.debe_cambiar_password) {
+        // Si no está en /perfil-empresa, redirigir allí (el modal aparecerá automáticamente)
+        if (pathname !== "/perfil-empresa" && !pathname.startsWith("/login")) {
+          router.push("/perfil-empresa")
+        }
       }
     }
   }, [user, isLoading, pathname, router])
@@ -226,14 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userData = await api.getCurrentUser()
       }
       
-      // Debug: log para ver qué datos se reciben
-      console.log('[Auth] User data received:', {
-        email: userData.email,
-        is_superuser: userData.is_superuser,
-        is_staff: userData.is_staff,
-        rol: userData.rol,
-        fullData: userData
-      })
       
       // Determinar tipo de usuario basado en el rol y permisos
       let userType: "admin" | "empresa" | "staff" = "empresa"
@@ -246,22 +237,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                          String(userData.is_superuser).toLowerCase() === "true"
       
       if (isSuperuser) {
-        console.log('[Auth] User is superuser, setting type to admin')
         userType = "admin"
       }
       // Si tiene rol de Administrador, Analista o Consulta, puede acceder al dashboard
-      else if (userData.rol?.nombre) {
-        const rolNombre = userData.rol.nombre.toLowerCase()
+      else if (userData.rol_detalle?.nombre) {
+        const rolNombre = userData.rol_detalle.nombre.toLowerCase()
         if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
-          console.log('[Auth] User has admin role, setting type to admin')
           userType = "admin"
         } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
-          console.log('[Auth] User has staff role, setting type to staff')
           userType = "staff"
         }
       }
-      
-      console.log('[Auth] Final user type:', userType)
       
       const loggedUser: User = {
         id: userData.id,
@@ -272,27 +258,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         type: userType,
         is_superuser: userData.is_superuser,
         is_staff: userData.is_staff,
-        rol: userData.rol,
+        debe_cambiar_password: userData.debe_cambiar_password || false,
+        rol: userData.rol_detalle || userData.rol, // Usar rol_detalle si está disponible, sino rol
         empresaData: userData.empresa,
       }
       
       setUser(loggedUser)
       setLastActivity(Date.now()) // Actualizar actividad al hacer login
       
-      // Debug: log para ver la redirección
-      console.log('[Auth] Redirecting user:', {
-        userType,
-        is_superuser: loggedUser.is_superuser,
-        rol: loggedUser.rol?.nombre,
-        willRedirectToDashboard: userType === "admin" || userType === "staff"
-      })
+      // Verificar si es empresa y debe cambiar la contraseña
+      // Solo empresas deben cambiar la contraseña, no admin/analista/consultor
+      if (userType === "empresa" && userData.debe_cambiar_password) {
+        // No redirigir, el componente de login mostrará el modal
+        return true
+      }
       
       // Redirigir según el tipo de usuario
       if (userType === "admin" || userType === "staff") {
-        console.log('[Auth] Redirecting to /dashboard')
         router.push("/dashboard")
       } else {
-        console.log('[Auth] Redirecting to /perfil-empresa')
         router.push("/perfil-empresa")
       }
       
@@ -325,8 +309,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (isSuperuser) {
         userType = "admin"
-      } else if (userData.rol?.nombre) {
-        const rolNombre = userData.rol.nombre.toLowerCase()
+      } else if (userData.rol_detalle?.nombre) {
+        const rolNombre = userData.rol_detalle.nombre.toLowerCase()
         if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
           userType = "admin"
         } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
@@ -343,7 +327,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         type: userType,
         is_superuser: userData.is_superuser,
         is_staff: userData.is_staff,
-        rol: userData.rol,
+        debe_cambiar_password: userData.debe_cambiar_password || false,
+        rol: userData.rol_detalle || userData.rol, // Usar rol_detalle si está disponible, sino rol
         empresaData: userData.empresa,
       }
       setUser(updatedUser)

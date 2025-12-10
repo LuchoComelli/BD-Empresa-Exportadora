@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Building2, MapPin, Phone, Mail } from "lucide-react"
 import api from "@/lib/api"
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 
 interface Empresa {
   id: number
@@ -21,21 +22,26 @@ interface Empresa {
 }
 
 export default function MatrizPage() {
+  const { user, isLoading: authLoading, canAccessDashboard } = useDashboardAuth()
   const [empresaSeleccionada, setEmpresaSeleccionada] = useState<string>("")
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadEmpresas()
-  }, [])
+    if (!authLoading && canAccessDashboard) {
+      loadEmpresas()
+    }
+  }, [authLoading, canAccessDashboard])
 
   const loadEmpresas = async () => {
     try {
       setLoading(true)
       const response = await api.getEmpresas({ estado: 'aprobada', page_size: 100 })
       setEmpresas(response.results || [])
-    } catch (error) {
-      console.error("Error loading empresas:", error)
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error loading empresas:", error)
+      }
     } finally {
       setLoading(false)
     }
@@ -43,6 +49,23 @@ export default function MatrizPage() {
 
   const empresaActual = empresas.find((e) => e.id.toString() === empresaSeleccionada)
 
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-[#6B7280]">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar permisos final
+  if (!canAccessDashboard) {
+    return null
+  }
 
   return (
     <MainLayout>

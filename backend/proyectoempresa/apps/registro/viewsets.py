@@ -239,7 +239,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         """Obtener todas las empresas aprobadas (desde el modelo unificado Empresa)"""
         from apps.empresas.models import Empresa
         from apps.empresas.serializers import (
-            EmpresaproductoListSerializer, EmpresaservicioListSerializer, EmpresaMixtaListSerializer
+            EmpresaListSerializer  # ✅ Usar serializer unificado
         )
         from django.db.models import Q
         import logging
@@ -281,31 +281,13 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         if rubro:
             empresas = empresas.filter(id_rubro__nombre__icontains=rubro)
         
-        # Separar por tipo para usar los serializers apropiados
-        empresas_producto = empresas.filter(tipo_empresa_valor='producto')
-        empresas_servicio = empresas.filter(tipo_empresa_valor='servicio')
-        empresas_mixta = empresas.filter(tipo_empresa_valor='mixta')
+        # ✅ Usar serializer unificado para todas las empresas
+        todas_empresas = EmpresaListSerializer(empresas, many=True).data
         
-        # Serializar todas las empresas
-        empresas_producto_data = EmpresaproductoListSerializer(empresas_producto, many=True).data
-        empresas_servicio_data = EmpresaservicioListSerializer(empresas_servicio, many=True).data
-        empresas_mixta_data = EmpresaMixtaListSerializer(empresas_mixta, many=True).data
-        
-        # Agregar tipo a cada empresa para identificarlas
-        for empresa in empresas_producto_data:
-            empresa['tipo_empresa'] = 'producto'
+        # Agregar tipo y estado a cada empresa
+        for empresa in todas_empresas:
+            empresa['tipo_empresa'] = empresa.get('tipo_empresa_valor', 'producto')
             empresa['estado'] = 'aprobada'
-        
-        for empresa in empresas_servicio_data:
-            empresa['tipo_empresa'] = 'servicio'
-            empresa['estado'] = 'aprobada'
-        
-        for empresa in empresas_mixta_data:
-            empresa['tipo_empresa'] = 'mixta'
-            empresa['estado'] = 'aprobada'
-        
-        # Combinar todas las empresas y eliminar duplicados por ID
-        todas_empresas = empresas_producto_data + empresas_servicio_data + empresas_mixta_data
         
         # Eliminar duplicados basándose en el ID (por si acaso)
         empresas_unicas = {}
@@ -508,8 +490,10 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         en_revision = queryset.filter(estado='en_revision').count()
         
         # Obtener todas las empresas aprobadas usando el modelo unificado
+        # Usar Empresa.objects.all() como fuente única de verdad
         from apps.empresas.models import Empresa
         empresas_aprobadas = Empresa.objects.all()
+        total_empresas_aprobadas = empresas_aprobadas.count()
         
         # Estadísticas de categoría basadas en matriz de clasificación
         exportadoras = 0
@@ -529,7 +513,6 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         
         # Si una empresa no tiene matriz, se cuenta como "Etapa Inicial"
         total_empresas_con_matriz = matrices.count()
-        total_empresas_aprobadas = empresas_aprobadas.count()
         etapa_inicial += (total_empresas_aprobadas - total_empresas_con_matriz)
         
         # Estadísticas recientes (último mes)
@@ -578,7 +561,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             })
         
         return Response({
-            'total_empresas': total_empresas_aprobadas,
+            'total_empresas': total_empresas_aprobadas,  # Ya calculado desde proxy models
             'exportadoras': exportadoras,
             'potencial_exportadora': potencial_exportadora,
             'etapa_inicial': etapa_inicial,

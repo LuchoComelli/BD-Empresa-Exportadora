@@ -397,6 +397,8 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
                 try:
                     rol_empresa = RolUsuario.objects.get(nombre='Empresa')
                     usuario.rol = rol_empresa
+                    # Marcar que debe cambiar la contraseña (es empresa con CUIT como password)
+                    usuario.debe_cambiar_password = True
                     usuario.save()
                 except RolUsuario.DoesNotExist:
                     logger.warning("Rol 'Empresa' no encontrado, usuario creado sin rol")

@@ -2,9 +2,10 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,9 +13,13 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Mail, Lock, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import api from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -33,11 +38,16 @@ export default function LoginPage() {
 
     const success = await login(formData.email, formData.password)
 
-    if (!success) {
+    if (success) {
+      // El login redirigirá automáticamente según el tipo de usuario
+      // El modal de cambio de contraseña aparecerá en /perfil-empresa si es necesario
+      setIsLoading(false)
+    } else {
       setError("Credenciales inválidas. Por favor, verifica tu correo y contraseña.")
       setIsLoading(false)
     }
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#222A59] via-[#3259B5] to-[#629BD2] flex items-center justify-center p-4">

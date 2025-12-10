@@ -8,10 +8,10 @@ from .models import (
     SubRubro,
     UnidadMedida,
     Otrorubro,
-    Empresa,
+    Empresa,  # ✅ Modelo principal unificado
     Empresaproducto,
     Empresaservicio,
-    EmpresaMixta,  # Proxies para compatibilidad
+    EmpresaMixta,  # ⚠️ OBSOLETO: Mantener solo para compatibilidad temporal
     ProductoEmpresa,
     ServicioEmpresa,
     ProductoEmpresaMixta,
@@ -31,6 +31,8 @@ from .serializers import (
     EmpresaservicioListSerializer,
     EmpresaMixtaSerializer,
     EmpresaMixtaListSerializer,
+    EmpresaSerializer,  # ✅ Nuevo serializer unificado
+    EmpresaListSerializer,  # ✅ Nuevo serializer unificado
     ProductoEmpresaSerializer,
     ServicioEmpresaSerializer,
     ProductoEmpresaMixtaSerializer,
@@ -674,5 +676,131 @@ class MatrizClasificacionExportadorViewSet(viewsets.ModelViewSet):
                 "puntaje_total": puntaje_total,
                 "puntaje_maximo": 18,
                 "categoria": categoria,
+            }
+        )
+
+
+# ============================================================================
+# VIEWSET UNIFICADO PARA EMPRESA (REEMPLAZA LOS PROXY MODELS)
+# ============================================================================
+
+class EmpresaViewSet(viewsets.ModelViewSet):
+    """ViewSet unificado para todas las empresas (reemplaza EmpresaproductoViewSet, EmpresaservicioViewSet, EmpresaMixtaViewSet)"""
+    
+    queryset = Empresa.objects.select_related(
+        "tipo_empresa",
+        "id_rubro",
+        "departamento",
+        "municipio",
+        "localidad",
+        "id_usuario",
+    ).prefetch_related(
+        "productos_empresa__posicion_arancelaria",
+        "productos_mixta__posiciones_arancelarias",
+        "servicios_empresa",
+        "servicios_mixta"
+    )
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    filterset_fields = [
+        "exporta",
+        "importa",
+        "certificadopyme",
+        "tipo_empresa",
+        "id_rubro",
+        "promo2idiomas",
+        "tipo_empresa_valor",  # Filtrar por tipo de empresa
+    ]
+    search_fields = [
+        "razon_social",
+        "cuit_cuil",
+        "correo",
+        "nombre_fantasia",
+        "telefono",
+        "direccion",
+        "departamento__nombre",
+        "municipio__nombre",
+        "localidad__nombre",
+        "id_rubro__nombre",
+    ]
+    ordering_fields = ["razon_social", "fecha_creacion"]
+    ordering = ["-fecha_creacion"]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return EmpresaListSerializer
+        return EmpresaSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Filtrar por usuario si no es admin
+        if not self.request.user.is_staff and self.request.user.is_authenticated:
+            queryset = queryset.filter(id_usuario=self.request.user)
+
+        # Filtrar por tipo de empresa si se proporciona
+        tipo_empresa_valor = self.request.query_params.get("tipo_empresa_valor")
+        if tipo_empresa_valor and tipo_empresa_valor != 'all':
+            queryset = queryset.filter(tipo_empresa_valor=tipo_empresa_valor)
+
+        # Filtrar por categoría de matriz si se proporciona
+        categoria_matriz = self.request.query_params.get("categoria_matriz")
+        if categoria_matriz:
+            queryset = queryset.filter(
+                clasificaciones_exportador__categoria=categoria_matriz
+            ).distinct()
+
+        # Filtrar por sub_rubro si se proporciona
+        sub_rubro = self.request.query_params.get('sub_rubro')
+        if sub_rubro:
+            queryset = queryset.filter(
+                Q(id_subrubro_id=sub_rubro) |
+                Q(id_subrubro_producto_id=sub_rubro) |
+                Q(id_subrubro_servicio_id=sub_rubro)
+            ).distinct()
+
+        # Filtrar por campos booleanos
+        importa_param = self.request.query_params.get("importa")
+        if importa_param:
+            importa_bool = importa_param.lower() == "true"
+            queryset = queryset.filter(importa=importa_bool)
+
+        promo2idiomas_param = self.request.query_params.get("promo2idiomas")
+        if promo2idiomas_param:
+            promo2idiomas_bool = promo2idiomas_param.lower() == "true"
+            queryset = queryset.filter(promo2idiomas=promo2idiomas_bool)
+
+        certificadopyme_param = self.request.query_params.get("certificadopyme")
+        if certificadopyme_param:
+            certificadopyme_bool = certificadopyme_param.lower() == "true"
+            queryset = queryset.filter(certificadopyme=certificadopyme_bool)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(actualizado_por=self.request.user)
+
+    @action(detail=False, methods=["get"])
+    def exportadoras(self, request):
+        """Obtener solo empresas exportadoras"""
+        empresas = self.get_queryset().filter(exporta="Sí")
+        serializer = self.get_serializer(empresas, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def estadisticas(self, request):
+        """Obtener estadísticas de empresas"""
+        queryset = self.get_queryset()
+        return Response(
+            {
+                "total": queryset.count(),
+                "exportadoras": queryset.filter(exporta="Sí").count(),
+                "importadoras": queryset.filter(importa=True).count(),
+                "con_certificado_pyme": queryset.filter(certificadopyme=True).count(),
+                "con_certificaciones": queryset.filter(
+                    certificacionesbool=True
+                ).count(),
             }
         )

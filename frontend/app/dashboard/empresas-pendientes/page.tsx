@@ -10,6 +10,7 @@ import { Search, Eye, Clock } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 
 interface EmpresaPendiente {
   id: number
@@ -23,13 +24,16 @@ interface EmpresaPendiente {
 }
 
 export default function EmpresasPendientesPage() {
+  const { user, isLoading: authLoading, canAccessDashboard } = useDashboardAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [empresas, setEmpresas] = useState<EmpresaPendiente[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadEmpresasPendientes()
-  }, [])
+    if (!authLoading && canAccessDashboard) {
+      loadEmpresasPendientes()
+    }
+  }, [authLoading, canAccessDashboard])
 
   // Recargar cuando se vuelve a la página (después de aprobar/rechazar)
   useEffect(() => {
@@ -63,8 +67,10 @@ export default function EmpresasPendientesPage() {
       } else {
         setEmpresas([])
       }
-    } catch (error) {
-      console.error("Error loading empresas pendientes:", error)
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error loading empresas pendientes:", error)
+      }
       setEmpresas([])
     } finally {
       setLoading(false)
@@ -82,6 +88,24 @@ export default function EmpresasPendientesPage() {
 
   // No filtrar localmente, el backend ya filtra por estado y search
   const filteredEmpresas = empresas
+
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-[#6B7280]">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar permisos final
+  if (!canAccessDashboard) {
+    return null
+  }
 
   return (
     <MainLayout>

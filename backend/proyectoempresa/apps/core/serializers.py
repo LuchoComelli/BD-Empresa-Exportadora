@@ -187,6 +187,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     """Serializer para usuarios"""
     rol_detalle = RolUsuarioSerializer(source='rol', read_only=True)
     password = serializers.CharField(write_only=True, required=False)
+    empresa = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -195,12 +196,36 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'is_active', 'is_staff', 'is_superuser', 'date_joined',
             'last_login', 'telefono', 'avatar', 'fecha_nacimiento',
             'genero', 'tipo_documento', 'numero_documento',
-            'departamento', 'municipio', 'localidad', 'password'
+            'departamento', 'municipio', 'localidad', 'password',
+            'debe_cambiar_password', 'empresa'
         ]
         read_only_fields = ['id', 'date_joined', 'last_login']
         extra_kwargs = {
             'password': {'write_only': True},
         }
+    
+    def get_empresa(self, obj):
+        """Obtener la empresa asociada al usuario si existe"""
+        try:
+            from apps.empresas.models import Empresa
+            empresa = Empresa.objects.filter(id_usuario=obj).select_related(
+                "tipo_empresa", "id_rubro", "departamento", "municipio", "localidad"
+            ).prefetch_related(
+                "productos_empresa__posicion_arancelaria",
+                "productos_mixta__posiciones_arancelarias",
+                "servicios_empresa",
+                "servicios_mixta"
+            ).first()
+            if empresa:
+                # Usar el serializer de empresa para formatear los datos
+                from apps.empresas.serializers import EmpresaSerializer
+                serializer = EmpresaSerializer(empresa, context=self.context)
+                return serializer.data
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo empresa para usuario {obj.id}: {str(e)}")
+        return None
     
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -216,6 +241,9 @@ class UsuarioSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         if password:
             instance.set_password(password)
+            # Si es una empresa y cambió la contraseña, marcar que ya no debe cambiarla
+            if instance.rol and instance.rol.nombre == 'Empresa' and instance.debe_cambiar_password:
+                instance.debe_cambiar_password = False
         instance.save()
         return instance
 

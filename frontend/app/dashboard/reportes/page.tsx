@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Download, FileText, BarChart3, TrendingUp, Building2 } from "lucide-react"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
 
 interface DashboardStats {
   total_empresas: number
@@ -26,6 +27,7 @@ interface DashboardStats {
 }
 
 export default function ReportesPage() {
+  const { user, isLoading: authLoading, canAccessDashboard } = useDashboardAuth()
   const { toast } = useToast()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -37,21 +39,25 @@ export default function ReportesPage() {
   const [formato, setFormato] = useState<string>("pdf")
 
   useEffect(() => {
-    loadStats()
-  }, [])
+    if (!authLoading && canAccessDashboard) {
+      loadStats()
+    }
+  }, [authLoading, canAccessDashboard])
 
   const loadStats = async () => {
     try {
       setLoading(true)
       const data = await api.getDashboardStats()
       setStats(data)
-    } catch (error) {
-      console.error("Error cargando estadísticas:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar las estadísticas",
-        variant: "destructive",
-      })
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error cargando estadísticas:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las estadísticas",
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -179,6 +185,24 @@ export default function ReportesPage() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-[#6B7280]">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar permisos final
+  if (!canAccessDashboard) {
+    return null
   }
 
   return (

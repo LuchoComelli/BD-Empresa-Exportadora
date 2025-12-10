@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { MainLayout } from "@/components/layout/main-layout"
 import { FiltersDropdown } from "@/components/empresas/filters-dropdown"
 import { CompaniesTable } from "@/components/empresas/companies-table"
@@ -11,6 +12,7 @@ import Link from "next/link"
 import api from "@/lib/api"
 import { ExportDialog } from "@/components/empresas/export-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/auth-context"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +41,8 @@ interface Empresa {
 }
 
 export default function EmpresasPage() {
+  const { user, isLoading: authLoading } = useAuth()
+  const router = useRouter()
   const { toast } = useToast()
   const [filters, setFilters] = useState<any>({})
   const [searchQuery, setSearchQuery] = useState("")
@@ -54,6 +58,32 @@ export default function EmpresasPage() {
     total: 0,
     totalPages: 0,
   })
+
+  // Verificar autenticación
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login")
+        return
+      }
+      
+      // Verificar si el usuario tiene permiso para acceder al dashboard
+      const canAccessDashboard = 
+        user.is_superuser || 
+        user.type === "admin" || 
+        user.type === "staff" ||
+        user.rol?.nombre?.toLowerCase().includes("admin") ||
+        user.rol?.nombre?.toLowerCase().includes("administrador") ||
+        user.rol?.nombre?.toLowerCase().includes("analista") ||
+        user.rol?.nombre?.toLowerCase().includes("consulta") ||
+        user.rol?.nombre?.toLowerCase().includes("consultor")
+      
+      if (!canAccessDashboard) {
+        router.push("/perfil-empresa")
+        return
+      }
+    }
+  }, [user, authLoading, router])
 
   const loadEmpresas = async () => {
     console.log('[DEBUG] Cargando empresas con página:', pagination.page)
@@ -163,18 +193,51 @@ if (response.results) {
     totalPages: 1,
   }))
 }
-} catch (error) {
-  console.error("Error loading empresas:", error)
-  setEmpresas([])
+} catch (error: any) {
+  // Manejar errores de autenticación silenciosamente
+  const errorMessage = error?.message || String(error)
+  const isNoAuthError = error?.noAuth || 
+                        error?.silent ||
+                        error?.status === 401 ||
+                        errorMessage.includes('No hay sesión activa') ||
+                        errorMessage.includes('credenciales') || 
+                        errorMessage.includes('autenticación') || 
+                        errorMessage.includes('401') ||
+                        errorMessage.includes('Sesión expirada')
+  
+  if (isNoAuthError) {
+    // Error de autenticación - no mostrar en consola, solo limpiar datos
+    setEmpresas([])
+    // El useEffect de autenticación se encargará de redirigir
+  } else {
+    // Otro tipo de error - mostrar en consola
+    console.error("Error loading empresas:", error)
+    setEmpresas([])
+  }
 } finally {
   setLoading(false)
 }
   }
 
   useEffect(() => {
-    loadEmpresas()
+    // Solo cargar empresas si el usuario está autenticado y tiene permisos
+    if (!authLoading && user) {
+      const canAccessDashboard = 
+        user.is_superuser || 
+        user.type === "admin" || 
+        user.type === "staff" ||
+        user.rol?.nombre?.toLowerCase().includes("admin") ||
+        user.rol?.nombre?.toLowerCase().includes("administrador") ||
+        user.rol?.nombre?.toLowerCase().includes("analista") ||
+        user.rol?.nombre?.toLowerCase().includes("consulta") ||
+        user.rol?.nombre?.toLowerCase().includes("consultor")
+      
+      if (canAccessDashboard) {
+        loadEmpresas()
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, searchQuery, pagination.page])
+  }, [filters, searchQuery, pagination.page, user, authLoading])
 
   const handleFilterChange = (newFilters: any) => {
     setFilters({ ...filters, ...newFilters })
@@ -283,6 +346,34 @@ const confirmarEliminacion = async () => {
     })
   }
 }
+
+  // Mostrar carga mientras se verifica el usuario
+  if (authLoading || !user) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-[#6B7280]">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  // Verificar permisos final
+  const canAccessDashboard = 
+    user.is_superuser || 
+    user.type === "admin" || 
+    user.type === "staff" ||
+    user.rol?.nombre?.toLowerCase().includes("admin") ||
+    user.rol?.nombre?.toLowerCase().includes("administrador") ||
+    user.rol?.nombre?.toLowerCase().includes("analista") ||
+    user.rol?.nombre?.toLowerCase().includes("consulta") ||
+    user.rol?.nombre?.toLowerCase().includes("consultor")
+
+  if (!canAccessDashboard) {
+    return null
+  }
 
   return (
     <MainLayout>

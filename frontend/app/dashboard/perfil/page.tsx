@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/lib/auth-context"
+import { handleAuthError } from "@/hooks/use-dashboard-auth"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { Save, User, Mail, Phone, Calendar, MapPin, FileText } from "lucide-react"
@@ -26,7 +27,8 @@ interface UserProfile {
   departamento?: string
   municipio?: string
   localidad?: string
-  rol?: {
+  rol?: number  // ID del rol
+  rol_detalle?: {
     id: number
     nombre: string
   }
@@ -75,13 +77,15 @@ export default function PerfilPage() {
         tipo_documento: data.tipo_documento || "",
         numero_documento: data.numero_documento || "",
       })
-    } catch (error) {
-      console.error("Error cargando perfil:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo cargar el perfil del usuario",
-        variant: "destructive",
-      })
+    } catch (error: any) {
+      if (!handleAuthError(error)) {
+        console.error("Error cargando perfil:", error)
+        toast({
+          title: "Error",
+          description: "No se pudo cargar el perfil del usuario",
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -122,12 +126,14 @@ export default function PerfilPage() {
         description: "Perfil actualizado correctamente",
       })
     } catch (error: any) {
-      console.error("Error actualizando perfil:", error)
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo actualizar el perfil",
-        variant: "destructive",
-      })
+      if (!handleAuthError(error)) {
+        console.error("Error actualizando perfil:", error)
+        toast({
+          title: "Error",
+          description: error.message || "No se pudo actualizar el perfil",
+          variant: "destructive",
+        })
+      }
     } finally {
       setSaving(false)
     }
@@ -193,10 +199,10 @@ export default function PerfilPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="rol">Rol</Label>
+                <Label htmlFor="rol">Rol Asignado</Label>
                 <Input
                   id="rol"
-                  value={userProfile.rol?.nombre || "Sin rol asignado"}
+                  value={userProfile.rol_detalle?.nombre || "Sin rol asignado"}
                   disabled
                   className="bg-muted"
                 />

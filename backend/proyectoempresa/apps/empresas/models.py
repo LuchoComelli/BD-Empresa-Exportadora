@@ -638,27 +638,40 @@ class Empresa(TimestampedModel):
     def __str__(self):
         return self.razon_social
 
+# ============================================================================
+# MODELOS PROXY OBSOLETOS - MANTENER SOLO PARA COMPATIBILIDAD TEMPORAL
+# ============================================================================
+# NOTA: Estos modelos proxy son redundantes. Todas las empresas se guardan
+# en la tabla Empresa y se diferencian por el campo tipo_empresa_valor.
+# Se recomienda usar el modelo Empresa directamente con filtros.
+# ============================================================================
+
 # Clases proxy para compatibilidad durante la migración
 # Estas filtran automáticamente por tipo_empresa_valor
+# ⚠️ OBSOLETO: Usar Empresa.objects.filter(tipo_empresa_valor='producto') en su lugar
 class EmpresaproductoManager(models.Manager):
-    """Manager que filtra solo empresas de producto"""
+    """Manager que filtra solo empresas de producto - OBSOLETO"""
     def get_queryset(self):
         return super().get_queryset().filter(tipo_empresa_valor='producto')
 
+# ⚠️ OBSOLETO: Usar Empresa.objects.filter(tipo_empresa_valor='servicio') en su lugar
 class EmpresaservicioManager(models.Manager):
-    """Manager que filtra solo empresas de servicio"""
+    """Manager que filtra solo empresas de servicio - OBSOLETO"""
     def get_queryset(self):
         return super().get_queryset().filter(tipo_empresa_valor='servicio')
 
+# ⚠️ OBSOLETO: Usar Empresa.objects.filter(tipo_empresa_valor='mixta') en su lugar
 class EmpresaMixtaManager(models.Manager):
-    """Manager que filtra solo empresas mixtas"""
+    """Manager que filtra solo empresas mixtas - OBSOLETO"""
     def get_queryset(self):
         return super().get_queryset().filter(tipo_empresa_valor='mixta')
 
+# ⚠️ OBSOLETO: Usar Empresa con tipo_empresa_valor='producto' en su lugar
 class Empresaproducto(Empresa):
     """
-    Proxy para empresas de producto - usa Empresa con tipo_empresa_valor='producto'
-    Mantenido para compatibilidad durante la migración
+    Proxy para empresas de producto - OBSOLETO
+    Usar: Empresa.objects.filter(tipo_empresa_valor='producto')
+    Mantenido solo para compatibilidad temporal con código legacy
     """
     objects = EmpresaproductoManager()
     
@@ -668,10 +681,12 @@ class Empresaproducto(Empresa):
         verbose_name_plural = 'Empresas de Productos'
         ordering = ['-fecha_creacion']
 
+# ⚠️ OBSOLETO: Usar Empresa con tipo_empresa_valor='servicio' en su lugar
 class Empresaservicio(Empresa):
     """
-    Proxy para empresas de servicio - usa Empresa con tipo_empresa_valor='servicio'
-    Mantenido para compatibilidad durante la migración
+    Proxy para empresas de servicio - OBSOLETO
+    Usar: Empresa.objects.filter(tipo_empresa_valor='servicio')
+    Mantenido solo para compatibilidad temporal con código legacy
     """
     objects = EmpresaservicioManager()
     
@@ -681,10 +696,12 @@ class Empresaservicio(Empresa):
         verbose_name_plural = 'Empresas de Servicios'
         ordering = ['-fecha_creacion']
 
+# ⚠️ OBSOLETO: Usar Empresa con tipo_empresa_valor='mixta' en su lugar
 class EmpresaMixta(Empresa):
     """
-    Proxy para empresas mixtas - usa Empresa con tipo_empresa_valor='mixta'
-    Mantenido para compatibilidad durante la migración
+    Proxy para empresas mixtas - OBSOLETO
+    Usar: Empresa.objects.filter(tipo_empresa_valor='mixta')
+    Mantenido solo para compatibilidad temporal con código legacy
     """
     objects = EmpresaMixtaManager()
     

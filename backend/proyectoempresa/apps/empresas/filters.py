@@ -1,6 +1,6 @@
 import django_filters
 from django import forms
-from .models import Empresaproducto, Empresaservicio, EmpresaMixta, Rubro
+from .models import Empresa, Rubro  # ✅ Usar modelo unificado
 
 class EmpresaProductoFilter(django_filters.FilterSet):
     # Filtros textuales
@@ -117,7 +117,7 @@ class EmpresaProductoFilter(django_filters.FilterSet):
     )
     
     class Meta:
-        model = Empresaproducto
+        model = Empresa  # ✅ Usar modelo unificado
         fields = [
             'razon_social', 'producto', 'descripcion', 'telefono', 'correo', 
             'direccion', 'cuit_cuil', 'departamento', 'municipio', 'localidad',
@@ -212,7 +212,7 @@ class EmpresaServicioFilter(django_filters.FilterSet):
     )
     
     class Meta:
-        model = Empresaservicio
+        model = Empresa  # ✅ Usar modelo unificado
         fields = [
             'razon_social', 'servicio', 'telefono', 'correo', 
             'direccion', 'cuit_cuil', 'departamento', 'municipio', 'localidad',
@@ -313,7 +313,7 @@ class EmpresaMixtaFilter(django_filters.FilterSet):
     )
     
     class Meta:
-        model = EmpresaMixta
+        model = Empresa  # ✅ Usar modelo unificado
         fields = [
             'razon_social', 'producto', 'servicio', 'telefono', 'correo', 
             'direccion', 'cuit_cuil', 'departamento', 'municipio', 'localidad',

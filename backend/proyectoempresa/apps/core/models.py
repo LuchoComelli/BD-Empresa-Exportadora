@@ -207,6 +207,11 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     fecha_ultimo_acceso = models.DateTimeField(blank=True, null=True, verbose_name="Último Acceso")
     intentos_login_fallidos = models.PositiveIntegerField(default=0, verbose_name="Intentos de Login Fallidos")
     bloqueado_hasta = models.DateTimeField(blank=True, null=True, verbose_name="Bloqueado Hasta")
+    debe_cambiar_password = models.BooleanField(
+        default=False,
+        verbose_name="Debe Cambiar Contraseña",
+        help_text="Indica si el usuario debe cambiar su contraseña en el próximo inicio de sesión (solo para empresas)"
+    )
     
     # Ubicación del usuario (compartida con empresas)
     departamento = models.CharField(

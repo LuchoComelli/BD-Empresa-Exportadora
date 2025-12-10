@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import (
     TipoEmpresa, Rubro, SubRubro, UnidadMedida, Otrorubro,
-    Empresa, Empresaproducto, Empresaservicio, EmpresaMixta,  # Proxies para compatibilidad
+    Empresa,  # ✅ Modelo principal unificado
+    Empresaproducto, Empresaservicio, EmpresaMixta,  # ⚠️ OBSOLETO: Mantener solo para compatibilidad
     ProductoEmpresa, ServicioEmpresa,
     ProductoEmpresaMixta, ServicioEmpresaMixta,
     PosicionArancelaria, PosicionArancelariaMixta,
@@ -1346,6 +1347,344 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = EmpresaMixta
+        fields = '__all__'
+        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
+
+
+# ============================================================================
+# SERIALIZERS UNIFICADOS PARA EMPRESA (REEMPLAZAN LOS PROXY MODELS)
+# ============================================================================
+
+class EmpresaListSerializer(serializers.ModelSerializer):
+    """Serializer simplificado unificado para listas de empresas (todos los tipos)"""
+    tipo_empresa_nombre = serializers.CharField(source='tipo_empresa.nombre', read_only=True)
+    tipo_empresa = serializers.SerializerMethodField()
+    tipo_empresa_valor = serializers.CharField(read_only=True)
+    rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
+    departamento_nombre = serializers.CharField(source='departamento.nombre', read_only=True)
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
+    categoria_matriz = serializers.SerializerMethodField()
+    sub_rubro_nombre = serializers.SerializerMethodField()
+
+    def get_tipo_empresa(self, obj):
+        """Retornar el valor del tipo de empresa"""
+        return getattr(obj, 'tipo_empresa_valor', None) or 'producto'
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
+    
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+    
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
+    def get_sub_rubro_nombre(self, obj):
+        """Obtener nombre del subrubro según el tipo de empresa"""
+        if obj.tipo_empresa_valor == 'mixta':
+            # Para empresas mixtas, mostrar ambos subrubros si existen
+            sub_prod = obj.id_subrubro_producto.nombre if obj.id_subrubro_producto else None
+            sub_serv = obj.id_subrubro_servicio.nombre if obj.id_subrubro_servicio else None
+            if sub_prod and sub_serv:
+                return f"{sub_prod} / {sub_serv}"
+            return sub_prod or sub_serv or None
+        else:
+            # Para empresas de producto o servicio único
+            return obj.id_subrubro.nombre if obj.id_subrubro else None
+    
+    class Meta:
+        model = Empresa
+        fields = [
+            'id', 'razon_social', 'cuit_cuil', 'direccion',
+            'departamento_nombre', 'telefono', 'correo',
+            'tipo_empresa_nombre', 'tipo_empresa', 'tipo_empresa_valor', 
+            'rubro_nombre', 'id_subrubro', 'id_subrubro_producto', 'id_subrubro_servicio',
+            'sub_rubro_nombre', 'exporta', 'importa', 'fecha_creacion', 
+            'categoria_matriz', 'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
+        ]
+
+
+class EmpresaSerializer(serializers.ModelSerializer):
+    """Serializer completo unificado para empresas (todos los tipos)"""
+    # Relaciones
+    productos = ProductoEmpresaSerializer(source='productos_empresa', many=True, read_only=True)
+    servicios = ServicioEmpresaSerializer(source='servicios_empresa', many=True, read_only=True)
+    productos_mixta = ProductoEmpresaMixtaSerializer(many=True, read_only=True)
+    servicios_mixta = ServicioEmpresaMixtaSerializer(many=True, read_only=True)
+    tipo_empresa_detalle = TipoEmpresaSerializer(source='tipo_empresa', read_only=True)
+    rubro_detalle = RubroSerializer(source='id_rubro', read_only=True)
+    
+    # Campos calculados
+    actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
+    rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
+    sub_rubro_nombre = serializers.SerializerMethodField()
+    departamento_nombre = serializers.SerializerMethodField()
+    municipio_nombre = serializers.SerializerMethodField()
+    localidad_nombre = serializers.SerializerMethodField()
+    instagram = serializers.SerializerMethodField()
+    facebook = serializers.SerializerMethodField()
+    linkedin = serializers.SerializerMethodField()
+    categoria_matriz = serializers.SerializerMethodField()
+    tipo_empresa_valor = serializers.CharField(read_only=True)
+    
+    def get_categoria_matriz(self, obj):
+        """Obtener la categoría de la matriz de clasificación"""
+        try:
+            matriz = MatrizClasificacionExportador.objects.filter(empresa=obj).first()
+            if matriz:
+                categoria_map = {
+                    'exportadora': 'Exportadora',
+                    'potencial_exportadora': 'Potencial Exportadora',
+                    'etapa_inicial': 'Etapa Inicial'
+                }
+                return categoria_map.get(matriz.categoria, 'Etapa Inicial')
+        except Exception:
+            pass
+        return None
+    
+    def _parse_redes(self, obj):
+        """Intentar parsear el campo `redes_sociales` que puede ser JSON o texto simple."""
+        import json
+        raw = getattr(obj, 'redes_sociales', None)
+        if not raw:
+            return {}
+        if isinstance(raw, dict):
+            return raw
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+        redes = {}
+        for part in parts:
+            if ':' in part or '=' in part:
+                sep = ':' if ':' in part else '='
+                k, v = part.split(sep, 1)
+                redes[k.strip()] = v.strip()
+        return redes
+
+    def get_instagram(self, obj):
+        try:
+            return self._parse_redes(obj).get('instagram') or None
+        except Exception:
+            return None
+
+    def get_facebook(self, obj):
+        try:
+            return self._parse_redes(obj).get('facebook') or None
+        except Exception:
+            return None
+
+    def get_linkedin(self, obj):
+        try:
+            return self._parse_redes(obj).get('linkedin') or None
+        except Exception:
+            return None
+    
+    def get_departamento_nombre(self, obj):
+        """Obtener nombre del departamento"""
+        return obj.departamento.nombre if obj.departamento else None
+
+    def get_municipio_nombre(self, obj):
+        """Obtener nombre del municipio"""
+        return obj.municipio.nombre if obj.municipio else None
+
+    def get_localidad_nombre(self, obj):
+        """Obtener nombre de la localidad"""
+        return obj.localidad.nombre if obj.localidad else None
+    
+    def get_sub_rubro_nombre(self, obj):
+        """Obtener nombre del subrubro según el tipo de empresa"""
+        if obj.tipo_empresa_valor == 'mixta':
+            sub_prod = obj.id_subrubro_producto.nombre if obj.id_subrubro_producto else None
+            sub_serv = obj.id_subrubro_servicio.nombre if obj.id_subrubro_servicio else None
+            if sub_prod and sub_serv:
+                return f"{sub_prod} / {sub_serv}"
+            return sub_prod or sub_serv or None
+        else:
+            return obj.id_subrubro.nombre if obj.id_subrubro else None
+    
+    def update(self, instance, validated_data):
+        """Actualizar empresa con validación de subrubro y redes sociales"""
+        import json
+        from django.db import models as django_models
+        
+        # 1. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            existing = {}
+            raw = getattr(instance, 'redes_sociales', None)
+            if raw:
+                try:
+                    existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                except Exception:
+                    existing = {}
+            existing.update(redes_updated)
+            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+        
+        # 2. MANEJAR SUBRUBROS
+        id_subrubro = validated_data.pop('id_subrubro', None)
+        id_subrubro_producto = validated_data.pop('id_subrubro_producto', None)
+        id_subrubro_servicio = validated_data.pop('id_subrubro_servicio', None)
+        
+        rubro = validated_data.get('id_rubro', instance.id_rubro)
+        
+        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
+            if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
+                instance.id_subrubro = None
+            if instance.id_subrubro_producto and instance.id_subrubro_producto.rubro != validated_data['id_rubro']:
+                instance.id_subrubro_producto = None
+            if instance.id_subrubro_servicio and instance.id_subrubro_servicio.rubro != validated_data['id_rubro']:
+                instance.id_subrubro_servicio = None
+        
+        if id_subrubro is not None:
+            if id_subrubro.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
+                })
+            instance.id_subrubro = id_subrubro
+        
+        if id_subrubro_producto is not None:
+            if id_subrubro_producto.rubro != rubro:
+                raise serializers.ValidationError({
+                    'id_subrubro_producto': 'El subrubro de productos debe pertenecer al rubro seleccionado'
+                })
+            instance.id_subrubro_producto = id_subrubro_producto
+        
+        if id_subrubro_servicio is not None:
+            rubro_servicio = validated_data.get('id_rubro_servicio', instance.id_rubro)
+            if id_subrubro_servicio.rubro != rubro_servicio:
+                raise serializers.ValidationError({
+                    'id_subrubro_servicio': 'El subrubro de servicios debe pertenecer al rubro de servicios'
+                })
+            instance.id_subrubro_servicio = id_subrubro_servicio
+        
+        # 3. ACTUALIZAR OTROS CAMPOS
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
+    
+    def create(self, validated_data):
+        """Crear empresa con validación de subrubro y creación automática de usuario"""
+        from apps.core.models import Usuario, RolUsuario
+        from django.db import transaction
+        import json
+        
+        # 1. EXTRAER Y VALIDAR SUBRUBROS
+        id_subrubro = validated_data.pop('id_subrubro', None)
+        id_subrubro_producto = validated_data.pop('id_subrubro_producto', None)
+        id_subrubro_servicio = validated_data.pop('id_subrubro_servicio', None)
+        rubro = validated_data.get('id_rubro')
+        
+        if id_subrubro and id_subrubro.rubro != rubro:
+            raise serializers.ValidationError({
+                'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
+            })
+        
+        if id_subrubro_producto and id_subrubro_producto.rubro != rubro:
+            raise serializers.ValidationError({
+                'id_subrubro_producto': 'El subrubro de productos debe pertenecer al rubro seleccionado'
+            })
+        
+        # 2. MANEJAR REDES SOCIALES
+        redes_updated = {}
+        for key in ('instagram', 'facebook', 'linkedin'):
+            if key in validated_data:
+                val = validated_data.pop(key)
+                if val:
+                    redes_updated[key] = val
+        
+        if redes_updated:
+            validated_data['redes_sociales'] = json.dumps(redes_updated, ensure_ascii=False)
+        
+        # 3. CREAR USUARIO AUTOMÁTICAMENTE SI ES NECESARIO
+        id_usuario = validated_data.get('id_usuario')
+        contacto_email = validated_data.get('contacto_principal_email')
+        cuit_cuil = validated_data.get('cuit_cuil')
+        
+        request = self.context.get('request')
+        if request and request.user and (request.user.is_staff or request.user.is_superuser):
+            if contacto_email and cuit_cuil and (not id_usuario or id_usuario == request.user):
+                with transaction.atomic():
+                    rol_empresa, _ = RolUsuario.objects.get_or_create(
+                        nombre='Empresa',
+                        defaults={
+                            'descripcion': 'Rol para empresas registradas',
+                            'puede_crear_empresas': False,
+                            'puede_editar_empresas': False,
+                            'puede_eliminar_empresas': False,
+                            'puede_ver_auditoria': False,
+                            'puede_exportar_datos': False,
+                            'puede_importar_datos': False,
+                            'puede_gestionar_usuarios': False,
+                            'puede_acceder_admin': False,
+                            'nivel_acceso': 1,
+                            'activo': True
+                        }
+                    )
+                    
+                    try:
+                        usuario_empresa = Usuario.objects.get(email=contacto_email)
+                        usuario_empresa.rol = rol_empresa
+                        usuario_empresa.set_password(cuit_cuil)
+                        usuario_empresa.is_active = True
+                        usuario_empresa.save()
+                    except Usuario.DoesNotExist:
+                        usuario_empresa = Usuario.objects.create_user(
+                            email=contacto_email,
+                            password=cuit_cuil,
+                            nombre=validated_data.get('contacto_principal_nombre', ''),
+                            apellido=validated_data.get('contacto_principal_cargo', ''),
+                            rol=rol_empresa,
+                            telefono=validated_data.get('contacto_principal_telefono', ''),
+                            is_active=True
+                        )
+                    
+                    validated_data['id_usuario'] = usuario_empresa
+        
+        # 4. CREAR LA EMPRESA (usando el modelo base Empresa)
+        empresa = Empresa.objects.create(**validated_data)
+        
+        # 5. ASIGNAR SUBRUBROS SI EXISTEN
+        if id_subrubro:
+            empresa.id_subrubro = id_subrubro
+        if id_subrubro_producto:
+            empresa.id_subrubro_producto = id_subrubro_producto
+        if id_subrubro_servicio:
+            empresa.id_subrubro_servicio = id_subrubro_servicio
+        
+        if id_subrubro or id_subrubro_producto or id_subrubro_servicio:
+            empresa.save()
+        
+        return empresa
+    
+    class Meta:
+        model = Empresa
         fields = '__all__'
         read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
 

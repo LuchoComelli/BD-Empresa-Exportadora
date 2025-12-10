@@ -538,6 +538,8 @@ def crear_empresa_desde_solicitud(solicitud):
         usuario_empresa.municipio = solicitud.municipio
         usuario_empresa.localidad = solicitud.localidad
         usuario_empresa.is_active = True
+        # Marcar que debe cambiar la contraseña (es empresa con CUIT como password)
+        usuario_empresa.debe_cambiar_password = True
         usuario_empresa.save()
         logger.info(f"Usuario existente actualizado: {usuario_empresa.email}")
     except User.DoesNotExist:
@@ -551,7 +553,8 @@ def crear_empresa_desde_solicitud(solicitud):
             departamento=solicitud.departamento,
             municipio=solicitud.municipio,
             localidad=solicitud.localidad,
-            is_active=True
+            is_active=True,
+            debe_cambiar_password=True  # Marcar que debe cambiar la contraseña
         )
         logger.info(f"Nuevo usuario creado: {usuario_empresa.email}")
     
