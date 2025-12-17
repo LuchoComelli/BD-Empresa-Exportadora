@@ -144,10 +144,11 @@ export default function ConfiguracionPage() {
         console.error("Error guardando configuración:", error)
         const errorMessage = error?.message || error?.detail || "No se pudo guardar la configuración"
         toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive"
-      })
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      }
     } finally {
       setSaving(false)
     }

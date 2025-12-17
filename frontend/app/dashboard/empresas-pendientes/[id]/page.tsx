@@ -113,11 +113,18 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
     } catch (error: any) {
       console.error("Error aprobando empresa:", error)
       
-      // Verificar si el error es solo del email pero la empresa se creó
-      const errorMessage = error.response?.data?.error || error.message || "Error al aprobar la empresa"
+      // Extraer el mensaje de error del backend (puede estar en diferentes lugares)
+      const errorMessage = error?.errorData?.error || 
+                          error?.errorData?.detail || 
+                          error?.errorData?.message ||
+                          error?.message || 
+                          "Error al aprobar la empresa. Por favor, intenta nuevamente."
       
       // Si el error menciona email, puede que la empresa se haya creado igual
-      if (errorMessage.toLowerCase().includes('email') || errorMessage.toLowerCase().includes('correo')) {
+      const lowerErrorMessage = errorMessage.toLowerCase()
+      if (lowerErrorMessage.includes('email') || 
+          lowerErrorMessage.includes('correo') ||
+          lowerErrorMessage.includes('enviar')) {
         toast({
           title: "Empresa aprobada con advertencia",
           description: `La empresa fue aprobada pero hubo un problema al enviar el email. La empresa fue creada correctamente.`,
@@ -128,9 +135,14 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
           router.refresh()
         }, 1000)
       } else {
+        // Mostrar el mensaje de error del backend si está disponible
+        const displayMessage = errorMessage.length > 200 
+          ? `${errorMessage.substring(0, 200)}...` 
+          : errorMessage
+        
         toast({
           title: "Error al aprobar",
-          description: errorMessage,
+          description: displayMessage,
           variant: "destructive",
         })
       }

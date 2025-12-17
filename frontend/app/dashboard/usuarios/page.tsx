@@ -144,8 +144,12 @@ export default function UsuariosPage() {
       }
       // El backend ya filtra los roles, solo necesitamos mapear los datos
       setRoles(allRoles)
-    } catch (error) {
-      console.error("Error loading roles:", error)
+    } catch (error: any) {
+      // Igual que en otras interfaces: tratar errores de autenticación (401, sin sesión)
+      // de forma silenciosa usando handleAuthError para evitar el mensaje en consola.
+      if (!handleAuthError(error)) {
+        console.error("Error loading roles:", error)
+      }
     }
   }
 

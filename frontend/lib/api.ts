@@ -151,9 +151,10 @@ class ApiService {
         }
         
         // Si hay errores de validación del serializer, construir mensaje detallado
-        let errorMessage = error.detail || `Error ${response.status}: ${response.statusText}`;
+        // El backend puede devolver el error en 'error', 'detail', o 'message'
+        let errorMessage = error.error || error.detail || error.message || `Error ${response.status}: ${response.statusText}`;
         
-        if (error && typeof error === 'object' && !error.detail) {
+        if (error && typeof error === 'object' && !error.error && !error.detail && !error.message) {
           // Hay errores de campo específicos
           const fieldErrors = Object.keys(error)
             .map(key => {
@@ -169,7 +170,10 @@ class ApiService {
           }
         }
         
-        throw new Error(errorMessage);
+        const apiError: any = new Error(errorMessage);
+        apiError.status = response.status;
+        apiError.errorData = error;
+        throw apiError;
       }
 
       // Si la respuesta es 204 No Content o está vacía, no intentar parsear JSON
