@@ -577,11 +577,122 @@ async getEmpresas(params?: {
     }
   }
 
-  // Actualizar una empresa por ID
+// Actualizar una empresa por ID
   async updateEmpresa(id: number, data: any): Promise<any> {
-    // ✅ Usar el nuevo endpoint unificado primero
+    console.log('🔵 [api.updateEmpresa] Actualizando empresa:', id)
+    console.log('🔵 [api.updateEmpresa] Tipo de data:', data instanceof FormData ? 'FormData' : 'JSON')
+    
+    // ✅ DETECTAR SI ES FormData
+    const isFormData = data instanceof FormData
+    
+    // ✅ SI ES FormData, hacer petición especial
+    if (isFormData) {
+      const token = this.getAccessToken()
+      
+      // ❌ NO establecer Content-Type para FormData (el navegador lo hace automáticamente)
+      const headers: HeadersInit = {}
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      // Debug: Ver qué se está enviando
+      console.log('📦 [api.updateEmpresa] Contenido del FormData:')
+      for (const [key, value] of data.entries()) {
+        if (value instanceof File) {
+          console.log(`  - ${key}: [File] ${value.name} (${value.size} bytes)`)
+        } else {
+          console.log(`  - ${key}: ${value}`)
+        }
+      }
+      
+      // ✅ INTENTAR MÚLTIPLES ENDPOINTS (el orden importa)
+      const endpoints = [
+        `/empresas/empresas/${id}/`,        // Endpoint unificado nuevo
+        `/empresas/empresas-producto/${id}/`,  // Fallback: producto
+        `/empresas/empresas-servicio/${id}/`,  // Fallback: servicio
+        `/empresas/empresas-mixta/${id}/`,     // Fallback: mixta
+      ]
+      
+      let lastError: Error | null = null
+      
+      for (const endpoint of endpoints) {
+        try {
+          const url = `${this.baseURL}${endpoint}`
+          console.log(`🔄 [api.updateEmpresa] Intentando con: ${endpoint}`)
+          
+          const response = await fetch(url, {
+            method: 'PATCH',
+            headers,
+            credentials: 'include',
+            body: data
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            console.log(`✅ [api.updateEmpresa] Empresa actualizada exitosamente con: ${endpoint}`)
+            return result
+          } else if (response.status === 404) {
+            // 404 es esperado cuando intentamos el endpoint incorrecto
+            console.log(`⏭️ [api.updateEmpresa] 404 en ${endpoint}, probando siguiente...`)
+            continue
+          } else {
+            // Otro error HTTP
+            let errorData: any = {}
+            try {
+              const errorText = await response.text()
+              console.error(`📄 [api.updateEmpresa] Texto de error raw:`, errorText)
+              if (errorText) {
+                errorData = JSON.parse(errorText)
+              }
+            } catch (parseError) {
+              console.error(`❌ [api.updateEmpresa] No se pudo parsear error:`, parseError)
+            }
+            
+            console.error(`❌ [api.updateEmpresa] Error ${response.status} en ${endpoint}:`, errorData)
+            
+            // Construir mensaje de error detallado
+            let errorMessage = 'Error al actualizar empresa'
+            if (errorData.detail) {
+              errorMessage = errorData.detail
+            } else if (errorData.message) {
+              errorMessage = errorData.message
+            } else if (typeof errorData === 'object' && Object.keys(errorData).length > 0) {
+              // Hay errores de campo específicos
+              const fieldErrors = Object.entries(errorData)
+                .map(([field, errors]: [string, any]) => {
+                  if (Array.isArray(errors)) {
+                    return `${field}: ${errors.join(', ')}`
+                  }
+                  return `${field}: ${errors}`
+                })
+                .join('\n')
+              if (fieldErrors) {
+                errorMessage = `Errores de validación:\n${fieldErrors}`
+              }
+            } else {
+              errorMessage = `Error ${response.status}: ${response.statusText}`
+            }
+            
+            lastError = new Error(errorMessage)
+            // No hacer break, seguir intentando otros endpoints
+            continue
+          }
+        } catch (error: any) {
+          console.error(`❌ [api.updateEmpresa] Excepción en ${endpoint}:`, error)
+          lastError = error
+          // Continuar con el siguiente endpoint
+          continue
+        }
+      }
+      
+      // Si llegamos aquí, ningún endpoint funcionó
+      throw lastError || new Error('No se pudo actualizar la empresa en ningún endpoint')
+    }
+    
+    // ✅ Si NO es FormData, usar el método patch normal (JSON)
+    console.log('📤 [api.updateEmpresa] Enviando como JSON')
     try {
-      return await this.patch<any>(`/empresas/${id}/`, data);
+      return await this.patch<any>(`/empresas/empresas/${id}/`, data);
     } catch (e) {
       // Fallback a endpoints antiguos por compatibilidad
       const tipoEmpresa = data.tipo_empresa || data.tipo_empresa_valor;
@@ -590,19 +701,19 @@ async getEmpresas(params?: {
         try {
           return await this.patch<any>(`/empresas/empresas-producto/${id}/`, data);
         } catch (e2) {
-          throw e; // Re-lanzar el error original si falla
+          throw e;
         }
       } else if (tipoEmpresa === 'servicio' || tipoEmpresa === 'servicios') {
         try {
           return await this.patch<any>(`/empresas/empresas-servicio/${id}/`, data);
         } catch (e2) {
-          throw e; // Re-lanzar el error original si falla
+          throw e;
         }
       } else if (tipoEmpresa === 'mixta' || tipoEmpresa === 'ambos') {
         try {
           return await this.patch<any>(`/empresas/empresas-mixta/${id}/`, data);
         } catch (e2) {
-          throw e; // Re-lanzar el error original si falla
+          throw e;
         }
       }
       
@@ -618,6 +729,7 @@ async getEmpresas(params?: {
       }
     }
   }
+
 
   // Exportar empresas aprobadas a PDF
   async exportEmpresasPDF(params?: {
@@ -739,6 +851,68 @@ async deleteEmpresa(id: number, tipo_empresa?: string): Promise<void> {
     }
     await this.delete(endpoint);
   }
+}
+
+// ========== PRODUCTOS Y SERVICIOS (NUEVO) ==========
+
+// Actualizar un producto
+async updateProducto(productoId: number, data: any): Promise<any> {
+  return this.patch<any>(`/empresas/productos/${productoId}/`, data);
+}
+
+// Crear un producto
+async createProducto(data: any): Promise<any> {
+  return this.post<any>('/empresas/productos/', data);
+}
+
+// Eliminar un producto
+async deleteProducto(productoId: number): Promise<void> {
+  await this.delete(`/empresas/productos/${productoId}/`);
+}
+
+// Actualizar un servicio
+async updateServicio(servicioId: number, data: any): Promise<any> {
+  return this.patch<any>(`/empresas/servicios/${servicioId}/`, data);
+}
+
+// Crear un servicio
+async createServicio(data: any): Promise<any> {
+  return this.post<any>('/empresas/servicios/', data);
+}
+
+// Eliminar un servicio
+async deleteServicio(servicioId: number): Promise<void> {
+  await this.delete(`/empresas/servicios/${servicioId}/`);
+}
+
+// Actualizar un producto mixta
+async updateProductoMixta(productoId: number, data: any): Promise<any> {
+  return this.patch<any>(`/empresas/productos-mixta/${productoId}/`, data);
+}
+
+// Crear un producto mixta
+async createProductoMixta(data: any): Promise<any> {
+  return this.post<any>('/empresas/productos-mixta/', data);
+}
+
+// Eliminar un producto mixta
+async deleteProductoMixta(productoId: number): Promise<void> {
+  await this.delete(`/empresas/productos-mixta/${productoId}/`);
+}
+
+// Actualizar un servicio mixta
+async updateServicioMixta(servicioId: number, data: any): Promise<any> {
+  return this.patch<any>(`/empresas/servicios-mixta/${servicioId}/`, data);
+}
+
+// Crear un servicio mixta
+async createServicioMixta(data: any): Promise<any> {
+  return this.post<any>('/empresas/servicios-mixta/', data);
+}
+
+// Eliminar un servicio mixta
+async deleteServicioMixta(servicioId: number): Promise<void> {
+  await this.delete(`/empresas/servicios-mixta/${servicioId}/`);
 }
 
   // Registrar nueva empresa

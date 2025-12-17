@@ -647,7 +647,14 @@ useEffect(() => {
         })),
         exporta: formData.exporta || null,
         destino_exportacion: formData.destinoExportacion || null,
-        interes_exportar: formData.exporta === 'no' ? (formData.interesExportar === 'si') : null,
+        interes_exportar: (() => {
+  if (formData.exporta === 'no' || formData.exporta === 'No' || 
+      formData.exporta === 'No, solo ventas nacionales' || 
+      formData.exporta === 'No, solo ventas locales') {
+    return formData.interesExportar === 'si' ? true : false
+  }
+  return null
+})(),
         importa: formData.importa || null,
         tipo_importacion: formData.importa === 'si' ? 'Importación' : null,
         certificado_pyme: formData.certificadoMiPyme || null,

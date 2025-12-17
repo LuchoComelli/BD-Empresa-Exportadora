@@ -145,6 +145,13 @@ class SolicitudRegistro(TimestampedModel):
         null=True, 
         verbose_name="Tipo de importación"
     )
+
+    interes_exportar = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name="¿Está Interesada en Comenzar a Exportar?",
+        help_text="Solo aplica si NO exporta actualmente"
+    )
     
     # Certificaciones
     certificado_pyme = models.CharField(

@@ -81,37 +81,24 @@ const availableFields = [
   // Actividad Comercial
   { id: "exporta", label: "¿Exporta?", category: "Actividad Comercial", default: true },
   { id: "destinoexporta", label: "Destino de Exportación", category: "Actividad Comercial", default: false },
-  { id: "tipoexporta", label: "Tipo de Exportación", category: "Actividad Comercial", default: false },
   { id: "importa", label: "¿Importa?", category: "Actividad Comercial", default: false },
-  { id: "tipoimporta", label: "Tipo de Importación", category: "Actividad Comercial", default: false },
-  { id: "frecuenciaimporta", label: "Frecuencia de Importación", category: "Actividad Comercial", default: false },
   { id: "interes_exportar", label: "Interés en Exportar", category: "Actividad Comercial", default: false },
   
   // Certificaciones
   { id: "certificadopyme", label: "Certificado MiPYME", category: "Certificaciones", default: false },
-  { id: "certificacionesbool", label: "Certificaciones Internacionales", category: "Certificaciones", default: false },
-  { id: "certificaciones", label: "Detalle de Certificaciones", category: "Certificaciones", default: false },
-  { id: "certificaciones_otros", label: "Otras Certificaciones", category: "Certificaciones", default: false },
+  { id: "certificaciones", label: "Certificaciones", category: "Certificaciones", default: false },
   
   // Promoción y Material
   { id: "promo2idiomas", label: "Material en Múltiples Idiomas", category: "Promoción", default: false },
   { id: "idiomas_trabaja", label: "Idiomas de Trabajo", category: "Promoción", default: false },
   
-  // Capacidad Productiva
-  { id: "capacidadproductiva", label: "Capacidad Productiva", category: "Capacidad", default: false },
-  { id: "tiempocapacidad", label: "Período de Capacidad", category: "Capacidad", default: false },
-  { id: "otracapacidad", label: "Otra Capacidad Productiva", category: "Capacidad", default: false },
-  
-  // Ferias
-  { id: "participoferianacional", label: "Participó en Ferias Nacionales", category: "Ferias", default: false },
-  { id: "feriasnacionales", label: "Detalle Ferias Nacionales", category: "Ferias", default: false },
-  { id: "participoferiainternacional", label: "Participó en Ferias Internacionales", category: "Ferias", default: false },
-  { id: "feriasinternacionales", label: "Detalle Ferias Internacionales", category: "Ferias", default: false },
+// ✅ NUEVOS CAMPOS: Actividades de Internacionalización
+  { id: "ferias", label: "Ferias", category: "Actividades de Internacionalización", default: false },
+  { id: "rondas", label: "Rondas de Negocios", category: "Actividades de Internacionalización", default: false },
+  { id: "misiones", label: "Misiones Comerciales", category: "Actividades de Internacionalización", default: false },
   
   // Otros
   { id: "observaciones", label: "Observaciones", category: "Otros", default: false },
-  { id: "puntaje", label: "Puntaje", category: "Otros", default: false },
-  { id: "descripcion", label: "Descripción", category: "Otros", default: false },
 ]
 
 export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
@@ -182,27 +169,17 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'contacto_secundario_email': 'contacto_secundario_email',
       'exporta': 'exporta',
       'destinoexporta': 'destinoexporta',
-      'tipoexporta': 'tipoexporta',
       'importa': 'importa',
-      'tipoimporta': 'tipoimporta',
-      'frecuenciaimporta': 'frecuenciaimporta',
       'interes_exportar': 'interes_exportar',
       'certificadopyme': 'certificadopyme',
       'certificacionesbool': 'certificacionesbool',
       'certificaciones': 'certificaciones',
-      'certificaciones_otros': 'certificaciones_otros',
       'promo2idiomas': 'promo2idiomas',
       'idiomas_trabaja': 'idiomas_trabaja',
-      'capacidadproductiva': 'capacidadproductiva',
-      'tiempocapacidad': 'tiempocapacidad',
-      'otracapacidad': 'otracapacidad',
-      'participoferianacional': 'participoferianacional',
-      'feriasnacionales': 'feriasnacionales',
-      'participoferiainternacional': 'participoferiainternacional',
-      'feriasinternacionales': 'feriasinternacionales',
+      'ferias': 'ferias',
+      'rondas': 'rondas',
+      'misiones': 'misiones',
       'observaciones': 'observaciones',
-      'puntaje': 'puntaje',
-      'descripcion': 'descripcion',
     }
 
     // Organizar campos por categoría

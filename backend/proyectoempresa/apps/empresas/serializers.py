@@ -72,7 +72,7 @@ class PosicionArancelariaSerializer(serializers.ModelSerializer):
 
 class ProductoEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para productos de empresa"""
-    posicion_arancelaria = serializers.SerializerMethodField()
+    posicion_arancelaria = serializers.SerializerMethodField(read_only=True)
     codigo_arancelario_input = serializers.CharField(
         write_only=True, 
         required=False, 
@@ -118,40 +118,41 @@ class ProductoEmpresaSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         """Actualizar producto y su posición arancelaria"""
-        codigo_arancelario = validated_data.pop('posicion_arancelaria_codigo', None)
-        
+    
+        # ✅ CRÍTICO: Extraer posicion_data ANTES de usarlo
+        posicion_data = validated_data.pop('posicion_arancelaria_codigo', None)
+    
         # Actualizar campos del producto
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        
+
         # Actualizar o crear posición arancelaria
-        if codigo_arancelario is not None:  # Permitir actualización incluso si está vacío
-            try:
-                if codigo_arancelario.strip():
-                    # Intentar obtener la posición existente
-                    try:
-                        posicion = instance.posicion_arancelaria
-                        posicion.codigo_arancelario = codigo_arancelario.strip()
-                        posicion.save()
-                    except PosicionArancelaria.DoesNotExist:
-                        # Crear nueva si no existe
-                        PosicionArancelaria.objects.create(
-                            producto=instance,
-                            codigo_arancelario=codigo_arancelario.strip(),
-                            descripcion_arancelaria=''
-                        )
-                else:
-                    # Si el código está vacío, eliminar la posición arancelaria
-                    try:
-                        instance.posicion_arancelaria.delete()
-                    except PosicionArancelaria.DoesNotExist:
-                        pass
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Error actualizando posición arancelaria: {str(e)}", exc_info=True)
-        
+        if posicion_data is not None:
+            codigo = None
+            if isinstance(posicion_data, dict):
+                codigo = posicion_data.get('codigo_arancelario')
+            elif isinstance(posicion_data, str):
+                codigo = posicion_data
+    
+            if codigo and codigo.strip():
+                try:
+                    posicion = instance.posicion_arancelaria
+                    posicion.codigo_arancelario = codigo.strip()
+                    posicion.save()
+                except PosicionArancelaria.DoesNotExist:
+                    PosicionArancelaria.objects.create(
+                        producto=instance,
+                        codigo_arancelario=codigo.strip(),
+                        descripcion_arancelaria=''
+                    )
+            else:
+                # Si el código está vacío, eliminar la posición arancelaria
+                try:
+                    instance.posicion_arancelaria.delete()
+                except PosicionArancelaria.DoesNotExist:
+                    pass
+
         return instance
     
     class Meta:
@@ -260,7 +261,7 @@ class EmpresaproductoListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre','tipo_empresa', 'rubro_nombre', 'id_subrubro',
-            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
+            'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 'categoria_matriz',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
 
@@ -394,20 +395,22 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         return None
     
     def update(self, instance, validated_data):
-        """
-        Actualizar empresa incluyendo subrubro y redes sociales
-        """
+        """Actualizar empresa incluyendo productos, servicios, subrubro y redes sociales"""
         import json
-        
-        # 1. MANEJAR REDES SOCIALES
+    
+        # 1. EXTRAER PRODUCTOS Y SERVICIOS **ANTES** de procesarlos
+        # IMPORTANTE: No están en validated_data, vienen en self.initial_data
+        productos_data = self.initial_data.get('productos', None)
+        servicios_data = self.initial_data.get('servicios', None)
+    
+        # 2. MANEJAR REDES SOCIALES
         redes_updated = {}
         for key in ('instagram', 'facebook', 'linkedin'):
             if key in validated_data:
                 val = validated_data.pop(key)
                 if val:
                     redes_updated[key] = val
-        
-        # Merge con redes existentes
+    
         if redes_updated:
             existing = {}
             raw = getattr(instance, 'redes_sociales', None)
@@ -416,36 +419,165 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
                     existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
                 except Exception:
                     existing = {}
-            
             existing.update(redes_updated)
             instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
-        
-        # 2. MANEJAR SUBRUBRO
+    
+        # 3. MANEJAR SUBRUBRO
         id_subrubro = validated_data.pop('id_subrubro', None)
-        
-        # Obtener el rubro (puede ser el nuevo o el actual)
         rubro = validated_data.get('id_rubro', instance.id_rubro)
-        
-        # Si se está cambiando el rubro, limpiar el subrubro si no pertenece al nuevo rubro
+    
         if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
             if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
                 instance.id_subrubro = None
-        
-        # Si se proporciona un nuevo subrubro, validar y asignar
+    
         if id_subrubro is not None:
-            # Validar que el subrubro pertenezca al rubro seleccionado
             if id_subrubro.rubro != rubro:
                 raise serializers.ValidationError({
                     'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
                 })
             instance.id_subrubro = id_subrubro
-        
-        # 3. ACTUALIZAR OTROS CAMPOS
+    
+        # 4. ACTUALIZAR OTROS CAMPOS DE LA EMPRESA
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        
+    
         instance.save()
+    
+        # 5. ACTUALIZAR PRODUCTOS Y SERVICIOS
+        self._actualizar_productos(instance, productos_data)
+        self._actualizar_servicios(instance, servicios_data)
+    
         return instance
+    
+    def _actualizar_productos(self, empresa, productos_data):
+        """Actualizar productos de la empresa"""
+        if productos_data is None:
+            return
+    
+        # Obtener IDs de productos que vienen en la petición
+        productos_ids_actuales = []
+    
+        for producto_data in productos_data:
+            producto_id = producto_data.get('id')
+        
+            # Si el ID es temporal (empieza con 'temp-'), crear nuevo producto
+            if producto_id and str(producto_id).startswith('temp-'):
+                producto_data_copy = producto_data.copy()
+                producto_data_copy.pop('id', None)
+            
+                # Extraer posición arancelaria si existe
+                # Extraer código arancelario
+                codigo_arancelario = None
+                posicion_data = producto_data_copy.pop('posicion_arancelaria', None)
+                if posicion_data:
+                    if isinstance(posicion_data, dict):
+                        codigo_arancelario = posicion_data.get('codigo_arancelario')
+                    elif isinstance(posicion_data, str):
+                        codigo_arancelario = posicion_data
+
+                # Crear producto (sin el campo posicion_arancelaria)
+                    nuevo_producto = ProductoEmpresa.objects.create(
+                    empresa=empresa,
+                    **producto_data_copy
+                )
+                productos_ids_actuales.append(nuevo_producto.id)
+                # Crear posición arancelaria si existe código
+                if codigo_arancelario and codigo_arancelario.strip():
+                    PosicionArancelaria.objects.create(
+                        producto=nuevo_producto,
+                        codigo_arancelario=codigo_arancelario.strip(),
+                        descripcion_arancelaria=''
+                    )
+        
+            # Si el producto ya existe, actualizarlo
+            elif producto_id:
+                try:
+                    producto = ProductoEmpresa.objects.get(id=producto_id, empresa=empresa)
+                
+                    # Extraer posición arancelaria
+                    posicion_data = producto_data.pop('posicion_arancelaria', None)
+                
+                    # Actualizar campos del producto
+                    for key, value in producto_data.items():
+                        if key != 'id':
+                            setattr(producto, key, value)
+                    producto.save()
+                
+                    productos_ids_actuales.append(producto.id)
+                
+                    # Actualizar posición arancelaria
+                    if posicion_data is not None:
+                        codigo = None
+                        if isinstance(posicion_data, dict):
+                            codigo = posicion_data.get('codigo_arancelario')
+                        elif isinstance(posicion_data, str):
+                            codigo = posicion_data
+                    
+                        if codigo and codigo.strip():
+                            try:
+                                posicion = producto.posicion_arancelaria
+                                posicion.codigo_arancelario = codigo.strip()
+                                posicion.save()
+                            except PosicionArancelaria.DoesNotExist:
+                                PosicionArancelaria.objects.create(
+                                    producto=producto,
+                                    codigo_arancelario=codigo.strip(),
+                                    descripcion_arancelaria=''
+                                )
+                        else:
+                            try:
+                                producto.posicion_arancelaria.delete()
+                            except PosicionArancelaria.DoesNotExist:
+                                pass
+                except ProductoEmpresa.DoesNotExist:
+                    continue
+    
+        # Eliminar productos que no están en la lista actual
+        ProductoEmpresa.objects.filter(empresa=empresa).exclude(
+            id__in=productos_ids_actuales
+        ).delete()
+
+    def _actualizar_servicios(self, empresa, servicios_data):
+        """Actualizar servicios de la empresa"""
+        if servicios_data is None:
+            return
+    
+        # Obtener IDs de servicios que vienen en la petición
+        servicios_ids_actuales = []
+    
+        for servicio_data in servicios_data:
+            servicio_id = servicio_data.get('id')
+        
+            # Si el ID es temporal, crear nuevo servicio
+            if servicio_id and str(servicio_id).startswith('temp-'):
+                servicio_data_copy = servicio_data.copy()
+                servicio_data_copy.pop('id', None)
+            
+                nuevo_servicio = ServicioEmpresa.objects.create(
+                    empresa=empresa,
+                    **servicio_data_copy
+                )
+                servicios_ids_actuales.append(nuevo_servicio.id)
+        
+            # Si el servicio ya existe, actualizarlo
+            elif servicio_id:
+                try:
+                    servicio = ServicioEmpresa.objects.get(id=servicio_id, empresa=empresa)
+                
+                    # Actualizar campos del servicio
+                    for key, value in servicio_data.items():
+                        if key != 'id':
+                            setattr(servicio, key, value)
+                    servicio.save()
+                
+                    servicios_ids_actuales.append(servicio.id)
+                except ServicioEmpresa.DoesNotExist:
+                    continue
+    
+        # Eliminar servicios que no están en la lista actual
+        ServicioEmpresa.objects.filter(empresa=empresa).exclude(
+            id__in=servicios_ids_actuales
+        ).delete()
     
     def create(self, validated_data):
         """
@@ -587,7 +719,7 @@ class EmpresaservicioListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre', 'id_subrubro',  
-            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
+            'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 'categoria_matriz',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
 
@@ -707,19 +839,21 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
         return None
     
     def update(self, instance, validated_data):
-        """
-        Actualizar empresa incluyendo subrubro y redes sociales
-        """
+        """Actualizar empresa incluyendo productos, servicios, subrubro y redes sociales"""
         import json
-        
-        # 1. MANEJAR REDES SOCIALES
+    
+        # 1. EXTRAER PRODUCTOS Y SERVICIOS
+        productos_data = validated_data.pop('productos', None)
+        servicios_data = validated_data.pop('servicios', None)
+    
+        # 2. MANEJAR REDES SOCIALES
         redes_updated = {}
         for key in ('instagram', 'facebook', 'linkedin'):
             if key in validated_data:
                 val = validated_data.pop(key)
                 if val:
                     redes_updated[key] = val
-        
+    
         if redes_updated:
             existing = {}
             raw = getattr(instance, 'redes_sociales', None)
@@ -728,33 +862,166 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
                     existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
                 except Exception:
                     existing = {}
-            
             existing.update(redes_updated)
             instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
-        
-        # 2. MANEJAR SUBRUBRO
+    
+        # 3. MANEJAR SUBRUBRO
         id_subrubro = validated_data.pop('id_subrubro', None)
         rubro = validated_data.get('id_rubro', instance.id_rubro)
-        
-        # Si se cambia el rubro, limpiar el subrubro si no pertenece al nuevo rubro
+    
         if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
             if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
                 instance.id_subrubro = None
-        
-        # Si se proporciona un nuevo subrubro, validar y asignar
+    
         if id_subrubro is not None:
             if id_subrubro.rubro != rubro:
                 raise serializers.ValidationError({
                     'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
                 })
             instance.id_subrubro = id_subrubro
-        
-        # 3. ACTUALIZAR OTROS CAMPOS
+    
+        # 4. ACTUALIZAR OTROS CAMPOS DE LA EMPRESA
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        
+    
         instance.save()
+    
+        # 5. ACTUALIZAR PRODUCTOS Y SERVICIOS
+        self._actualizar_productos(instance, productos_data)
+        self._actualizar_servicios(instance, servicios_data)
+    
         return instance
+    
+    def _actualizar_productos(self, empresa, productos_data):
+        """Actualizar productos de la empresa"""
+        if productos_data is None:
+            return
+    
+        # Obtener IDs de productos que vienen en la petición
+        productos_ids_actuales = []
+    
+        for producto_data in productos_data:
+            producto_id = producto_data.get('id')
+        
+            # Si el ID es temporal (empieza con 'temp-'), crear nuevo producto
+            if producto_id and str(producto_id).startswith('temp-'):
+                producto_data_copy = producto_data.copy()
+                producto_data_copy.pop('id', None)
+            
+                # Extraer posición arancelaria si existe
+                # Extraer código arancelario
+                codigo_arancelario = None
+                posicion_data = producto_data_copy.pop('posicion_arancelaria', None)
+                if posicion_data:
+                    if isinstance(posicion_data, dict):
+                        codigo_arancelario = posicion_data.get('codigo_arancelario')
+                    elif isinstance(posicion_data, str):
+                        codigo_arancelario = posicion_data
+
+                # Crear producto (sin el campo posicion_arancelaria)
+                nuevo_producto = ProductoEmpresa.objects.create(
+                    empresa=empresa,
+                    **producto_data_copy
+                )
+                productos_ids_actuales.append(nuevo_producto.id)
+
+                # Crear posición arancelaria si existe código
+                if codigo_arancelario and codigo_arancelario.strip():
+                    PosicionArancelaria.objects.create(
+                        producto=nuevo_producto,
+                        codigo_arancelario=codigo_arancelario.strip(),
+                        descripcion_arancelaria=''
+                )
+        
+            # Si el producto ya existe, actualizarlo
+            elif producto_id:
+                try:
+                    producto = ProductoEmpresa.objects.get(id=producto_id, empresa=empresa)
+                
+                    # Extraer posición arancelaria
+                    posicion_data = producto_data.pop('posicion_arancelaria', None)
+                
+                    # Actualizar campos del producto
+                    for key, value in producto_data.items():
+                        if key != 'id':
+                            setattr(producto, key, value)
+                    producto.save()
+                
+                    productos_ids_actuales.append(producto.id)
+                
+                    # Actualizar posición arancelaria
+                    if posicion_data is not None:
+                        codigo = None
+                        if isinstance(posicion_data, dict):
+                            codigo = posicion_data.get('codigo_arancelario')
+                        elif isinstance(posicion_data, str):
+                            codigo = posicion_data
+                    
+                        if codigo and codigo.strip():
+                            try:
+                                posicion = producto.posicion_arancelaria
+                                posicion.codigo_arancelario = codigo.strip()
+                                posicion.save()
+                            except PosicionArancelaria.DoesNotExist:
+                                PosicionArancelaria.objects.create(
+                                    producto=producto,
+                                    codigo_arancelario=codigo.strip(),
+                                    descripcion_arancelaria=''
+                                )
+                        else:
+                            try:
+                                producto.posicion_arancelaria.delete()
+                            except PosicionArancelaria.DoesNotExist:
+                                pass
+                except ProductoEmpresa.DoesNotExist:
+                    continue
+    
+        # Eliminar productos que no están en la lista actual
+        ProductoEmpresa.objects.filter(empresa=empresa).exclude(
+            id__in=productos_ids_actuales
+        ).delete()
+
+    def _actualizar_servicios(self, empresa, servicios_data):
+        """Actualizar servicios de la empresa"""
+        if servicios_data is None:
+            return
+    
+        # Obtener IDs de servicios que vienen en la petición
+        servicios_ids_actuales = []
+    
+        for servicio_data in servicios_data:
+            servicio_id = servicio_data.get('id')
+        
+            # Si el ID es temporal, crear nuevo servicio
+            if servicio_id and str(servicio_id).startswith('temp-'):
+                servicio_data_copy = servicio_data.copy()
+                servicio_data_copy.pop('id', None)
+            
+                nuevo_servicio = ServicioEmpresa.objects.create(
+                    empresa=empresa,
+                    **servicio_data_copy
+                )
+                servicios_ids_actuales.append(nuevo_servicio.id)
+        
+            # Si el servicio ya existe, actualizarlo
+            elif servicio_id:
+                try:
+                    servicio = ServicioEmpresa.objects.get(id=servicio_id, empresa=empresa)
+                
+                    # Actualizar campos del servicio
+                    for key, value in servicio_data.items():
+                        if key != 'id':
+                            setattr(servicio, key, value)
+                    servicio.save()
+                
+                    servicios_ids_actuales.append(servicio.id)
+                except ServicioEmpresa.DoesNotExist:
+                    continue
+    
+        # Eliminar servicios que no están en la lista actual
+        ServicioEmpresa.objects.filter(empresa=empresa).exclude(
+            id__in=servicios_ids_actuales
+        ).delete()
     
     def create(self, validated_data):
         """
@@ -956,7 +1223,7 @@ class EmpresaMixtaListSerializer(serializers.ModelSerializer):
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'tipo_empresa', 'rubro_nombre', 
             'id_subrubro_producto', 'id_subrubro_servicio',  
-            'exporta', 'importa', 'fecha_creacion', 'categoria_matriz',
+            'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 'categoria_matriz',
             'actividades_promocion_internacional',
             'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
@@ -983,6 +1250,56 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
     instagram = serializers.SerializerMethodField()
     facebook = serializers.SerializerMethodField()
     linkedin = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        """Override para debug y asegurar que se cargan productos/servicios"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 🔍 DEBUG: Ver qué está pasando
+        logger.info(f"=" * 80)
+        logger.info(f"🔍 [EmpresaMixtaSerializer.to_representation]")
+        logger.info(f"   Empresa ID: {instance.id}")
+        logger.info(f"   Razón Social: {instance.razon_social}")
+        logger.info(f"   Tipo Empresa: {instance.tipo_empresa_valor}")
+        
+        # ✅ FORZAR la carga de productos y servicios
+        productos_mixta = instance.productos_mixta.all()
+        servicios_mixta = instance.servicios_mixta.all()
+        
+        logger.info(f"   📦 Productos en BD: {productos_mixta.count()}")
+        for producto in productos_mixta:
+            logger.info(f"      - {producto.nombre_producto}")
+            posiciones = producto.posiciones_arancelarias.all()
+            logger.info(f"        Posiciones arancelarias: {posiciones.count()}")
+            for pos in posiciones:
+                logger.info(f"          * {pos.codigo_arancelario}")
+        
+        logger.info(f"   🔧 Servicios en BD: {servicios_mixta.count()}")
+        for servicio in servicios_mixta:
+            logger.info(f"      - {servicio.nombre_servicio}")
+        
+        # Llamar al método padre para serializar
+        data = super().to_representation(instance)
+        
+        # 🔍 DEBUG: Ver qué se está devolviendo
+        logger.info(f"   📤 Productos en respuesta: {len(data.get('productos', []))}")
+        logger.info(f"   📤 Servicios en respuesta: {len(data.get('servicios', []))}")
+        
+        # ⚠️ Si no hay productos/servicios en la respuesta, agregarlos manualmente
+        if not data.get('productos') and productos_mixta.exists():
+            logger.warning("⚠️  Productos NO se serializaron automáticamente, serializando manualmente...")
+            data['productos'] = ProductoEmpresaMixtaSerializer(productos_mixta, many=True).data
+        
+        if not data.get('servicios') and servicios_mixta.exists():
+            logger.warning("⚠️  Servicios NO se serializaron automáticamente, serializando manualmente...")
+            data['servicios'] = ServicioEmpresaMixtaSerializer(servicios_mixta, many=True).data
+        
+        logger.info(f"   ✅ Productos finales en respuesta: {len(data.get('productos', []))}")
+        logger.info(f"   ✅ Servicios finales en respuesta: {len(data.get('servicios', []))}")
+        logger.info(f"=" * 80)
+        
+        return data
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""
@@ -1248,6 +1565,82 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
     
+    def _actualizar_productos(self, empresa, productos_data):
+        """Actualizar productos de empresa mixta"""
+        if productos_data is None:
+            return
+    
+        productos_ids_actuales = []
+    
+        for producto_data in productos_data:
+            producto_id = producto_data.get('id')
+        
+            if producto_id and str(producto_id).startswith('temp-'):
+                producto_data_copy = producto_data.copy()
+                producto_data_copy.pop('id', None)
+                producto_data_copy.pop('posicion_arancelaria', None)
+            
+                nuevo_producto = ProductoEmpresaMixta.objects.create(
+                    empresa=empresa,
+                    **producto_data_copy
+                )
+                productos_ids_actuales.append(nuevo_producto.id)
+        
+            elif producto_id:
+                try:
+                    producto = ProductoEmpresaMixta.objects.get(id=producto_id, empresa=empresa)
+                    producto_data.pop('posicion_arancelaria', None)
+                
+                    for key, value in producto_data.items():
+                        if key != 'id':
+                            setattr(producto, key, value)
+                    producto.save()
+                
+                    productos_ids_actuales.append(producto.id)
+                except ProductoEmpresaMixta.DoesNotExist:
+                    continue
+    
+        ProductoEmpresaMixta.objects.filter(empresa=empresa).exclude(
+            id__in=productos_ids_actuales
+        ).delete()
+
+    def _actualizar_servicios(self, empresa, servicios_data):
+        """Actualizar servicios de empresa mixta"""
+        if servicios_data is None:
+            return
+    
+        servicios_ids_actuales = []
+    
+        for servicio_data in servicios_data:
+            servicio_id = servicio_data.get('id')
+        
+            if servicio_id and str(servicio_id).startswith('temp-'):
+                servicio_data_copy = servicio_data.copy()
+                servicio_data_copy.pop('id', None)
+            
+                nuevo_servicio = ServicioEmpresaMixta.objects.create(
+                    empresa=empresa,
+                    **servicio_data_copy
+                )
+                servicios_ids_actuales.append(nuevo_servicio.id)
+        
+            elif servicio_id:
+                try:
+                    servicio = ServicioEmpresaMixta.objects.get(id=servicio_id, empresa=empresa)
+                
+                    for key, value in servicio_data.items():
+                        if key != 'id':
+                            setattr(servicio, key, value)
+                    servicio.save()
+                
+                    servicios_ids_actuales.append(servicio.id)
+                except ServicioEmpresaMixta.DoesNotExist:
+                    continue
+    
+        ServicioEmpresaMixta.objects.filter(empresa=empresa).exclude(
+            id__in=servicios_ids_actuales
+        ).delete()
+    
     def create(self, validated_data):
         """
         Crear empresa mixta con validación de subrubros y creación automática de usuario
@@ -1414,7 +1807,7 @@ class EmpresaListSerializer(serializers.ModelSerializer):
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'tipo_empresa', 'tipo_empresa_valor', 
             'rubro_nombre', 'id_subrubro', 'id_subrubro_producto', 'id_subrubro_servicio',
-            'sub_rubro_nombre', 'exporta', 'importa', 'fecha_creacion', 
+            'sub_rubro_nombre', 'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 
             'categoria_matriz', 'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
         ]
 
@@ -1588,6 +1981,7 @@ class EmpresaSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance
+        
     
     def create(self, validated_data):
         """Crear empresa con validación de subrubro y creación automática de usuario"""

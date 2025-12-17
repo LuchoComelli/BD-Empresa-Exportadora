@@ -184,7 +184,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             'actividades_promocion_internacional',
             'contacto_principal', 'contactos_secundarios',
             'nombre_contacto', 'cargo_contacto', 'telefono_contacto', 'email_contacto',
-            'exporta', 'destino_exportacion', 'importa', 'tipo_importacion',
+            'exporta', 'destino_exportacion', 'interes_exportar', 'importa', 'tipo_importacion',
             'certificado_pyme', 'certificaciones', 'brochure_url', 'catalogo_pdf', 'material_promocional_idiomas',
             'idiomas_trabajo', 'observaciones',
             'instagram', 'facebook', 'linkedin'
@@ -369,6 +369,24 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             validated_data['actividades_promocion'] = actividades_promocion
             # Limitar contactos secundarios a máximo 2 (para tener hasta 3 contactos totales: 1 principal + 2 secundarios)
             validated_data['contactos_secundarios'] = contactos_secundarios[:2]
+
+            # Procesar campo interes_exportar
+            exporta_value = validated_data.get('exporta')
+            if exporta_value and str(exporta_value).lower() in ['no', 'no, solo ventas nacionales', 'no, solo ventas locales']:
+                # Solo procesar si NO exporta
+                # El campo ya viene en validated_data del to_internal_value
+                # pero aseguramos el valor correcto
+                if 'interes_exportar' in self.initial_data:
+                    interes_value = self.initial_data.get('interes_exportar')
+                    if interes_value in ['si', 'Sí', True, 'true']:
+                        validated_data['interes_exportar'] = True
+                    elif interes_value in ['no', 'No', False, 'false']:
+                        validated_data['interes_exportar'] = False
+                    else:
+                        validated_data['interes_exportar'] = None
+            else:
+                # Si exporta, no tiene sentido el campo interes_exportar
+                validated_data['interes_exportar'] = None
             
             # Manejar catálogo PDF si viene
             if 'catalogo_pdf' in validated_data and validated_data['catalogo_pdf']:

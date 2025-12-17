@@ -304,6 +304,36 @@ class Empresa(TimestampedModel):
         null=True, 
         verbose_name="Email del Contacto Secundario"
     )
+
+    # Contacto terciario (opcional)
+    contacto_terciario_nombre = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        verbose_name="Nombre del Contacto Terciario"
+    )
+    contacto_terciario_cargo = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        verbose_name="Cargo del Contacto Terciario"
+    )
+    contacto_terciario_telefono = models.CharField(
+        max_length=20, 
+        blank=True, 
+        null=True, 
+        verbose_name="Teléfono del Contacto Terciario",
+        validators=[RegexValidator(
+            regex=r'^\+?1?\d{9,15}$',
+            message="Formato de teléfono inválido"
+        )]
+    )
+    contacto_terciario_email = models.EmailField(
+        max_length=254, 
+        blank=True, 
+        null=True, 
+        verbose_name="Email del Contacto Terciario"
+    )
     
     # Campos de exportación (opcionales) - SISTEMA SIMPLIFICADO OPTIMIZADO
     exporta = models.CharField(

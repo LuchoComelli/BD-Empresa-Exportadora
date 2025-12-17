@@ -89,82 +89,101 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             logger.error(f"Error al crear solicitud de registro: {str(e)}", exc_info=True)
             raise
     
-    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageUsers])
+    @action(detail=True, methods=['post'])
     def aprobar(self, request, pk=None):
-        """Aprobar solicitud y crear empresa"""
+        """Aprobar una solicitud de registro y crear la empresa"""
+        from django.db import transaction
+        import logging
+        logger = logging.getLogger(__name__)
+    
         solicitud = self.get_object()
-        
-        if solicitud.estado != 'pendiente':
+    
+        # Verificar que la solicitud esté pendiente
+        if solicitud.estado == 'rechazada':
             return Response(
-                {'error': 'Solo se pueden aprobar solicitudes pendientes'},
-                status=status.HTTP_400_BAD_REQUEST
+            {'error': 'No se puede aprobar una solicitud rechazada'},
+            status=status.HTTP_400_BAD_REQUEST
             )
-        
+    
+            # Si ya está aprobada y tiene empresa, retornar éxito
+        if solicitud.estado == 'aprobada' and solicitud.empresa_creada:
+            logger.info(f"✅ Solicitud ID={solicitud.id} ya fue aprobada anteriormente")
+            return Response({
+            'status': 'success',
+            'message': 'La solicitud ya fue aprobada anteriormente',
+            'empresa_id': solicitud.empresa_creada.id
+        })
+    
         observaciones = request.data.get('observaciones', '')
-        
+    
         try:
-            # Importar función de creación de empresa
-            from .views import crear_empresa_desde_solicitud, enviar_email_aprobacion
-            import logging
-            logger = logging.getLogger(__name__)
-            
-            # Primero crear la empresa (antes de marcar como aprobada)
-            # Si falla, no se marca como aprobada
-            logger.info(f"Creando empresa desde solicitud ID={solicitud.id}")
+            # Crear empresa (fuera de transacción primero para detectar errores)
+            from .views import crear_empresa_desde_solicitud
             empresa = crear_empresa_desde_solicitud(solicitud)
-            logger.info(f"Empresa creada exitosamente: ID={empresa.id}, Tipo={type(empresa).__name__}")
-            
-            # Solo después de crear la empresa exitosamente, marcar como aprobada
-            solicitud.estado = 'aprobada'
-            solicitud.fecha_aprobacion = timezone.now()
-            solicitud.aprobado_por = request.user
-            solicitud.observaciones_admin = observaciones
-            solicitud.empresa_creada = empresa
-            solicitud.save()
-            logger.info(f"Solicitud marcada como aprobada: ID={solicitud.id}")
-            
-            # Enviar email (no crítico - si falla, no afecta la aprobación)
-            email_enviado = False
-            email_error_msg = None
-            try:
-                enviar_email_aprobacion(solicitud)
-                email_enviado = True
-                logger.info(f"Email de aprobación enviado exitosamente para solicitud ID={solicitud.id}")
-            except Exception as email_error:
-                email_error_msg = str(email_error)
-                logger.warning(f"Error al enviar email de aprobación para solicitud ID={solicitud.id}: {email_error_msg}")
-                # No fallar si el email falla - la empresa ya está creada y aprobada
-            
-            # Siempre retornar éxito si la empresa se creó y la solicitud se aprobó
-            response_data = {
-                'status': 'success',
-                'message': 'Solicitud aprobada correctamente',
-                'empresa_id': empresa.id,
-                'email_enviado': email_enviado
-            }
-            
-            if not email_enviado and email_error_msg:
-                response_data['email_warning'] = f'La empresa fue aprobada pero hubo un problema al enviar el email: {email_error_msg}'
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error al aprobar solicitud ID={solicitud.id}: {str(e)}", exc_info=True)
-            
-            # Revertir el estado si se había marcado como aprobada pero falló algo
-            solicitud.refresh_from_db()
-            if solicitud.estado == 'aprobada' and not solicitud.empresa_creada:
-                solicitud.estado = 'pendiente'
-                solicitud.fecha_aprobacion = None
-                solicitud.aprobado_por = None
+        
+            # Si llegamos aquí, la empresa fue creada exitosamente
+            # Ahora actualizar la solicitud en una transacción separada
+            with transaction.atomic():
+                solicitud.estado = 'aprobada'
+                solicitud.fecha_aprobacion = timezone.now()
+                solicitud.aprobado_por = request.user
+                solicitud.observaciones_admin = observaciones
+                solicitud.empresa_creada = empresa
                 solicitud.save()
-                logger.warning(f"Estado de solicitud revertido a pendiente debido a error")
-            
+        
+            logger.info(f"✅ Solicitud ID={solicitud.id} aprobada y empresa ID={empresa.id} vinculada")
+        
+            # Intentar enviar email (no crítico)
+            try:
+                from .views import enviar_email_aprobacion
+                enviar_email_aprobacion(solicitud)
+            except Exception as email_error:
+                logger.warning(f"⚠️ Error enviando email: {str(email_error)}")
+        
+            return Response({
+            'status': 'success',
+            'message': 'Solicitud aprobada exitosamente',
+            'empresa_id': empresa.id
+            })
+        
+        except ValueError as e:
+            logger.error(f"❌ Error de validación: {str(e)}")
             return Response(
-                {'error': f'Error al aprobar la solicitud: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {'error': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
             )
+        except Exception as e:
+            logger.error(f"❌ Error inesperado: {str(e)}", exc_info=True)
+        
+        # Verificar si la empresa se creó a pesar del error
+        from apps.empresas.models import Empresa
+        cuit_normalizado = str(solicitud.cuit_cuil).replace('-', '').replace(' ', '').strip()
+        empresa_creada = Empresa.objects.filter(cuit_cuil=cuit_normalizado).first()
+        
+        if empresa_creada:
+            # La empresa existe, actualizar la solicitud
+            logger.info(f"✅ Empresa encontrada después del error, vinculando a solicitud")
+            try:
+                with transaction.atomic():
+                    solicitud.estado = 'aprobada'
+                    solicitud.fecha_aprobacion = timezone.now()
+                    solicitud.aprobado_por = request.user
+                    solicitud.observaciones_admin = observaciones
+                    solicitud.empresa_creada = empresa_creada
+                    solicitud.save()
+                
+                return Response({
+                    'status': 'success',
+                    'message': 'Solicitud aprobada exitosamente',
+                    'empresa_id': empresa_creada.id
+                })
+            except Exception as update_error:
+                logger.error(f"❌ Error actualizando solicitud: {str(update_error)}")
+        
+        return Response(
+            {'error': f'Error al aprobar la solicitud: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageUsers])
     def rechazar(self, request, pk=None):

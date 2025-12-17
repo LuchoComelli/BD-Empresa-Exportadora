@@ -368,90 +368,276 @@ useEffect(() => {
     setEditedData(empresa ? { ...empresa } : null)
   }
 
-  const handleSave = async () => {
+const handleSave = async () => {
   if (!editedData || !empresa) return
 
   try {
     setSaving(true)
     
-    console.log('📤 [handleSave] editedData COMPLETO:', editedData)
-    console.log('📤 [handleSave] editedData.sub_rubro:', editedData.sub_rubro)
-    console.log('📤 [handleSave] typeof sub_rubro:', typeof editedData.sub_rubro)
+    console.log('📤 [handleSave] Iniciando guardado')
     
-    // Normalizar datos antes de enviar
-    const dataToSend = {
-      ...editedData,
-      // Normalizar relaciones a IDs
-      departamento: typeof editedData.departamento === 'object' 
-        ? editedData.departamento.id 
-        : editedData.departamento,
-      municipio: editedData.municipio 
-        ? (typeof editedData.municipio === 'object' 
-            ? editedData.municipio.id 
-            : editedData.municipio)
-        : null,
-      localidad: editedData.localidad 
-        ? (typeof editedData.localidad === 'object' 
-            ? editedData.localidad.id 
-            : editedData.localidad)
-        : null,
-id_rubro: typeof editedData.id_rubro === 'object' 
-  ? editedData.id_rubro.id 
-  : editedData.id_rubro,
+    // 0. DETERMINAR TIPO DE EMPRESA PRIMERO
+    const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa || 'producto'
+    const esProducto = tipoEmpresa === 'producto'
+    const esServicio = tipoEmpresa === 'servicio'
+    const esMixta = tipoEmpresa === 'mixta'
+    
+    console.log('📦 [handleSave] Tipo de empresa:', tipoEmpresa)
 
-// ⭐ CRÍTICO: Normalizar id_subrubro (NO sub_rubro)
-id_subrubro: editedData.id_subrubro 
-  ? (typeof editedData.id_subrubro === 'object' 
-      ? editedData.id_subrubro.id 
-      : editedData.id_subrubro)
-  : null,
-      
-      // Limpiar productos/servicios temporales
-      productos: editedData.productos?.map(p => {
-        if (String(p.id).startsWith('temp-')) {
-          const { id, ...productoSinId } = p
-          return productoSinId
-        }
-        return p
-      }),
-      servicios: editedData.servicios?.map(s => {
-        if (String(s.id).startsWith('temp-')) {
-          const { id, ...servicioSinId } = s
-          return servicioSinId
-        }
-        return s
-      }),
-      servicios_ofrecidos: editedData.servicios_ofrecidos?.map((s: any) => {
-        if (String(s.id).startsWith('temp-')) {
-          const { id, ...servicioSinId } = s
-          return servicioSinId
-        }
-        return s
-      }),
+    // 1. GUARDAR DATOS BÁSICOS DE LA EMPRESA (sin productos/servicios)
+    const { productos, servicios, productos_mixta, servicios_mixta, brochure_file, brochure_filename, ...empresaData } = editedData
+    
+    // ✅ CREAR FormData para enviar archivos
+    const formData = new FormData()
+    
+    // ✅ MANEJAR ARCHIVO PDF
+    if (brochure_file) {
+      // Subir nuevo archivo
+      console.log('📎 [handleSave] Agregando archivo brochure:', brochure_file.name)
+      formData.append('brochure', brochure_file)
+    } else if (editedData.brochure === null && empresa.brochure) {
+      // El usuario eliminó el archivo (brochure es null pero antes existía)
+      console.log('🗑️ [handleSave] Eliminando archivo brochure existente')
+      formData.append('brochure', '') // Enviar string vacío para eliminar
     }
     
-    console.log('📤 [handleSave] dataToSend COMPLETO:', dataToSend)
-    console.log('📤 [handleSave] dataToSend.id_subrubro:', dataToSend.id_subrubro)
-    console.log('📤 [handleSave] dataToSend.id_rubro:', dataToSend.id_rubro)
+    // Normalizar relaciones a IDs
+    const dataToSend: any = {
+      ...empresaData,
+      departamento: typeof empresaData.departamento === 'object' 
+        ? empresaData.departamento.id 
+        : empresaData.departamento,
+      municipio: empresaData.municipio 
+        ? (typeof empresaData.municipio === 'object' 
+            ? empresaData.municipio.id 
+            : empresaData.municipio)
+        : null,
+      localidad: empresaData.localidad 
+        ? (typeof empresaData.localidad === 'object' 
+            ? empresaData.localidad.id 
+            : empresaData.localidad)
+        : null,
+      id_rubro: typeof empresaData.id_rubro === 'object' 
+        ? empresaData.id_rubro.id 
+        : empresaData.id_rubro,
+    }
     
-    const updated = await api.updateEmpresa(empresa.id, dataToSend)
+    // ✅ CRÍTICO: Manejar subrubros según tipo de empresa
+    if (esMixta) {
+      // Para empresas mixtas: dos subrubros separados
+      if (empresaData.id_subrubro_producto) {
+        dataToSend.id_subrubro_producto = typeof empresaData.id_subrubro_producto === 'object'
+          ? empresaData.id_subrubro_producto.id
+          : empresaData.id_subrubro_producto
+      }
+      if (empresaData.id_subrubro_servicio) {
+        dataToSend.id_subrubro_servicio = typeof empresaData.id_subrubro_servicio === 'object'
+          ? empresaData.id_subrubro_servicio.id
+          : empresaData.id_subrubro_servicio
+      }
+      // NO enviar id_subrubro para empresas mixtas
+      delete dataToSend.id_subrubro
+    } else {
+      // Para empresas de producto o servicio único
+      dataToSend.id_subrubro = empresaData.id_subrubro 
+        ? (typeof empresaData.id_subrubro === 'object' 
+            ? empresaData.id_subrubro.id 
+            : empresaData.id_subrubro)
+        : null
+      // NO enviar subrubros separados para empresas no mixtas
+      delete dataToSend.id_subrubro_producto
+      delete dataToSend.id_subrubro_servicio
+    }
     
-    console.log('✅ [handleSave] Respuesta del servidor:', updated)
+    // ✅ AGREGAR TODOS LOS CAMPOS AL FormData
+    console.log('📋 [handleSave] Campos a enviar en FormData:')
+    for (const [key, value] of Object.entries(dataToSend)) {
+      if (value === null || value === undefined) {
+        console.log(`  ⏭️ Saltando ${key}: ${value}`)
+        continue
+      }
+      
+      if (typeof value === 'object' && !(value instanceof File) && !Array.isArray(value)) {
+        console.log(`  📄 ${key}: ${JSON.stringify(value)} (JSON)`)
+        formData.append(key, JSON.stringify(value))
+      } else if (Array.isArray(value)) {
+        console.log(`  📋 ${key}: ${JSON.stringify(value)} (Array)`)
+        formData.append(key, JSON.stringify(value))
+      } else {
+        console.log(`  ✏️ ${key}: ${value}`)
+        formData.append(key, String(value))
+      }
+    }
     
-    setEmpresa(updated)
-    setEditedData(updated)
+    console.log('📤 [handleSave] Guardando empresa (datos básicos + archivo)')
+    console.log('📤 [handleSave] Tipo empresa para backend:', tipoEmpresa)
+    
+    // ✅ USAR FormData en lugar de JSON
+    await api.updateEmpresa(empresa.id, formData)
+    
+    // 3. GUARDAR PRODUCTOS (para empresas de producto o mixta)
+    if (esProducto || esMixta) {
+      const productosData = esMixta ? productos_mixta : productos
+      
+      if (productosData && Array.isArray(productosData)) {
+        console.log('📦 [handleSave] Procesando productos:', productosData.length)
+        
+        // Obtener IDs de productos actuales
+        const productosActualesIds = productosData
+          .filter((p: any) => p.id && !String(p.id).startsWith('temp-'))
+          .map((p: any) => p.id)
+        
+        // Obtener IDs de productos originales
+        const productosOriginales = esMixta 
+          ? (empresa.productos_mixta || [])
+          : (empresa.productos || [])
+        const productosOriginalesIds = productosOriginales.map((p: any) => p.id)
+        
+        // Eliminar productos que ya no están
+        const productosAEliminar = productosOriginalesIds.filter(
+          (id: number) => !productosActualesIds.includes(id)
+        )
+        
+        for (const id of productosAEliminar) {
+          console.log('🗑️ [handleSave] Eliminando producto:', id)
+          if (esMixta) {
+            await api.deleteProductoMixta(id)
+          } else {
+            await api.deleteProducto(id)
+          }
+        }
+        
+        // Crear o actualizar productos
+        for (const producto of productosData) {
+          const productoData = {
+            nombre_producto: producto.nombre_producto || producto.nombre || '',
+            descripcion: producto.descripcion || '',
+            capacidad_productiva: producto.capacidad_productiva || null,
+            unidad_medida: producto.unidad_medida || 'kg',
+            periodo_capacidad: producto.periodo_capacidad || 'mensual',
+            es_principal: producto.es_principal || false,
+            precio_estimado: producto.precio_estimado || null,
+            moneda_precio: producto.moneda_precio || 'ARS',
+            empresa: empresa.id,
+          }
+          
+          // Agregar código arancelario si existe
+          if (producto.posicion_arancelaria) {
+            const codigo = typeof producto.posicion_arancelaria === 'object'
+              ? producto.posicion_arancelaria.codigo_arancelario
+              : producto.posicion_arancelaria
+            if (codigo) {
+              productoData.codigo_arancelario_input = codigo
+            }
+          }
+          
+          if (producto.id && !String(producto.id).startsWith('temp-')) {
+            console.log('✏️ [handleSave] Actualizando producto:', producto.id)
+            if (esMixta) {
+              await api.updateProductoMixta(producto.id, productoData)
+            } else {
+              await api.updateProducto(producto.id, productoData)
+            }
+          } else {
+            console.log('➕ [handleSave] Creando producto nuevo')
+            if (esMixta) {
+              await api.createProductoMixta(productoData)
+            } else {
+              await api.createProducto(productoData)
+            }
+          }
+        }
+      }
+    }
+    
+    // 4. GUARDAR SERVICIOS (para empresas de servicio o mixta)
+    if (esServicio || esMixta) {
+      const serviciosData = esMixta ? servicios_mixta : servicios
+      
+      if (serviciosData && Array.isArray(serviciosData)) {
+        console.log('🔧 [handleSave] Procesando servicios:', serviciosData.length)
+        
+        const serviciosActualesIds = serviciosData
+          .filter((s: any) => s.id && !String(s.id).startsWith('temp-'))
+          .map((s: any) => s.id)
+        
+        const serviciosOriginales = esMixta
+          ? (empresa.servicios_mixta || [])
+          : (empresa.servicios || [])
+        const serviciosOriginalesIds = serviciosOriginales.map((s: any) => s.id)
+        
+        const serviciosAEliminar = serviciosOriginalesIds.filter(
+          (id: number) => !serviciosActualesIds.includes(id)
+        )
+        
+        for (const id of serviciosAEliminar) {
+          console.log('🗑️ [handleSave] Eliminando servicio:', id)
+          if (esMixta) {
+            await api.deleteServicioMixta(id)
+          } else {
+            await api.deleteServicio(id)
+          }
+        }
+        
+        for (const servicio of serviciosData) {
+          const servicioData = {
+            nombre_servicio: servicio.nombre_servicio || servicio.nombre || servicio.descripcion || '',
+            descripcion: servicio.descripcion || '',
+            tipo_servicio: servicio.tipo_servicio || '',
+            sector_atendido: servicio.sector_atendido || '',
+            alcance_servicio: servicio.alcance_servicio || servicio.alcance_geografico || 'local',
+            paises_trabaja: servicio.paises_trabaja || servicio.paises_destino || '',
+            exporta_servicios: servicio.exporta_servicios || servicio.exporta_servicios_alias || false,
+            interes_exportar_servicios: servicio.interes_exportar_servicios || servicio.interes_exportar || false,
+            idiomas_trabajo: Array.isArray(servicio.idiomas_trabajo) 
+              ? servicio.idiomas_trabajo.join(', ') 
+              : (servicio.idiomas_trabajo || ''),
+            forma_contratacion: Array.isArray(servicio.forma_contratacion)
+              ? servicio.forma_contratacion[0]
+              : (servicio.forma_contratacion || 'hora'),
+            certificaciones_tecnicas: servicio.certificaciones_tecnicas || '',
+            tiene_equipo_tecnico: servicio.tiene_equipo_tecnico || false,
+            equipo_tecnico_formacion: servicio.equipo_tecnico_formacion || false,
+            es_principal: servicio.es_principal || false,
+            empresa: empresa.id,
+          }
+          
+          if (servicio.id && !String(servicio.id).startsWith('temp-')) {
+            console.log('✏️ [handleSave] Actualizando servicio:', servicio.id)
+            if (esMixta) {
+              await api.updateServicioMixta(servicio.id, servicioData)
+            } else {
+              await api.updateServicio(servicio.id, servicioData)
+            }
+          } else {
+            console.log('➕ [handleSave] Creando servicio nuevo')
+            if (esMixta) {
+              await api.createServicioMixta(servicioData)
+            } else {
+              await api.createServicio(servicioData)
+            }
+          }
+        }
+      }
+    }
+    
+    // 5. RECARGAR LA EMPRESA ACTUALIZADA
+    console.log('🔄 [handleSave] Recargando empresa actualizada')
+    const updatedEmpresa = await api.getEmpresaById(empresa.id)
+    setEmpresa(updatedEmpresa)
+    setEditedData(updatedEmpresa)
     setIsEditing(false)
+    
     toast({
       title: "Cambios guardados",
       description: "Los cambios se han guardado exitosamente",
       variant: "default",
     })
   } catch (error: any) {
-    console.error("❌ [handleSave] Error saving empresa:", error)
-    console.error("❌ [handleSave] Error message:", error.message)
+    console.error("❌ [handleSave] Error saving:", error)
     toast({
       title: "Error al guardar",
-      description: error.message || "Error al guardar los cambios. Por favor, intenta nuevamente.",
+      description: error.message || "Error al guardar los cambios",
       variant: "destructive",
     })
   } finally {
@@ -739,96 +925,144 @@ id_subrubro: editedData.id_subrubro
         </p>
       </div>
 
-      {/* Rubro */}
-      <div>
-        <Label>Rubro</Label>
-        {isEditing ? (
-          <Select
-            value={editedData?.id_rubro ? String(typeof editedData.id_rubro === 'object' ? editedData.id_rubro.id : editedData.id_rubro) : ''}
-            onValueChange={(value) => {
-  console.log('🔵 [Rubro] Cambiando rubro a:', value)
-  setEditedData(editedData ? { 
-    ...editedData, 
-    id_rubro: parseInt(value),
-    id_subrubro: null  // ← LIMPIAR subrubro cuando cambia rubro
-  } : null)
-  loadSubRubrosData(parseInt(value))
-}}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona un rubro" />
-            </SelectTrigger>
-            <SelectContent>
-              {rubros.map((rubro) => (
-                <SelectItem key={rubro.id} value={String(rubro.id)}>
-                  {rubro.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <p className="mt-1 font-semibold">
-            {displayData?.rubro_nombre || 
-             (typeof displayData?.id_rubro === 'object' ? displayData.id_rubro.nombre : displayData?.id_rubro) || 
-             'N/A'}
-          </p>
-        )}
-      </div>
+      {/* Rubro - Mostrar según tipo de empresa */}
+      {displayData?.tipo_empresa_valor === 'mixta' ? (
+        <>
+          {/* Rubro de Productos */}
+          <div>
+            <Label>Rubro de Productos</Label>
+            <p className="mt-1 font-semibold">
+              {displayData?.rubro_producto_nombre || displayData?.rubro_nombre || 'N/A'}
+            </p>
+          </div>
+          
+          {/* Rubro de Servicios */}
+          <div>
+            <Label>Rubro de Servicios</Label>
+            <p className="mt-1 font-semibold">
+              {displayData?.rubro_servicio_nombre || displayData?.rubro_nombre || 'N/A'}
+            </p>
+          </div>
+        </>
+      ) : (
+        <div>
+          <Label>Rubro</Label>
+          {isEditing ? (
+            <Select
+              value={editedData?.id_rubro ? String(typeof editedData.id_rubro === 'object' ? editedData.id_rubro.id : editedData.id_rubro) : ''}
+              onValueChange={(value) => {
+                console.log('🔵 [Rubro] Cambiando rubro a:', value)
+                setEditedData(editedData ? { 
+                  ...editedData, 
+                  id_rubro: parseInt(value),
+                  id_subrubro: null
+                } : null)
+                loadSubRubrosData(parseInt(value))
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un rubro" />
+              </SelectTrigger>
+              <SelectContent>
+                {rubros.map((rubro) => (
+                  <SelectItem key={rubro.id} value={String(rubro.id)}>
+                    {rubro.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="mt-1 font-semibold">
+              {displayData?.rubro_nombre || 
+               (typeof displayData?.id_rubro === 'object' ? displayData.id_rubro.nombre : displayData?.id_rubro) || 
+               'N/A'}
+            </p>
+          )}
+        </div>
+      )}
 
 
-        {/* SubRubro - NUEVO CAMPO */}
-<div>
-  <Label>SubRubro</Label>
-  {isEditing ? (
-    <Select
-      value={editedData?.id_subrubro 
-        ? String(typeof editedData.id_subrubro === 'object' ? editedData.id_subrubro.id : editedData.id_subrubro)
-        : ''
-      }
-      onValueChange={(value) => {
-        console.log('🔵 [SubRubro] Cambiando subrubro a:', value)
-        setEditedData(editedData ? { 
-          ...editedData, 
-          id_subrubro: parseInt(value)
-        } : null)
-      }}
-      disabled={loadingRubros || !editedData?.id_rubro || subRubros.length === 0}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder={
-          loadingRubros 
-            ? "Cargando..." 
-            : !editedData?.id_rubro 
-            ? "Selecciona primero un rubro" 
-            : subRubros.length === 0 
-            ? "No hay subrubros disponibles" 
-            : "Selecciona un subrubro"
-        } />
-      </SelectTrigger>
-      <SelectContent>
-        {subRubros.length > 0 ? (
-          subRubros.map((subRubro) => (
-            <SelectItem key={subRubro.id} value={String(subRubro.id)}>
-              {subRubro.nombre}
-            </SelectItem>
-          ))
+                {/* SubRubro - Mostrar según tipo de empresa */}
+        {displayData?.tipo_empresa_valor === 'mixta' ? (
+          <>
+            {/* SubRubro de Productos */}
+            <div>
+              <Label>SubRubro de Productos</Label>
+              <p className="mt-1 font-semibold">
+                {displayData?.sub_rubro_producto_nombre || 
+                 (typeof displayData?.id_subrubro_producto === 'object' 
+                   ? displayData.id_subrubro_producto.nombre 
+                   : displayData?.id_subrubro_producto) || 
+                 'N/A'}
+              </p>
+            </div>
+            
+            {/* SubRubro de Servicios */}
+            <div>
+              <Label>SubRubro de Servicios</Label>
+              <p className="mt-1 font-semibold">
+                {displayData?.sub_rubro_servicio_nombre || 
+                 (typeof displayData?.id_subrubro_servicio === 'object' 
+                   ? displayData.id_subrubro_servicio.nombre 
+                   : displayData?.id_subrubro_servicio) || 
+                 'N/A'}
+              </p>
+            </div>
+          </>
         ) : (
-          <SelectItem value="none" disabled>
-            No hay subrubros disponibles
-          </SelectItem>
+          <div>
+            <Label>SubRubro</Label>
+            {isEditing ? (
+              <Select
+                value={editedData?.id_subrubro 
+                  ? String(typeof editedData.id_subrubro === 'object' ? editedData.id_subrubro.id : editedData.id_subrubro)
+                  : ''
+                }
+                onValueChange={(value) => {
+                  console.log('🔵 [SubRubro] Cambiando subrubro a:', value)
+                  setEditedData(editedData ? { 
+                    ...editedData, 
+                    id_subrubro: parseInt(value)
+                  } : null)
+                }}
+                disabled={loadingRubros || !editedData?.id_rubro || subRubros.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    loadingRubros 
+                      ? "Cargando..." 
+                      : !editedData?.id_rubro 
+                      ? "Selecciona primero un rubro" 
+                      : subRubros.length === 0 
+                      ? "No hay subrubros disponibles" 
+                      : "Selecciona un subrubro"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {subRubros.length > 0 ? (
+                    subRubros.map((subRubro) => (
+                      <SelectItem key={subRubro.id} value={String(subRubro.id)}>
+                        {subRubro.nombre}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>
+                      No hay subrubros disponibles
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="mt-1 font-semibold">
+                {displayData?.sub_rubro_nombre || 
+                 (typeof displayData?.id_subrubro === 'object' 
+                   ? displayData.id_subrubro.nombre 
+                   : displayData?.id_subrubro) || 
+                 'N/A'}
+              </p>
+            )}
+          </div>
         )}
-      </SelectContent>
-    </Select>
-  ) : (
-    <p className="mt-1 font-semibold">
-      {displayData?.sub_rubro_nombre || 
-       (typeof displayData?.id_subrubro === 'object' 
-         ? displayData.id_subrubro.nombre 
-         : displayData?.id_subrubro) || 
-       'N/A'}
-    </p>
-  )}
-</div>
 
       {/* Teléfono */}
       <div>
@@ -1001,6 +1235,122 @@ id_subrubro: editedData.id_subrubro
           </div>
         </div>
       )}
+
+      {/* Contactos Secundarios y Terciarios */}
+{(displayData?.contacto_secundario_nombre || displayData?.contacto_terciario_nombre || isEditing) && (
+  <div className="md:col-span-2">
+    <Label>Contactos Adicionales</Label>
+    <div className="mt-2 space-y-4">
+      {/* Contacto Secundario */}
+      {(displayData?.contacto_secundario_nombre || isEditing) && (
+        <div className="p-4 bg-muted/30 rounded-lg">
+          <h4 className="font-semibold text-sm mb-3">Contacto Secundario</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <span className="text-sm text-muted-foreground">Nombre</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_secundario_nombre || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_nombre: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_secundario_nombre || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Cargo</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_secundario_cargo || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_cargo: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_secundario_cargo || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Teléfono</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_secundario_telefono || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_telefono: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_secundario_telefono || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Email</span>
+              {isEditing ? (
+                <Input
+                  type="email"
+                  value={editedData?.contacto_secundario_email || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_email: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_secundario_email || 'N/A'}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Contacto Terciario */}
+      {(displayData?.contacto_terciario_nombre || isEditing) && (
+        <div className="p-4 bg-muted/30 rounded-lg">
+          <h4 className="font-semibold text-sm mb-3">Contacto Terciario</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <span className="text-sm text-muted-foreground">Nombre</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_terciario_nombre || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_nombre: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_terciario_nombre || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Cargo</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_terciario_cargo || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_cargo: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_terciario_cargo || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Teléfono</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_terciario_telefono || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_telefono: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_terciario_telefono || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Email</span>
+              {isEditing ? (
+                <Input
+                  type="email"
+                  value={editedData?.contacto_terciario_email || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_email: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_terciario_email || 'N/A'}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
     </CardContent>
   </Card>
 </TabsContent>
@@ -1442,9 +1792,12 @@ id_subrubro: editedData.id_subrubro
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  // Agregar nuevo producto vacío
+                  // ✅ FIX: Detectar si es mixta y usar el campo correcto
+                  const esMixta = empresa.tipo_empresa_valor === 'mixta'
+                  const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                  
                   const newProducto = {
-                    id: `temp-${Date.now()}`, // ID temporal
+                    id: `temp-${Date.now()}`,
                     nombre_producto: '',
                     descripcion: '',
                     capacidad_productiva: '',
@@ -1452,9 +1805,10 @@ id_subrubro: editedData.id_subrubro
                     periodo_capacidad: 'mensual',
                     es_principal: false,
                   }
+                  
                   setEditedData(editedData ? {
                     ...editedData,
-                    productos: [...(editedData.productos || []), newProducto]
+                    [productosKey]: [...(editedData[productosKey] || []), newProducto]
                   } : null)
                 }}
                 className="gap-2"
@@ -1467,203 +1821,230 @@ id_subrubro: editedData.id_subrubro
             )}
           </div>
 
-          {displayData?.productos && displayData.productos.length > 0 ? (
-            <div className="space-y-4">
-              {displayData.productos.map((producto: any, index: number) => (
-                <div key={producto.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                  {isEditing ? (
-                    // MODO EDICIÓN
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 space-y-4">
-                          {/* Nombre del Producto */}
-                          <div>
-                            <Label>Nombre del Producto</Label>
-                            <Input
-                              value={producto.nombre_producto || producto.nombre || ''}
-                              onChange={(e) => {
-                                const updatedProductos = [...(editedData?.productos || [])]
-                                updatedProductos[index] = {
-                                  ...updatedProductos[index],
-                                  nombre_producto: e.target.value,
-                                  nombre: e.target.value
-                                }
-                                setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
-                              }}
-                              placeholder="Nombre del producto"
-                            />
-                          </div>
-
-                          {/* Descripción */}
-                          <div>
-                            <Label>Descripción</Label>
-                            <Textarea
-                              value={producto.descripcion || ''}
-                              onChange={(e) => {
-                                const updatedProductos = [...(editedData?.productos || [])]
-                                updatedProductos[index] = {
-                                  ...updatedProductos[index],
-                                  descripcion: e.target.value
-                                }
-                                setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
-                              }}
-                              placeholder="Descripción del producto"
-                              rows={3}
-                            />
-                          </div>
-
-                          {/* Capacidad Productiva */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(() => {
+            // ✅ FIX: Obtener productos del campo correcto según el tipo
+            const esMixta = displayData?.tipo_empresa_valor === 'mixta'
+            const productosData = esMixta 
+              ? (displayData?.productos_mixta || [])
+              : (displayData?.productos || [])
+            
+            console.log('🔍 Tipo empresa:', displayData?.tipo_empresa_valor)
+            console.log('🔍 Es mixta:', esMixta)
+            console.log('🔍 Productos data:', productosData)
+            
+            return productosData && productosData.length > 0 ? (
+              <div className="space-y-4">
+                {productosData.map((producto: any, index: number) => (
+                  <div key={producto.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                    {isEditing ? (
+                      // MODO EDICIÓN
+                      <div className="space-y-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-4">
+                            {/* Nombre del Producto */}
                             <div>
-                              <Label>Capacidad Productiva</Label>
+                              <Label>Nombre del Producto</Label>
                               <Input
-                                type="number"
-                                step="0.01"
-                                value={producto.capacidad_productiva || ''}
+                                value={producto.nombre_producto || producto.nombre || ''}
                                 onChange={(e) => {
-                                  const updatedProductos = [...(editedData?.productos || [])]
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                  const updatedProductos = [...(editedData?.[productosKey] || [])]
                                   updatedProductos[index] = {
                                     ...updatedProductos[index],
-                                    capacidad_productiva: e.target.value
+                                    nombre_producto: e.target.value,
+                                    nombre: e.target.value
                                   }
-                                  setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                  setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                 }}
-                                placeholder="Ej: 1000"
+                                placeholder="Nombre del producto"
                               />
                             </div>
 
+                            {/* Descripción */}
                             <div>
-                              <Label>Unidad de Medida</Label>
-                              <Select
-                                value={producto.unidad_medida || 'kg'}
-                                onValueChange={(value) => {
-                                  const updatedProductos = [...(editedData?.productos || [])]
+                              <Label>Descripción</Label>
+                              <Textarea
+                                value={producto.descripcion || ''}
+                                onChange={(e) => {
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                  const updatedProductos = [...(editedData?.[productosKey] || [])]
                                   updatedProductos[index] = {
                                     ...updatedProductos[index],
-                                    unidad_medida: value
+                                    descripcion: e.target.value
                                   }
-                                  setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                  setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                 }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="kg">Kilogramos (kg)</SelectItem>
-                                  <SelectItem value="tn">Toneladas (tn)</SelectItem>
-                                  <SelectItem value="lt">Litros (lt)</SelectItem>
-                                  <SelectItem value="m3">Metros cúbicos (m³)</SelectItem>
-                                  <SelectItem value="un">Unidades (un)</SelectItem>
-                                  <SelectItem value="otro">Otro</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                placeholder="Descripción del producto"
+                                rows={3}
+                              />
                             </div>
 
-                            <div>
-                              <Label>Período</Label>
-                              <Select
-                                value={producto.periodo_capacidad || 'mensual'}
-                                onValueChange={(value) => {
-                                  const updatedProductos = [...(editedData?.productos || [])]
-                                  updatedProductos[index] = {
-                                    ...updatedProductos[index],
-                                    periodo_capacidad: value
-                                  }
-                                  setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecciona" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="mensual">Mensual</SelectItem>
-                                  <SelectItem value="anual">Anual</SelectItem>
-                                  <SelectItem value="semanal">Semanal</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
+                            {/* Capacidad Productiva */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div>
+                                <Label>Capacidad Productiva</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={producto.capacidad_productiva || ''}
+                                  onChange={(e) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                    const updatedProductos = [...(editedData?.[productosKey] || [])]
+                                    updatedProductos[index] = {
+                                      ...updatedProductos[index],
+                                      capacidad_productiva: e.target.value
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
+                                  }}
+                                  placeholder="Ej: 1000"
+                                />
+                              </div>
 
-                          {/* Posición Arancelaria */}
-                          {producto.posicion_arancelaria && (
+                              <div>
+                                <Label>Unidad de Medida</Label>
+                                <Select
+                                  value={producto.unidad_medida || 'kg'}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                    const updatedProductos = [...(editedData?.[productosKey] || [])]
+                                    updatedProductos[index] = {
+                                      ...updatedProductos[index],
+                                      unidad_medida: value
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                                    <SelectItem value="tn">Toneladas (tn)</SelectItem>
+                                    <SelectItem value="lt">Litros (lt)</SelectItem>
+                                    <SelectItem value="m3">Metros cúbicos (m³)</SelectItem>
+                                    <SelectItem value="un">Unidades (un)</SelectItem>
+                                    <SelectItem value="otro">Otro</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <Label>Período</Label>
+                                <Select
+                                  value={producto.periodo_capacidad || 'mensual'}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                    const updatedProductos = [...(editedData?.[productosKey] || [])]
+                                    updatedProductos[index] = {
+                                      ...updatedProductos[index],
+                                      periodo_capacidad: value
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="mensual">Mensual</SelectItem>
+                                    <SelectItem value="anual">Anual</SelectItem>
+                                    <SelectItem value="semanal">Semanal</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {/* Posición Arancelaria - SIEMPRE MOSTRAR EN EDICIÓN */}
                             <div>
                               <Label>Posición Arancelaria</Label>
                               <Input
-                                value={typeof producto.posicion_arancelaria === 'object' 
-                                  ? producto.posicion_arancelaria.codigo_arancelario 
-                                  : producto.posicion_arancelaria}
+                                value={
+                                  typeof producto.posicion_arancelaria === 'object' && producto.posicion_arancelaria
+                                    ? producto.posicion_arancelaria.codigo_arancelario || ''
+                                    : producto.posicion_arancelaria || ''
+                                }
                                 onChange={(e) => {
-                                  const updatedProductos = [...(editedData?.productos || [])]
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                  const updatedProductos = [...(editedData?.[productosKey] || [])]
                                   updatedProductos[index] = {
                                     ...updatedProductos[index],
-                                    posicion_arancelaria: {
-                                      ...updatedProductos[index].posicion_arancelaria,
-                                      codigo_arancelario: e.target.value
-                                    }
+                                    posicion_arancelaria: e.target.value
+                                      ? {
+                                          codigo_arancelario: e.target.value
+                                        }
+                                      : null
                                   }
-                                  setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                  setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                 }}
-                                placeholder="Ej: 1234.56.78"
+                                placeholder="Ej: 1234.56.78 (opcional)"
                               />
                             </div>
-                          )}
-                        </div>
+                          </div>
 
-                        {/* Botón Eliminar */}
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => {
-                            const updatedProductos = editedData?.productos?.filter((_, i) => i !== index) || []
-                            setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
-                          }}
-                          className="flex-shrink-0"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    // MODO LECTURA
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-semibold text-lg">{producto.nombre_producto || producto.nombre}</p>
-                        {producto.descripcion && (
-                          <p className="text-sm text-muted-foreground mt-2">{producto.descripcion}</p>
-                        )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                          {producto.capacidad_productiva && (
-                            <div>
-                              <span className="text-sm font-medium">Capacidad Productiva: </span>
-                              <span className="text-sm">{producto.capacidad_productiva} {producto.unidad_medida || ''}</span>
-                            </div>
-                          )}
-                          {producto.posicion_arancelaria && (
-                            <div>
-                              <span className="text-sm font-medium">Posición Arancelaria: </span>
-                              <span className="text-sm">
-                                {typeof producto.posicion_arancelaria === 'object' 
-                                  ? producto.posicion_arancelaria.codigo_arancelario 
-                                  : producto.posicion_arancelaria}
-                              </span>
-                            </div>
-                          )}
-                          {producto.periodo_capacidad && (
-                            <div>
-                              <span className="text-sm font-medium">Período: </span>
-                              <span className="text-sm">{producto.periodo_capacidad}</span>
-                            </div>
-                          )}
+                          {/* Botón Eliminar */}
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => {
+                              const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                              const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                              const updatedProductos = editedData?.[productosKey]?.filter((_, i) => i !== index) || []
+                              setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
+                            }}
+                            className="flex-shrink-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground py-4">No hay productos registrados</p>
-          )}
+                    ) : (
+                      // MODO LECTURA
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-semibold text-lg">{producto.nombre_producto || producto.nombre}</p>
+                          {producto.descripcion && (
+                            <p className="text-sm text-muted-foreground mt-2">{producto.descripcion}</p>
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            {producto.capacidad_productiva && (
+                              <div>
+                                <span className="text-sm font-medium">Capacidad Productiva: </span>
+                                <span className="text-sm">{producto.capacidad_productiva} {producto.unidad_medida || ''}</span>
+                              </div>
+                            )}
+                            {producto.posicion_arancelaria && (
+                              <div>
+                                <span className="text-sm font-medium">Posición Arancelaria: </span>
+                                <span className="text-sm">
+                                  {typeof producto.posicion_arancelaria === 'object' 
+                                    ? producto.posicion_arancelaria.codigo_arancelario 
+                                    : producto.posicion_arancelaria}
+                                </span>
+                              </div>
+                            )}
+                            {producto.periodo_capacidad && (
+                              <div>
+                                <span className="text-sm font-medium">Período: </span>
+                                <span className="text-sm">{producto.periodo_capacidad}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground py-4">No hay productos registrados</p>
+            )
+          })()}
         </div>
       )}
 
@@ -1677,7 +2058,10 @@ id_subrubro: editedData.id_subrubro
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  // Agregar nuevo servicio vacío
+                  // ✅ FIX: Detectar si es mixta y usar el campo correcto
+                  const esMixta = empresa.tipo_empresa_valor === 'mixta'
+                  const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                  
                   const newServicio = {
                     id: `temp-${Date.now()}`,
                     nombre_servicio: '',
@@ -1689,13 +2073,10 @@ id_subrubro: editedData.id_subrubro
                     forma_contratacion: 'hora',
                     es_principal: false,
                   }
-                  const serviciosKey = displayData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                  const currentServicios = editedData?.[serviciosKey] || []
-                  const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
                   
                   setEditedData(editedData ? {
                     ...editedData,
-                    [serviciosKey]: [...serviciosArray, newServicio]
+                    [serviciosKey]: [...(editedData[serviciosKey] || []), newServicio]
                   } : null)
                 }}
                 className="gap-2"
@@ -1709,15 +2090,17 @@ id_subrubro: editedData.id_subrubro
           </div>
 
           {(() => {
-            const servicios = displayData?.servicios_ofrecidos 
-              ? (Array.isArray(displayData.servicios_ofrecidos)
-                  ? displayData.servicios_ofrecidos
-                  : (Object.keys(displayData.servicios_ofrecidos || {}).length ? [displayData.servicios_ofrecidos] : []))
-              : (displayData?.servicios || []);
+            // ✅ FIX: Obtener servicios del campo correcto según el tipo
+            const esMixta = displayData?.tipo_empresa_valor === 'mixta'
+            const serviciosData = esMixta 
+              ? (displayData?.servicios_mixta || [])
+              : (displayData?.servicios || [])
             
-            return servicios && servicios.length > 0 ? (
+            console.log('🔍 Servicios data:', serviciosData)
+            
+            return serviciosData && serviciosData.length > 0 ? (
               <div className="space-y-4">
-                {servicios.map((servicio: any, index: number) => (
+                {serviciosData.map((servicio: any, index: number) => (
                   <div key={servicio.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     {isEditing ? (
                       // MODO EDICIÓN
@@ -1730,10 +2113,9 @@ id_subrubro: editedData.id_subrubro
                               <Input
                                 value={servicio.nombre || servicio.nombre_servicio || servicio.descripcion || ''}
                                 onChange={(e) => {
-                                  const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                  const currentServicios = editedData?.[serviciosKey] || []
-                                  const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                  const updatedServicios = [...serviciosArray]
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                  const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                   updatedServicios[index] = {
                                     ...updatedServicios[index],
                                     nombre: e.target.value,
@@ -1751,10 +2133,9 @@ id_subrubro: editedData.id_subrubro
                               <Textarea
                                 value={servicio.descripcion || ''}
                                 onChange={(e) => {
-                                  const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                  const currentServicios = editedData?.[serviciosKey] || []
-                                  const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                  const updatedServicios = [...serviciosArray]
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                  const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                   updatedServicios[index] = {
                                     ...updatedServicios[index],
                                     descripcion: e.target.value
@@ -1773,10 +2154,9 @@ id_subrubro: editedData.id_subrubro
                                 <Select
                                   value={Array.isArray(servicio.tipo_servicio) ? servicio.tipo_servicio[0] : servicio.tipo_servicio || ''}
                                   onValueChange={(value) => {
-                                    const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                    const currentServicios = editedData?.[serviciosKey] || []
-                                    const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                    const updatedServicios = [...serviciosArray]
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                     updatedServicios[index] = {
                                       ...updatedServicios[index],
                                       tipo_servicio: value
@@ -1802,21 +2182,32 @@ id_subrubro: editedData.id_subrubro
 
                               <div>
                                 <Label>Sector Atendido</Label>
-                                <Input
-                                  value={servicio.sector_atendido || (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores || '')}
-                                  onChange={(e) => {
-                                    const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                    const currentServicios = editedData?.[serviciosKey] || []
-                                    const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                    const updatedServicios = [...serviciosArray]
+                                <Select
+                                  value={servicio.sector_atendido || ''}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                     updatedServicios[index] = {
                                       ...updatedServicios[index],
-                                      sector_atendido: e.target.value
+                                      sector_atendido: value
                                     }
                                     setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                                   }}
-                                  placeholder="Ej: Minería, Turismo"
-                                />
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona un sector" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="mineria">Minería</SelectItem>
+                                    <SelectItem value="agroindustria">Agroindustria</SelectItem>
+                                    <SelectItem value="turismo">Turismo</SelectItem>
+                                    <SelectItem value="comercio">Comercio</SelectItem>
+                                    <SelectItem value="salud">Salud</SelectItem>
+                                    <SelectItem value="pymes">Pymes</SelectItem>
+                                    <SelectItem value="otro">Otro</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
 
@@ -1827,10 +2218,9 @@ id_subrubro: editedData.id_subrubro
                                 <Select
                                   value={servicio.alcance_geografico || servicio.alcance_servicio || 'local'}
                                   onValueChange={(value) => {
-                                    const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                    const currentServicios = editedData?.[serviciosKey] || []
-                                    const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                    const updatedServicios = [...serviciosArray]
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                     updatedServicios[index] = {
                                       ...updatedServicios[index],
                                       alcance_geografico: value,
@@ -1855,10 +2245,9 @@ id_subrubro: editedData.id_subrubro
                                 <Select
                                   value={Array.isArray(servicio.forma_contratacion) ? servicio.forma_contratacion[0] : servicio.forma_contratacion || 'hora'}
                                   onValueChange={(value) => {
-                                    const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                    const currentServicios = editedData?.[serviciosKey] || []
-                                    const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                    const updatedServicios = [...serviciosArray]
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                     updatedServicios[index] = {
                                       ...updatedServicios[index],
                                       forma_contratacion: value
@@ -1878,6 +2267,177 @@ id_subrubro: editedData.id_subrubro
                                 </Select>
                               </div>
                             </div>
+                            
+                            {/* Países con los que Trabaja */}
+                            <div>
+                              <Label>Países con los que Trabaja</Label>
+                              <Textarea
+                                value={servicio.paises_trabaja || servicio.paises_destino || ''}
+                                onChange={(e) => {
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                  const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                  updatedServicios[index] = {
+                                    ...updatedServicios[index],
+                                    paises_trabaja: e.target.value,
+                                    paises_destino: e.target.value
+                                  }
+                                  setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                }}
+                                placeholder="Ej: Brasil, Chile, México (separados por comas)"
+                                rows={2}
+                              />
+                            </div>
+
+                            {/* Exporta Servicios e Interés */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <Label>¿Exporta Servicios?</Label>
+                                <Select
+                                  value={servicio.exporta_servicios || servicio.exporta_servicios_alias ? 'si' : 'no'}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                    updatedServicios[index] = {
+                                      ...updatedServicios[index],
+                                      exporta_servicios: value === 'si',
+                                      exporta_servicios_alias: value === 'si'
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="si">Sí</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <Label>¿Interés en Exportar Servicios?</Label>
+                                <Select
+                                  value={servicio.interes_exportar_servicios || servicio.interes_exportar ? 'si' : 'no'}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                    updatedServicios[index] = {
+                                      ...updatedServicios[index],
+                                      interes_exportar_servicios: value === 'si',
+                                      interes_exportar: value === 'si'
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="si">Sí</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {/* Idiomas de Trabajo */}
+                            <div>
+                              <Label>Idiomas de Trabajo</Label>
+                              <Input
+                                value={Array.isArray(servicio.idiomas) 
+                                  ? servicio.idiomas.join(', ') 
+                                  : (servicio.idiomas_trabajo || '')}
+                                onChange={(e) => {
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                  const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                  updatedServicios[index] = {
+                                    ...updatedServicios[index],
+                                    idiomas_trabajo: e.target.value,
+                                    idiomas: e.target.value.split(',').map(i => i.trim()).filter(Boolean)
+                                  }
+                                  setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                }}
+                                placeholder="Ej: Español, Inglés, Portugués"
+                              />
+                            </div>
+
+                            {/* Certificaciones Técnicas */}
+                            <div>
+                              <Label>Certificaciones Técnicas</Label>
+                              <Textarea
+                                value={servicio.certificaciones_tecnicas || ''}
+                                onChange={(e) => {
+                                  const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                  const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                  const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                  updatedServicios[index] = {
+                                    ...updatedServicios[index],
+                                    certificaciones_tecnicas: e.target.value
+                                  }
+                                  setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                }}
+                                placeholder="Ej: ISO 9001, ISO 14001, SCRUM, AWS"
+                                rows={2}
+                              />
+                            </div>
+
+                            {/* Equipo Técnico */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <Label>¿Tiene Equipo Técnico Especializado?</Label>
+                                <Select
+                                  value={servicio.tiene_equipo_tecnico ? 'si' : 'no'}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                    updatedServicios[index] = {
+                                      ...updatedServicios[index],
+                                      tiene_equipo_tecnico: value === 'si'
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="si">Sí</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <Label>¿Equipo en Formación?</Label>
+                                <Select
+                                  value={servicio.equipo_tecnico_formacion ? 'si' : 'no'}
+                                  onValueChange={(value) => {
+                                    const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                                    const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                    const updatedServicios = [...(editedData?.[serviciosKey] || [])]
+                                    updatedServicios[index] = {
+                                      ...updatedServicios[index],
+                                      equipo_tecnico_formacion: value === 'si'
+                                    }
+                                    setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="si">Sí</SelectItem>
+                                    <SelectItem value="no">No</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
                           </div>
 
                           {/* Botón Eliminar */}
@@ -1885,10 +2445,9 @@ id_subrubro: editedData.id_subrubro
                             variant="destructive"
                             size="icon"
                             onClick={() => {
-                              const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                              const currentServicios = editedData?.[serviciosKey] || []
-                              const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                              const updatedServicios = serviciosArray.filter((_, i) => i !== index)
+                              const esMixta = editedData?.tipo_empresa_valor === 'mixta'
+                              const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                              const updatedServicios = editedData?.[serviciosKey]?.filter((_, i) => i !== index) || []
                               setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                             }}
                             className="flex-shrink-0"
@@ -1898,7 +2457,7 @@ id_subrubro: editedData.id_subrubro
                         </div>
                       </div>
                     ) : (
-                      // MODO LECTURA (código existente)
+                      // MODO LECTURA
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="font-semibold text-lg">
@@ -1908,6 +2467,7 @@ id_subrubro: editedData.id_subrubro
                             <p className="text-sm text-muted-foreground mt-2">{servicio.descripcion}</p>
                           )}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            {/* Tipo de Servicio */}
                             {servicio.tipo_servicio && (
                               <div>
                                 <span className="text-sm font-medium">Tipo: </span>
@@ -1918,15 +2478,19 @@ id_subrubro: editedData.id_subrubro
                                 </span>
                               </div>
                             )}
+                            
+                            {/* Sectores Atendidos */}
                             {(servicio.sector_atendido || (servicio.sectores && servicio.sectores.length > 0)) && (
                               <div>
                                 <span className="text-sm font-medium">Sectores Atendidos: </span>
                                 <span className="text-sm">
                                   {servicio.sector_atendido || 
-                                   (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores)}
+                                  (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores)}
                                 </span>
                               </div>
                             )}
+                            
+                            {/* Alcance Geográfico */}
                             {(servicio.alcance_geografico || servicio.alcance_servicio) && (
                               <div>
                                 <span className="text-sm font-medium">Alcance Geográfico: </span>
@@ -1935,14 +2499,106 @@ id_subrubro: editedData.id_subrubro
                                 </span>
                               </div>
                             )}
+                            
+                            {/* Países con los que Trabaja */}
+                            {(servicio.paises_trabaja || servicio.paises_destino) && (
+                              <div>
+                                <span className="text-sm font-medium">Países: </span>
+                                <span className="text-sm">
+                                  {servicio.paises_trabaja || servicio.paises_destino}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Forma de Contratación */}
                             {servicio.forma_contratacion && (
                               <div>
                                 <span className="text-sm font-medium">Forma de Contratación: </span>
                                 <span className="text-sm">
                                   {Array.isArray(servicio.forma_contratacion) 
-                                    ? servicio.forma_contratacion.map(formatFormaContratacion).join(', ') 
-                                    : formatFormaContratacion(servicio.forma_contratacion)}
+                                    ? servicio.forma_contratacion.map((forma: string) => {
+                                        const formatFormaContratacion = (forma: string) => {
+                                          switch(forma) {
+                                            case 'hora': return 'Por Hora';
+                                            case 'proyecto': return 'Por Proyecto';
+                                            case 'mensual': return 'Mensual';
+                                            case 'otro': return 'Otro';
+                                            default: return forma;
+                                          }
+                                        }
+                                        return formatFormaContratacion(forma);
+                                      }).join(', ') 
+                                    : (() => {
+                                        const forma = servicio.forma_contratacion;
+                                        switch(forma) {
+                                          case 'hora': return 'Por Hora';
+                                          case 'proyecto': return 'Por Proyecto';
+                                          case 'mensual': return 'Mensual';
+                                          case 'otro': return 'Otro';
+                                          default: return forma;
+                                        }
+                                      })()}
                                 </span>
+                              </div>
+                            )}
+                            
+                            {/* Exporta Servicios */}
+                            {(servicio.exporta_servicios !== undefined || servicio.exporta_servicios_alias !== undefined) && (
+                              <div>
+                                <span className="text-sm font-medium">¿Exporta Servicios?: </span>
+                                <span className="text-sm">
+                                  {(servicio.exporta_servicios || servicio.exporta_servicios_alias) ? 'Sí' : 'No'}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Interés en Exportar Servicios */}
+                            {(servicio.interes_exportar_servicios !== undefined || servicio.interes_exportar !== undefined) && (
+                              <div>
+                                <span className="text-sm font-medium">¿Interés en Exportar?: </span>
+                                <span className="text-sm">
+                                  {(servicio.interes_exportar_servicios || servicio.interes_exportar) ? 'Sí' : 'No'}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Idiomas de Trabajo */}
+                            {(servicio.idiomas_trabajo || (servicio.idiomas && servicio.idiomas.length > 0)) && (
+                              <div>
+                                <span className="text-sm font-medium">Idiomas de Trabajo: </span>
+                                <span className="text-sm">
+                                  {Array.isArray(servicio.idiomas) 
+                                    ? servicio.idiomas.join(', ') 
+                                    : (servicio.idiomas_trabajo || 'N/A')}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Certificaciones Técnicas */}
+                            {servicio.certificaciones_tecnicas && (
+                              <div className="md:col-span-2">
+                                <span className="text-sm font-medium">Certificaciones Técnicas: </span>
+                                <span className="text-sm">{servicio.certificaciones_tecnicas}</span>
+                              </div>
+                            )}
+                            
+                            {/* Equipo Técnico */}
+                            {(servicio.tiene_equipo_tecnico !== undefined || servicio.equipo_tecnico_formacion !== undefined) && (
+                              <div className="md:col-span-2">
+                                <div className="flex gap-4">
+                                  {servicio.tiene_equipo_tecnico !== undefined && (
+                                    <div>
+                                      <span className="text-sm font-medium">¿Tiene Equipo Técnico?: </span>
+                                      <span className="text-sm">{servicio.tiene_equipo_tecnico ? 'Sí' : 'No'}</span>
+                                    </div>
+                                  )}
+                                  {servicio.equipo_tecnico_formacion !== undefined && (
+                                    <div>
+                                      <span className="text-sm font-medium">¿Equipo en Formación?: </span>
+                                      <span className="text-sm">{servicio.equipo_tecnico_formacion ? 'Sí' : 'No'}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1954,7 +2610,7 @@ id_subrubro: editedData.id_subrubro
               </div>
             ) : (
               <p className="text-muted-foreground py-4">No hay servicios registrados</p>
-            );
+            )
           })()}
         </div>
       )}
@@ -2001,24 +2657,116 @@ id_subrubro: editedData.id_subrubro
                   )}
                 </div>
                 <div className="md:col-span-2">
-                  <Label>Brochure / Catálogo (PDF)</Label>
-                  {isEditing ? (
-                    <p className="mt-1 text-sm text-muted-foreground">Se puede subir o actualizar el brochure desde la edición.</p>
-                  ) : (
-                    displayData?.brochure ? (
-                      <a
-                        href={displayData.brochure}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-block text-sm text-[#3259B5] font-semibold hover:underline"
-                      >
-                        Descargar Brochure / Catálogo
-                      </a>
-                    ) : (
-                      <p className="mt-1 font-semibold">N/A</p>
-                    )
-                  )}
-                </div>
+  <Label>Brochure / Catálogo (PDF)</Label>
+  {isEditing ? (
+    <div className="space-y-3">
+      {/* Mostrar archivo actual si existe */}
+      {displayData?.brochure && (
+        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border">
+          <div className="flex-1">
+            <p className="text-sm font-medium">Archivo actual:</p>
+            <a
+              href={displayData.brochure}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-[#3259B5] hover:underline flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Ver PDF actual
+            </a>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditedData(editedData ? { 
+                ...editedData, 
+                brochure: null,
+                brochure_file: null 
+              } : null)
+            }}
+            className="text-red-600 hover:text-red-700"
+          >
+            <X className="w-4 h-4 mr-1" />
+            Eliminar
+          </Button>
+        </div>
+      )}
+      
+      {/* Input para subir nuevo archivo */}
+      <div className="border-2 border-dashed border-[#3259B5] rounded-lg p-6 text-center hover:bg-[#3259B5]/5 transition-colors cursor-pointer">
+        <input
+          id="brochure-upload"
+          type="file"
+          accept=".pdf"
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              const file = e.target.files[0]
+              
+              // Validar tamaño (máximo 10MB)
+              if (file.size > 10 * 1024 * 1024) {
+                toast({
+                  title: "Archivo muy grande",
+                  description: "El archivo debe ser menor a 10 MB",
+                  variant: "destructive",
+                })
+                return
+              }
+              
+              // Validar tipo
+              if (file.type !== 'application/pdf') {
+                toast({
+                  title: "Formato inválido",
+                  description: "Solo se aceptan archivos PDF",
+                  variant: "destructive",
+                })
+                return
+              }
+              
+              // Guardar el archivo en el estado
+              setEditedData(editedData ? { 
+                ...editedData, 
+                brochure_file: file,
+                brochure_filename: file.name
+              } : null)
+            }
+          }}
+          className="hidden"
+        />
+        <label htmlFor="brochure-upload" className="cursor-pointer block">
+          <div className="text-3xl mb-2">📄</div>
+          <p className="font-medium text-[#222A59] mb-1">
+            {editedData?.brochure_file 
+              ? `Archivo seleccionado: ${editedData.brochure_filename}`
+              : displayData?.brochure
+              ? "Haz clic para reemplazar el PDF"
+              : "Haz clic para cargar PDF"}
+          </p>
+          <p className="text-xs text-[#6B7280]">Máximo 10 MB</p>
+        </label>
+      </div>
+    </div>
+  ) : (
+    displayData?.brochure ? (
+      <a
+        href={displayData.brochure}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 inline-flex items-center gap-2 text-sm text-[#3259B5] font-semibold hover:underline"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Descargar Brochure / Catálogo
+      </a>
+    ) : (
+      <p className="mt-1 font-semibold">N/A</p>
+    )
+  )}
+</div>
               </CardContent>
             </Card>
           </TabsContent>

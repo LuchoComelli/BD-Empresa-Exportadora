@@ -903,23 +903,6 @@ export default function PerfilEmpresaPage() {
                 <p className="text-sm md:text-base text-white/80 mb-2">Nombre de Fantasía: {empresaData.nombreFantasia}</p>
               )}
               <p className="text-sm md:text-base text-white/90 mb-4">CUIT: {empresaData.cuit || 'N/A'}</p>
-              <div className="flex flex-wrap gap-2">
-                {empresaData.rubro && (
-                  <Badge className="bg-[#C3C840] text-[#222A59] hover:bg-[#C3C840]/90">
-                    {empresaData.rubro}
-                    {empresaData.subRubro && ` - ${empresaData.subRubro}`}
-                  </Badge>
-                )}
-                {empresaData.exporta && <Badge className="bg-white/20 text-white hover:bg-white/30">Exportadora</Badge>}
-                {empresaData.certificadoMiPyme && (
-                  <Badge className="bg-white/20 text-white hover:bg-white/30">Mi Pyme</Badge>
-                )}
-                {empresaData.estado && (
-                  <Badge className={`${empresaData.estado === 'aprobada' ? 'bg-green-500' : 'bg-yellow-500'} text-white`}>
-                    {empresaData.estado.charAt(0).toUpperCase() + empresaData.estado.slice(1)}
-                  </Badge>
-                )}
-              </div>
             </div>
           </div>
         </Card>
@@ -1003,17 +986,6 @@ export default function PerfilEmpresaPage() {
                   ) : (
                     <p className="mt-1 font-semibold">{empresaData?.tipo_sociedad || empresaData?.tipoSociedad || 'N/A'}</p>
                   )}
-                </div>
-
-                {/* Tipo de Empresa */}
-                <div>
-                  <Label>Tipo de Empresa</Label>
-                  <p className="mt-1 font-semibold">
-                    {empresaData?.tipo_empresa_detalle?.nombre || 
-                     empresaData?.tipo_empresa_valor || 
-                     empresaData?.tipo_empresa || 
-                     'N/A'}
-                  </p>
                 </div>
 
                 {/* Rubro */}

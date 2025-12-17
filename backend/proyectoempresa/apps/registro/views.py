@@ -317,15 +317,26 @@ def enviar_email_rechazo(solicitud):
         )
 
 def crear_empresa_desde_solicitud(solicitud):
-    """
-    Crear empresa desde solicitud aprobada
-    SIMPLIFICADA - Usa directamente los modelos nuevos de geografia
-    """
     from apps.empresas.models import Empresa, Rubro, TipoEmpresa
     from apps.geografia.models import Departamento, Municipio, Localidad
     import logging
     
     logger = logging.getLogger(__name__)
+
+        # Normalizar CUIT
+    cuit_normalizado = str(solicitud.cuit_cuil).replace('-', '').replace(' ', '').strip()
+    
+    # Verificar si ya existe una empresa con este CUIT
+    empresa_existente = Empresa.objects.filter(cuit_cuil=cuit_normalizado).first()
+    
+    if empresa_existente:
+        # Si la empresa ya existe, verificar si esta solicitud ya la creó
+        if solicitud.empresa_creada_id == empresa_existente.id:
+            logger.info(f"✅ La solicitud ID={solicitud.id} ya creó la empresa ID={empresa_existente.id}. Retornando empresa existente.")
+            return empresa_existente
+        else:
+            # El CUIT ya existe en otra empresa diferente
+            raise ValueError(f"❌ Ya existe otra empresa registrada con el CUIT {cuit_normalizado}")
     
     # ✅ BUSCAR departamento directamente (modelos nuevos)
     departamento = None
@@ -573,7 +584,6 @@ def crear_empresa_desde_solicitud(solicitud):
         'cuit_cuil': cuit_normalizado,
         'direccion': solicitud.direccion,
         'codigo_postal': solicitud.codigo_postal,
-        # Direccion comercial desde la solicitud
         'direccion_comercial': getattr(solicitud, 'direccion_comercial', None) or None,
         'codigo_postal_comercial': getattr(solicitud, 'codigo_postal_comercial', None) or None,
         'departamento': departamento,  
@@ -585,6 +595,7 @@ def crear_empresa_desde_solicitud(solicitud):
         'exporta': exporta_value,
         'destinoexporta': solicitud.destino_exportacion[:200] if solicitud.destino_exportacion else None,
         'importa': True if solicitud.importa == 'si' else False,
+        'interes_exportar': solicitud.interes_exportar if hasattr(solicitud, 'interes_exportar') else None,
         'certificadopyme': True if solicitud.certificado_pyme == 'si' else False,
         'certificaciones': solicitud.certificaciones[:500] if solicitud.certificaciones else None,
         'promo2idiomas': True if solicitud.material_promocional_idiomas == 'si' else False,
@@ -593,6 +604,14 @@ def crear_empresa_desde_solicitud(solicitud):
         'contacto_principal_cargo': (solicitud.cargo_contacto[:100] if solicitud.cargo_contacto else ''),
         'contacto_principal_telefono': (solicitud.telefono_contacto[:20] if solicitud.telefono_contacto else ''),
         'contacto_principal_email': (solicitud.email_contacto or solicitud.correo),
+        'contacto_secundario_nombre': None,
+        'contacto_secundario_cargo': None,
+        'contacto_secundario_telefono': None,
+        'contacto_secundario_email': None,
+        'contacto_terciario_nombre': None,
+        'contacto_terciario_cargo': None,
+        'contacto_terciario_telefono': None,
+        'contacto_terciario_email': None,
         'id_usuario': usuario_empresa,
         'id_rubro': rubro,
         'id_subrubro': id_subrubro,
@@ -604,6 +623,30 @@ def crear_empresa_desde_solicitud(solicitud):
         # Mapear geolocalizacion (puede venir como string "lat,lng" o como objeto)
         'geolocalizacion': None,
     }
+
+    try:
+        if solicitud.contactos_secundarios and isinstance(solicitud.contactos_secundarios, list):
+            # Contacto secundario (índice 0)
+            if len(solicitud.contactos_secundarios) > 0:
+                contacto_sec = solicitud.contactos_secundarios[0]
+                empresa_kwargs['contacto_secundario_nombre'] = contacto_sec.get('nombre', '')[:100] if contacto_sec.get('nombre') else None
+                empresa_kwargs['contacto_secundario_cargo'] = contacto_sec.get('cargo', '')[:100] if contacto_sec.get('cargo') else None
+                empresa_kwargs['contacto_secundario_telefono'] = contacto_sec.get('telefono', '')[:20] if contacto_sec.get('telefono') else None
+                empresa_kwargs['contacto_secundario_email'] = contacto_sec.get('email', '') if contacto_sec.get('email') else None
+                logger.info(f"[Registro->Empresa] Contacto secundario mapeado: {contacto_sec.get('nombre', 'N/A')}")
+        
+            # Contacto terciario (índice 1)
+            if len(solicitud.contactos_secundarios) > 1:
+                contacto_ter = solicitud.contactos_secundarios[1]
+                empresa_kwargs['contacto_terciario_nombre'] = contacto_ter.get('nombre', '')[:100] if contacto_ter.get('nombre') else None
+                empresa_kwargs['contacto_terciario_cargo'] = contacto_ter.get('cargo', '')[:100] if contacto_ter.get('cargo') else None
+                empresa_kwargs['contacto_terciario_telefono'] = contacto_ter.get('telefono', '')[:20] if contacto_ter.get('telefono') else None
+                empresa_kwargs['contacto_terciario_email'] = contacto_ter.get('email', '') if contacto_ter.get('email') else None
+                logger.info(f"[Registro->Empresa] Contacto terciario mapeado: {contacto_ter.get('nombre', 'N/A')}")
+        else:
+            logger.info(f"[Registro->Empresa] No hay contactos secundarios en la solicitud ID={solicitud.id}")
+    except Exception as e:
+        logger.error(f"[Registro->Empresa] Error al mapear contactos secundarios: {str(e)}", exc_info=True)
     # Loguear detalle de actividades para debugging
     try:
         logger.info(f"[Registro->Empresa] Solicitud ID={solicitud.id} actividades_promocion (raw): {repr(solicitud.actividades_promocion)}")
@@ -698,23 +741,50 @@ def crear_empresa_desde_solicitud(solicitud):
             if isinstance(k, str) and column_exists(Empresa, k):
                 filtered_kwargs[k] = v
         empresa = Empresa.objects.create(**filtered_kwargs)
+
         from apps.empresas.models import ProductoEmpresa, PosicionArancelaria
+        
         if solicitud.productos:
-            for producto_data in solicitud.productos:
-                producto = ProductoEmpresa.objects.create(
-            empresa=empresa,
-            nombre_producto=producto_data.get('nombre', ''),
-            descripcion=producto_data.get('descripcion', ''),
-            capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
-            unidad_medida=producto_data.get('unidad_medida', 'kg'),
-            periodo_capacidad=producto_data.get('periodo_capacidad', 'mensual'),
-        )
-        if producto_data.get('posicion_arancelaria'):
-            PosicionArancelaria.objects.create(
-                producto=producto,
-                codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
-                descripcion_arancelaria=producto_data.get('descripcion_arancelaria', ''),
+            for idx, producto_data in enumerate(solicitud.productos):
+                # ✅ VALIDAR que tenga posición arancelaria
+                posicion_aran = producto_data.get('posicion_arancelaria', '').strip()
+            
+            logger.info(
+                f"📦 [Producto {idx + 1}] Nombre: {producto_data.get('nombre', 'sin nombre')}, "
+                f"Posición Arancelaria: {posicion_aran or 'VACÍO'}"
             )
+            
+            # Crear producto
+            producto = ProductoEmpresa.objects.create(
+                empresa=empresa,
+                nombre_producto=producto_data.get('nombre', ''),
+                descripcion=producto_data.get('descripcion', ''),
+                capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
+                unidad_medida=producto_data.get('unidad_medida', 'kg'),
+                periodo_capacidad=producto_data.get('periodo_capacidad', 'mensual'),
+            )
+            
+            # ✅ SIEMPRE intentar crear la posición arancelaria (con validación)
+            if posicion_aran:
+                try:
+                    PosicionArancelaria.objects.create(
+                        producto=producto,
+                        codigo_arancelario=posicion_aran,
+                        descripcion_arancelaria=producto_data.get('descripcion_arancelaria', ''),
+                    )
+                    logger.info(
+                        f"✅ [Producto {idx + 1}] Posición arancelaria {posicion_aran} creada exitosamente"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"❌ [Producto {idx + 1}] Error creando posición arancelaria: {str(e)}",
+                        exc_info=True
+                    )
+                    # NO eliminar el producto, solo registrar el error
+            else:
+                logger.warning(
+                    f"⚠️  [Producto {idx + 1}] NO tiene posición arancelaria - se guardó sin ella"
+                )
                 
     elif tipo_empresa_value == 'servicio':
         # Filtrar claves por columnas existentes antes de crear
@@ -759,7 +829,6 @@ def crear_empresa_desde_solicitud(solicitud):
                     
     else:  # mixta
         # Filtrar claves por columnas existentes antes de crear
-
         from django.core.exceptions import FieldDoesNotExist
         def column_exists(model, field_name):
             try:
@@ -776,24 +845,56 @@ def crear_empresa_desde_solicitud(solicitud):
         for k, v in empresa_kwargs.items():
             if isinstance(k, str) and column_exists(Empresa, k):
                 filtered_kwargs[k] = v
+    
         empresa = Empresa.objects.create(**filtered_kwargs)
+    
+        # ✅ IMPORTAR ANTES de usar las clases
         from apps.empresas.models import ProductoEmpresaMixta, ServicioEmpresaMixta, PosicionArancelariaMixta
+    
+        # PRODUCTOS
         if solicitud.productos:
-            for producto_data in solicitud.productos:
+            for idx, producto_data in enumerate(solicitud.productos):
+                # ✅ VALIDAR que tenga posición arancelaria
+                posicion_aran = producto_data.get('posicion_arancelaria', '').strip()
+            
+                logger.info(
+                    f"📦 [Producto Mixta {idx + 1}] Nombre: {producto_data.get('nombre', 'sin nombre')}, "
+                    f"Posición Arancelaria: {posicion_aran or 'VACÍO'}"
+                )
+            
+                # Crear producto
                 producto = ProductoEmpresaMixta.objects.create(
-            empresa=empresa,
-            nombre_producto=producto_data.get('nombre', ''),
-            descripcion=producto_data.get('descripcion', ''),
-            capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
-            unidad_medida=producto_data.get('unidad_medida', 'kg'),
-            periodo_capacidad=producto_data.get('periodo_capacidad', 'mensual'),
-        )
-        if producto_data.get('posicion_arancelaria'):
-            PosicionArancelariaMixta.objects.create(
-                producto=producto,
-                codigo_arancelario=producto_data.get('posicion_arancelaria', ''),
-                descripcion_arancelaria=producto_data.get('descripcion_arancelaria', ''),
-            )
+                    empresa=empresa,
+                    nombre_producto=producto_data.get('nombre', ''),
+                    descripcion=producto_data.get('descripcion', ''),
+                    capacidad_productiva=float(producto_data.get('capacidad_productiva', 0)) if producto_data.get('capacidad_productiva') else None,
+                    unidad_medida=producto_data.get('unidad_medida', 'kg'),
+                    periodo_capacidad=producto_data.get('periodo_capacidad', 'mensual'),
+                )
+            
+                # ✅ SIEMPRE intentar crear la posición arancelaria (con validación)
+                if posicion_aran:
+                    try:
+                        PosicionArancelariaMixta.objects.create(
+                            producto=producto,
+                            codigo_arancelario=posicion_aran,
+                            descripcion_arancelaria=producto_data.get('descripcion_arancelaria', ''),
+                        )
+                        logger.info(
+                            f"✅ [Producto Mixta {idx + 1}] Posición arancelaria {posicion_aran} creada exitosamente"
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"❌ [Producto Mixta {idx + 1}] Error creando posición arancelaria: {str(e)}",
+                            exc_info=True
+                        )
+                        # NO eliminar el producto, solo registrar el error
+                else:
+                    logger.warning(
+                        f"⚠️  [Producto Mixta {idx + 1}] NO tiene posición arancelaria - se guardó sin ella"
+                    )
+    
+        # SERVICIOS
         if solicitud.servicios_ofrecidos:
             servicios_data = solicitud.servicios_ofrecidos
             if isinstance(servicios_data, dict):

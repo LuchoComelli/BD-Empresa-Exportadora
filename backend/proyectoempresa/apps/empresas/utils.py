@@ -8,6 +8,42 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import datetime
 from io import BytesIO
 
+def extraer_actividades_promocion(empresa):
+    """
+    Extraer ferias, rondas y misiones del campo actividades_promocion_internacional
+    Retorna un diccionario con las tres categorías
+    """
+    actividades = {
+        'ferias': [],
+        'rondas': [],
+        'misiones': []
+    }
+    
+    # Obtener el campo JSON
+    promo_data = empresa.actividades_promocion_internacional
+    
+    if not promo_data:
+        return actividades
+    
+    # Si es un diccionario, extraer las actividades
+    if isinstance(promo_data, dict):
+        # Ferias
+        ferias = promo_data.get('ferias', [])
+        if isinstance(ferias, list):
+            actividades['ferias'] = [f.get('nombre', '') for f in ferias if isinstance(f, dict) and f.get('nombre')]
+        
+        # Rondas
+        rondas = promo_data.get('rondas', [])
+        if isinstance(rondas, list):
+            actividades['rondas'] = [r.get('nombre', '') for r in rondas if isinstance(r, dict) and r.get('nombre')]
+        
+        # Misiones
+        misiones = promo_data.get('misiones', [])
+        if isinstance(misiones, list):
+            actividades['misiones'] = [m.get('nombre', '') for m in misiones if isinstance(m, dict) and m.get('nombre')]
+    
+    return actividades
+
 # Colores institucionales (convertidos de HEX a RGB 0-1)
 COLOR_AZUL_PRINCIPAL = colors.HexColor('#222A59')  # Azul institucional
 COLOR_AZUL_SECUNDARIO = colors.HexColor('#3259B5')  # Azul medio
@@ -721,37 +757,24 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
         # Actividad Comercial
         'exporta': {'field': 'exporta', 'section': 'comercial', 'label': '¿Exporta?'},
         'destinoexporta': {'field': 'destinoexporta', 'section': 'comercial', 'label': 'Destino de Exportación'},
-        'tipoexporta': {'field': 'tipoexporta', 'section': 'comercial', 'label': 'Tipo de Exportación'},
         'importa': {'field': 'importa', 'section': 'comercial', 'label': '¿Importa?'},
-        'tipoimporta': {'field': 'tipoimporta', 'section': 'comercial', 'label': 'Tipo de Importación'},
-        'frecuenciaimporta': {'field': 'frecuenciaimporta', 'section': 'comercial', 'label': 'Frecuencia de Importación'},
         'interes_exportar': {'field': 'interes_exportar', 'section': 'comercial', 'label': 'Interés en Exportar'},
         
         # Certificaciones
         'certificadopyme': {'field': 'certificadopyme', 'section': 'comercial', 'label': 'Certificado MiPYME'},
-        'certificacionesbool': {'field': 'certificacionesbool', 'section': 'comercial', 'label': 'Certificaciones Internacionales'},
-        'certificaciones': {'field': 'certificaciones', 'section': 'comercial', 'label': 'Detalle de Certificaciones'},
-        'certificaciones_otros': {'field': 'certificaciones_otros', 'section': 'comercial', 'label': 'Otras Certificaciones'},
+        'certificaciones': {'field': 'certificaciones', 'section': 'comercial', 'label': 'Certificaciones'},
         
         # Promoción
         'promo2idiomas': {'field': 'promo2idiomas', 'section': 'comercial', 'label': 'Material en Múltiples Idiomas'},
         'idiomas_trabaja': {'field': 'idiomas_trabaja', 'section': 'comercial', 'label': 'Idiomas de Trabajo'},
         
-        # Capacidad
-        'capacidadproductiva': {'field': 'capacidadproductiva', 'section': 'comercial', 'label': 'Capacidad Productiva'},
-        'tiempocapacidad': {'field': 'tiempocapacidad', 'section': 'comercial', 'label': 'Período de Capacidad'},
-        'otracapacidad': {'field': 'otracapacidad', 'section': 'comercial', 'label': 'Otra Capacidad Productiva'},
         
-        # Ferias
-        'participoferianacional': {'field': 'participoferianacional', 'section': 'comercial', 'label': 'Participó en Ferias Nacionales'},
-        'feriasnacionales': {'field': 'feriasnacionales', 'section': 'comercial', 'label': 'Detalle Ferias Nacionales'},
-        'participoferiainternacional': {'field': 'participoferiainternacional', 'section': 'comercial', 'label': 'Participó en Ferias Internacionales'},
-        'feriasinternacionales': {'field': 'feriasinternacionales', 'section': 'comercial', 'label': 'Detalle Ferias Internacionales'},
+        'ferias': {'field': 'ferias', 'section': 'comercial', 'label': 'Ferias'},
+        'rondas': {'field': 'rondas', 'section': 'comercial', 'label': 'Rondas'},
+        'misiones': {'field': 'misiones', 'section': 'comercial', 'label': 'Misiones'},
         
         # Otros
         'observaciones': {'field': 'observaciones', 'section': 'comercial', 'label': 'Observaciones'},
-        'puntaje': {'field': 'puntaje', 'section': 'comercial', 'label': 'Puntaje'},
-        'descripcion': {'field': 'descripcion', 'section': 'comercial', 'label': 'Descripción'},
     }
     
     # Expandir campos disponibles basándose en los campos seleccionados
@@ -787,6 +810,13 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
     # Función helper para obtener el valor de un campo
     def get_field_value(empresa, field_name):
         """Obtiene el valor de un campo de la empresa, manejando relaciones"""
+        # ✅ MANEJAR FERIAS, RONDAS Y MISIONES
+        if field_name in ['ferias', 'rondas', 'misiones']:
+            actividades = extraer_actividades_promocion(empresa)
+            items = actividades.get(field_name, [])
+            if items:
+                return ', '.join(items)
+            return '-'
         # Campos que requieren acceso a relaciones
         if field_name == 'rubro_nombre':
             if empresa.id_rubro:
@@ -920,7 +950,7 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
     
     # SECCIÓN 1: INFORMACIÓN BÁSICA
     if secciones['basica']:
-        story.append(Paragraph("Información Básica de Empresas", title_style))
+        story.append(Paragraph("Datos Generales", title_style))
         story.append(Spacer(1, 0.3*cm))
         
         campos_basicos = secciones['basica']
@@ -1313,7 +1343,7 @@ def calcular_puntajes_matriz(empresa):
     6. Estructura interna: Alta = 2, Media = 1, No = 0
     7. Interés exportador: Sí = 1, No = 0
     8. Certificaciones nacionales: ≥2 = 2, 1 = 1, Ninguna = 0
-    9. Certificaciones internacionales: ≥1 = 2, Ninguna = 0
+    9. certificaciones: ≥1 = 2, Ninguna = 0
     
     Retorna un diccionario con puntajes y opciones seleccionadas.
     """
