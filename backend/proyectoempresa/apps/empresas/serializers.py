@@ -70,6 +70,16 @@ class PosicionArancelariaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'producto_id']
 
 
+class PosicionArancelariaMixtaSerializer(serializers.ModelSerializer):
+    """Serializer para posiciones arancelarias de productos mixtos"""
+    producto_id = serializers.IntegerField(source='producto.id', read_only=True)
+    
+    class Meta:
+        model = PosicionArancelariaMixta
+        fields = ['id', 'producto', 'producto_id', 'codigo_arancelario', 'descripcion_arancelaria', 'es_principal']
+        read_only_fields = ['id', 'producto_id']
+
+
 class ProductoEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para productos de empresa"""
     posicion_arancelaria = serializers.SerializerMethodField(read_only=True)
@@ -2061,10 +2071,30 @@ class EmpresaSerializer(serializers.ModelSerializer):
                     
                     validated_data['id_usuario'] = usuario_empresa
         
-        # 4. CREAR LA EMPRESA (usando el modelo base Empresa)
+        # 4. EXTRAER Y ESTABLECER tipo_empresa_valor (aunque sea read_only, lo establecemos manualmente)
+        # Los campos read_only no están en validated_data, así que los obtenemos de initial_data
+        tipo_empresa_valor = self.initial_data.get('tipo_empresa_valor') or validated_data.pop('tipo_empresa_valor', None)
+        
+        # Si no se proporciona tipo_empresa_valor, intentar inferirlo del tipo_empresa
+        if not tipo_empresa_valor and validated_data.get('tipo_empresa'):
+            tipo_empresa_obj = validated_data.get('tipo_empresa')
+            if hasattr(tipo_empresa_obj, 'nombre'):
+                nombre_tipo = tipo_empresa_obj.nombre.lower()
+                if 'producto' in nombre_tipo and 'servicio' in nombre_tipo:
+                    tipo_empresa_valor = 'mixta'
+                elif 'servicio' in nombre_tipo:
+                    tipo_empresa_valor = 'servicio'
+                else:
+                    tipo_empresa_valor = 'producto'
+        
+        # 5. CREAR LA EMPRESA (usando el modelo base Empresa)
         empresa = Empresa.objects.create(**validated_data)
         
-        # 5. ASIGNAR SUBRUBROS SI EXISTEN
+        # 6. ESTABLECER tipo_empresa_valor si se proporcionó
+        if tipo_empresa_valor:
+            empresa.tipo_empresa_valor = tipo_empresa_valor
+        
+        # 7. ASIGNAR SUBRUBROS SI EXISTEN
         if id_subrubro:
             empresa.id_subrubro = id_subrubro
         if id_subrubro_producto:
@@ -2072,7 +2102,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
         if id_subrubro_servicio:
             empresa.id_subrubro_servicio = id_subrubro_servicio
         
-        if id_subrubro or id_subrubro_producto or id_subrubro_servicio:
+        # Guardar si hay cambios
+        if tipo_empresa_valor or id_subrubro or id_subrubro_producto or id_subrubro_servicio:
             empresa.save()
         
         return empresa

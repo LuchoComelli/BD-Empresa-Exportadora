@@ -989,11 +989,7 @@ const handleSave = async () => {
             <div>
               <Label>SubRubro de Productos</Label>
               <p className="mt-1 font-semibold">
-                {displayData?.sub_rubro_producto_nombre || 
-                 (typeof displayData?.id_subrubro_producto === 'object' 
-                   ? displayData.id_subrubro_producto.nombre 
-                   : displayData?.id_subrubro_producto) || 
-                 'N/A'}
+                {displayData?.sub_rubro_producto_nombre || 'N/A'}
               </p>
             </div>
             
@@ -1001,11 +997,7 @@ const handleSave = async () => {
             <div>
               <Label>SubRubro de Servicios</Label>
               <p className="mt-1 font-semibold">
-                {displayData?.sub_rubro_servicio_nombre || 
-                 (typeof displayData?.id_subrubro_servicio === 'object' 
-                   ? displayData.id_subrubro_servicio.nombre 
-                   : displayData?.id_subrubro_servicio) || 
-                 'N/A'}
+                {displayData?.sub_rubro_servicio_nombre || 'N/A'}
               </p>
             </div>
           </>

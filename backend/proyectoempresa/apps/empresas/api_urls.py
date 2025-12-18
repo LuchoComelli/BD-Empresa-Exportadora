@@ -6,7 +6,8 @@ from .viewsets import (
     EmpresaViewSet,  # ✅ Nuevo ViewSet unificado
     ProductoEmpresaViewSet, ServicioEmpresaViewSet,
     ProductoEmpresaMixtaViewSet, ServicioEmpresaMixtaViewSet,
-    PosicionArancelariaViewSet, MatrizClasificacionExportadorViewSet
+    PosicionArancelariaViewSet, PosicionArancelariaMixtaViewSet,
+    MatrizClasificacionExportadorViewSet
 )
 
 router = DefaultRouter()
@@ -24,6 +25,7 @@ router.register(r'servicios', ServicioEmpresaViewSet, basename='servicio')
 router.register(r'productos-mixta', ProductoEmpresaMixtaViewSet, basename='producto-mixta')
 router.register(r'servicios-mixta', ServicioEmpresaMixtaViewSet, basename='servicio-mixta')
 router.register(r'posiciones-arancelarias', PosicionArancelariaViewSet, basename='posicion-arancelaria')
+router.register(r'posiciones-arancelarias-mixta', PosicionArancelariaMixtaViewSet, basename='posicion-arancelaria-mixta')
 router.register(r'matriz-clasificacion', MatrizClasificacionExportadorViewSet, basename='matriz-clasificacion')
 # ✅ Nuevo endpoint unificado (recomendado) - AL FINAL para evitar conflictos
 # Usar r'' para que la URL final sea /api/empresas/ en lugar de /api/empresas/empresas/

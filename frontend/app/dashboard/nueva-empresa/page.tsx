@@ -435,28 +435,28 @@ useEffect(() => {
     setLoading(true)
     
     try {
-    // Validar usuario autenticado
-    if (!user || !user.id) {
+      // Validar usuario autenticado
+      if (!user || !user.id) {
         toast({
           title: "Error",
-        description: "Debes estar autenticado para crear una empresa",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-    
-    // ✅ Mapear tipo de negocio
-    const tipoEmpresaMap: Record<string, string> = {
-      productos: 'producto',
-      servicios: 'servicio',
-      ambos: 'mixta'
-    }
-    
-    // ✅ Validar campos críticos ANTES de preparar datos
-    if (!formData.direccion || formData.direccion.trim() === '') {
-      toast({
-        title: "Campo requerido",
+          description: "Debes estar autenticado para crear una empresa",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+      
+      // Mapear tipo de negocio
+      const tipoEmpresaMap: Record<string, string> = {
+        productos: 'producto',
+        servicios: 'servicio',
+        ambos: 'mixta'
+      }
+      
+      // Validar campos críticos ANTES de preparar datos
+      if (!formData.direccion || formData.direccion.trim() === '') {
+        toast({
+          title: "Campo requerido",
           description: "Por favor, completa el campo de Dirección",
           variant: "destructive",
         })
@@ -465,7 +465,7 @@ useEffect(() => {
       }
       if (!formData.departamento || formData.departamento.trim() === '') {
         toast({
-        title: "Campo requerido",
+          title: "Campo requerido",
           description: "Por favor, completa el campo de Departamento",
           variant: "destructive",
         })
@@ -473,11 +473,12 @@ useEffect(() => {
         return
       }
       
-    // ✅ Validar rubros según el tipo de empresa
+      // Validar rubros según el tipo de empresa
       if (tipoNegocio === 'ambos') {
+        // Para empresas mixtas, validar que se hayan seleccionado rubros y subrubros de productos y servicios
         if (!formData.rubroProducto) {
           toast({
-          title: "Campo requerido",
+            title: "Campo requerido",
             description: "Por favor, selecciona el rubro de productos",
             variant: "destructive",
           })
@@ -486,7 +487,7 @@ useEffect(() => {
         }
         if (!formData.subRubroProducto) {
           toast({
-          title: "Campo requerido",
+            title: "Campo requerido",
             description: "Por favor, selecciona el sub-rubro de productos",
             variant: "destructive",
           })
@@ -495,7 +496,7 @@ useEffect(() => {
         }
         if (!formData.rubroServicio) {
           toast({
-          title: "Campo requerido",
+            title: "Campo requerido",
             description: "Por favor, selecciona el rubro de servicios",
             variant: "destructive",
           })
@@ -504,7 +505,7 @@ useEffect(() => {
         }
         if (!formData.subRubroServicio) {
           toast({
-          title: "Campo requerido",
+            title: "Campo requerido",
             description: "Por favor, selecciona el sub-rubro de servicios",
             variant: "destructive",
           })
@@ -512,9 +513,10 @@ useEffect(() => {
           return
         }
       } else {
+        // Para empresas de producto o servicio únicos
         if (!formData.rubro) {
           toast({
-          title: "Campo requerido",
+            title: "Campo requerido",
             description: "Por favor, selecciona el rubro",
             variant: "destructive",
           })
@@ -523,7 +525,7 @@ useEffect(() => {
         }
         if (!formData.subRubro) {
           toast({
-          title: "Campo requerido",
+            title: "Campo requerido",
             description: "Por favor, selecciona el sub-rubro",
             variant: "destructive",
           })
@@ -531,515 +533,341 @@ useEffect(() => {
           return
         }
       }
-    
-    // ✅ Preparar FormData para enviar archivos
-    const formDataToSend = new FormData()
-    
-    // ✅ Preparar datos para enviar al backend (IGUAL QUE EL FORMULARIO PÚBLICO)
-    const registrationData: any = {
-      razon_social: formData.razonSocial,
-      nombre_fantasia: formData.nombreFantasia || null,
-      tipo_sociedad: formData.tipoSociedad || null,
-      cuit_cuil: formData.cuit,
-      tipo_empresa: tipoEmpresaMap[tipoNegocio] || 'producto',
-      // Para empresas mixtas, enviar campos separados
-      ...(tipoNegocio === 'ambos' ? {
-        rubro_producto: rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || '',
-        sub_rubro_producto: subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || null,
-        rubro_servicio: rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || '',
-        sub_rubro_servicio: subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || null,
-        // Generar rubro_principal y sub_rubro combinando productos y servicios
-        rubro_principal: (() => {
-          const rubroProd = rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || ''
-          const rubroServ = rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || ''
-          return rubroProd ? (rubroServ ? `${rubroProd} / ${rubroServ}` : rubroProd) : rubroServ
-        })(),
-        sub_rubro: (() => {
-          const subProd = subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || ''
-          const subServ = subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || ''
-          return subProd ? (subServ ? `${subProd} / ${subServ}` : subProd) : (subServ || null)
-        })(),
-      } : {
-        rubro_principal: rubros.find(r => String(r.id) === formData.rubro)?.nombre || '',
-        sub_rubro: subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || null,
-        rubro_producto: null,
-        sub_rubro_producto: null,
-        rubro_servicio: null,
-        sub_rubro_servicio: null,
-      }),
-      descripcion_actividad: tipoNegocio === 'ambos'
-        ? (() => {
-            const rubroProd = rubrosProductos.find(r => String(r.id) === formData.rubroProducto)?.nombre || ''
-            const subProd = subrubrosProductos.find(s => String(s.id) === formData.subRubroProducto)?.nombre || ''
-            const rubroServ = rubrosServicios.find(r => String(r.id) === formData.rubroServicio)?.nombre || ''
-            const subServ = subrubrosServicios.find(s => String(s.id) === formData.subRubroServicio)?.nombre || ''
-            const prod = rubroProd ? `${rubroProd}${subProd ? ' - ' + subProd : ''}` : ''
-            const serv = rubroServ ? `${rubroServ}${subServ ? ' - ' + subServ : ''}` : ''
-            return `${prod}${prod && serv ? ' / ' : ''}${serv}`.trim()
-          })()
-        : (() => {
-            const rubro = rubros.find(r => String(r.id) === formData.rubro)?.nombre || ''
-            const subrubro = subrubros.find(s => String(s.id) === formData.subRubro)?.nombre || ''
-            return rubro ? `${rubro}${subrubro ? ' - ' + subrubro : ''}` : ''
-          })(),
-      direccion: formData.direccion ? String(formData.direccion).trim() : '',
-      codigo_postal: formData.codigoPostal || null,
-      direccion_comercial: formData.direccionComercial || null,  // ✅ AGREGAR
-      codigo_postal_comercial: formData.codigoPostalComercial || null,  // ✅ AGREGAR
-      // Los códigos de geografía se envían como strings directamente
-      departamento: formData.departamento ? String(formData.departamento).trim() : null,
-      municipio: formData.municipio ? String(formData.municipio).trim() : null,
-      localidad: formData.localidad ? String(formData.localidad).trim() : null,
-      geolocalizacion: formData.geolocalizacion || null,
-      telefono: contactoPrincipal.telefono,
-      correo: contactoPrincipal.email,
-      sitioweb: (() => {
-        if (formData.paginaWeb && formData.paginaWeb.trim() !== '') {
-          const url = formData.paginaWeb.trim()
-          let urlCompleta = url
-          if (!url.match(/^https?:\/\//i)) {
-            urlCompleta = `https://${url}`
-          }
-          try {
-            new URL(urlCompleta)
-            return urlCompleta
-          } catch {
-            return null
-          }
+      
+      // Obtener TipoEmpresa
+      let tipoEmpresaId: number = 1
+      try {
+        const tiposEmpresa = await api.get<any>('/empresas/tipos-empresa/')
+        const tiposArray = Array.isArray(tiposEmpresa) ? tiposEmpresa : (tiposEmpresa.results || tiposEmpresa)
+        const tipoEmpresaValor = tipoNegocio === 'productos' ? 'producto' : (tipoNegocio === 'servicios' ? 'servicio' : 'mixta')
+        const tipoEmpresa = tiposArray.find((t: any) => 
+          t.nombre.toLowerCase() === tipoEmpresaValor || 
+          (tipoEmpresaValor === 'producto' && t.nombre.toLowerCase().includes('producto')) ||
+          (tipoEmpresaValor === 'servicio' && t.nombre.toLowerCase().includes('servicio')) ||
+          (tipoEmpresaValor === 'mixta' && t.nombre.toLowerCase().includes('mixt'))
+        )
+        if (tipoEmpresa) {
+          tipoEmpresaId = tipoEmpresa.id
         }
-        return null
-      })(),
-      instagram: formData.instagram || null,
-      facebook: formData.facebook || null,
-      linkedin: formData.linkedin || null,
-      contacto_principal: {
-        nombre: contactoPrincipal.nombre,
-        cargo: contactoPrincipal.cargo,
-        telefono: contactoPrincipal.telefono,
-        email: contactoPrincipal.email,
-      },
-      contactos_secundarios: contactosSecundarios.map(c => ({  // ✅ AGREGAR
-        nombre: c.nombre,
-        cargo: c.cargo,
-        telefono: c.telefono,
-        email: c.email,
-      })),
-      productos: tipoNegocio === "servicios" ? [] : productos.map(p => ({
-        nombre: p.nombre,
-        posicion_arancelaria: p.posicionArancelaria,
-        descripcion: p.descripcion,
-        capacidad_productiva: p.capacidadProductiva ? parseFloat(p.capacidadProductiva.replace(/,/g, '')) : null,
-        unidad_medida: p.unidadMedida || "kg",
-      })),
-      servicios: tipoNegocio === "productos" ? null : servicios.length > 0 ? servicios.map(s => ({
-        nombre: s.descripcion || 'Servicio',
-        descripcion: s.descripcion,
-        tipo_servicio: s.tipoServicio.join(', '),
-        sector_atendido: s.sectores.join(', '),
-        alcance_geografico: s.alcanceGeografico,
-        paises_destino: s.paisesDestino,
-        idiomas: s.idiomas.join(', '),
-        forma_contratacion: s.formaContratacion.join(', '),
-        certificaciones_tecnicas: s.certificacionesTecnicas,
-        equipo_tecnico: s.equipoTecnico,
-      })) : null,
-      actividades_promocion_internacional: actividadesPromocion.map(a => ({  // ✅ AGREGAR
-        tipo: a.tipo,
-        lugar: a.lugar,
-        anio: a.anio,
-        observaciones: a.observaciones || '',
-      })),
-      exporta: formData.exporta || null,
-      destino_exportacion: formData.destinoExportacion || null,
-      interes_exportar: formData.exporta === 'no' ? (formData.interesExportar === 'si') : null,  // ✅ CORREGIR
-      importa: formData.importa || null,
-      tipo_importacion: formData.importa === 'si' ? 'Importación' : null,
-      certificado_pyme: formData.certificadoMiPyme || null,
-      certificaciones: formData.certificaciones || null,
-      brochure_url: formData.brochureUrl || null,
-      material_promocional_idiomas: formData.materialPromocion || null,
-      idiomas_trabajo: servicios && servicios.length > 0 ? servicios.map(s => s.idiomas.join(', ')).join(', ') || null : null,
-      observaciones: formData.observaciones || null,
-    }
-    
-    // ✅ Agregar todos los campos al FormData
-    for (const [key, value] of Object.entries(registrationData)) {
-      if (value === null || value === undefined) {
-        continue
+      } catch (error) {
+        console.error('Error obteniendo tipos de empresa:', error)
       }
       
-      if (typeof value === 'object' && !(value instanceof File) && !Array.isArray(value)) {
-        formDataToSend.append(key, JSON.stringify(value))
-      } else if (Array.isArray(value)) {
-        formDataToSend.append(key, JSON.stringify(value))
-      } else {
-        formDataToSend.append(key, String(value))
-      }
-    }
-    
-    // ✅ Agregar archivo PDF si existe
-    if (formData.catalogoPdf) {
-      formDataToSend.append('catalogo_pdf', formData.catalogoPdf)
-    }
-    
-    // ✅ CREAR EMPRESA DIRECTAMENTE (sin pasar por solicitudes)
-console.log("Creando empresa desde dashboard del administrador...")
-      
-      // Preparar datos base de la empresa
+      // Preparar datos base de la empresa para el endpoint /empresas/
       const rubroId = tipoNegocio === 'ambos' 
-  ? formData.rubroProducto 
+        ? formData.rubroProducto 
         : formData.rubro
       
-// Obtener TipoEmpresa
-let tipoEmpresaId: number = 1
-try {
-  const tiposEmpresa = await api.get<any>('/empresas/tipos-empresa/')
-  const tiposArray = Array.isArray(tiposEmpresa) ? tiposEmpresa : (tiposEmpresa.results || tiposEmpresa)
-  const tipoEmpresaValor = tipoNegocio === 'productos' ? 'producto' : (tipoNegocio === 'servicios' ? 'servicio' : 'mixta')
-  const tipoEmpresa = tiposArray.find((t: any) => 
-    t.nombre.toLowerCase() === tipoEmpresaValor || 
-    (tipoEmpresaValor === 'producto' && t.nombre.toLowerCase().includes('producto')) ||
-    (tipoEmpresaValor === 'servicio' && t.nombre.toLowerCase().includes('servicio')) ||
-    (tipoEmpresaValor === 'mixta' && t.nombre.toLowerCase().includes('mixt'))
-  )
-  if (tipoEmpresa) {
-    tipoEmpresaId = tipoEmpresa.id
-  }
-} catch (error) {
-  console.error('Error obteniendo tipos de empresa:', error)
-}
-
-// Validar y limpiar URL del sitio web
-let sitioWebValido: string | null = null
-if (formData.paginaWeb && formData.paginaWeb.trim() !== '') {
-  const url = formData.paginaWeb.trim()
-  if (!url.match(/^https?:\/\//i)) {
-    sitioWebValido = `https://${url}`
-  } else {
-    sitioWebValido = url
-  }
-  try {
-    new URL(sitioWebValido)
-  } catch {
-    sitioWebValido = null
-  }
-}
+      // Validar y limpiar URL del sitio web
+      let sitioWebValido: string | null = null
+      if (formData.paginaWeb && formData.paginaWeb.trim() !== '') {
+        const url = formData.paginaWeb.trim()
+        let urlCompleta = url
+        if (!url.match(/^https?:\/\//i)) {
+          urlCompleta = `https://${url}`
+        }
+        try {
+          new URL(urlCompleta)
+          sitioWebValido = urlCompleta
+        } catch {
+          sitioWebValido = null
+        }
+      }
       
-      const baseEmpresaData: any = {
+      // Preparar datos de la empresa (igual estructura que el formulario público pero adaptado para /empresas/)
+      const empresaData: any = {
         razon_social: formData.razonSocial,
         nombre_fantasia: formData.nombreFantasia || null,
         tipo_sociedad: formData.tipoSociedad || null,
         cuit_cuil: formData.cuit,
-  id_rubro: parseInt(String(rubroId)),
-        direccion: formData.direccion.trim(),
+        id_rubro: parseInt(String(rubroId)),
+        // Enviar subrubros como IDs numéricos (DRF los convertirá automáticamente a objetos)
+        ...(tipoNegocio === 'ambos' ? {
+          id_subrubro_producto: formData.subRubroProducto ? parseInt(String(formData.subRubroProducto)) : null,
+          id_subrubro_servicio: formData.subRubroServicio ? parseInt(String(formData.subRubroServicio)) : null,
+        } : {
+          id_subrubro: formData.subRubro ? parseInt(String(formData.subRubro)) : null,
+        }),
+        direccion: formData.direccion ? String(formData.direccion).trim() : '',
         codigo_postal: formData.codigoPostal || null,
-  direccion_comercial: formData.direccionComercial || null,
-  codigo_postal_comercial: formData.codigoPostalComercial || null,
-  departamento: formData.departamento ? String(formData.departamento).trim() : null,
-  municipio: formData.municipio ? String(formData.municipio).trim() : null,
-  localidad: formData.localidad ? String(formData.localidad).trim() : null,
+        direccion_comercial: formData.direccionComercial || null,
+        codigo_postal_comercial: formData.codigoPostalComercial || null,
+        departamento: formData.departamento ? String(formData.departamento).trim() : null,
+        municipio: formData.municipio ? String(formData.municipio).trim() : null,
+        localidad: formData.localidad ? String(formData.localidad).trim() : null,
         geolocalizacion: formData.geolocalizacion || null,
         telefono: contactoPrincipal.telefono,
         correo: contactoPrincipal.email,
-  sitioweb: sitioWebValido,
+        sitioweb: sitioWebValido,
         instagram: formData.instagram || null,
         facebook: formData.facebook || null,
         linkedin: formData.linkedin || null,
-        exporta: formData.exporta === 'si' ? 'Sí' : (formData.exporta === 'en-proceso' ? 'En proceso' : 'No, solo ventas nacionales'),
+        contacto_principal_nombre: contactoPrincipal.nombre,
+        contacto_principal_cargo: contactoPrincipal.cargo,
+        contacto_principal_telefono: contactoPrincipal.telefono,
+        contacto_principal_email: contactoPrincipal.email,
+        tipo_empresa_valor: tipoEmpresaMap[tipoNegocio] || 'producto',
+        tipo_empresa: tipoEmpresaId,
+        id_usuario: user.id,
+        // Mapear valores de exporta a los valores que espera el backend
+        exporta: (() => {
+          if (!formData.exporta) return null
+          const exportaMap: Record<string, string> = {
+            'si': 'Sí',
+            'no': 'No, solo ventas nacionales', // Valor por defecto cuando es "no"
+            'en-proceso': 'Sí', // "En proceso" se mapea a "Sí"
+          }
+          return exportaMap[formData.exporta] || formData.exporta
+        })(),
         destinoexporta: formData.destinoExportacion || null,
-  interes_exportar: formData.exporta === 'no' ? (formData.interesExportar === 'si') : null,
-        importa: formData.importa === 'si',
-        certificadopyme: formData.certificadoMiPyme === 'si' || formData.certificadoMiPyme === 'vigente',
+        interes_exportar: (() => {
+          if (formData.exporta === 'no' || formData.exporta === 'No' || 
+              formData.exporta === 'No, solo ventas nacionales' || 
+              formData.exporta === 'No, solo ventas locales') {
+            return formData.interesExportar === 'si' ? true : false
+          }
+          return null
+        })(),
+        importa: formData.importa === 'si' || false,
+        certificadopyme: formData.certificadoMiPyme === 'si' || formData.certificadoMiPyme === 'vigente' || false,
         certificaciones: formData.certificaciones || null,
-        promo2idiomas: formData.materialPromocion === 'si',
+        promo2idiomas: formData.materialPromocion === 'si' || false,
         observaciones: formData.observaciones || null,
-  contacto_principal_nombre: contactoPrincipal.nombre,
-  contacto_principal_cargo: contactoPrincipal.cargo,
-  contacto_principal_telefono: contactoPrincipal.telefono,
-  contacto_principal_email: contactoPrincipal.email,
-  tipo_empresa_valor: tipoNegocio === 'productos' ? 'producto' : (tipoNegocio === 'servicios' ? 'servicio' : 'mixta'),
-  tipo_empresa: tipoEmpresaId,
-  id_usuario: user.id,
+        // Incluir contactos secundarios directamente en los datos de la empresa
+        // El modelo tiene campos para contacto secundario (índice 0) y terciario (índice 1)
+        ...(contactosSecundarios.length > 0 ? {
+          contacto_secundario_nombre: contactosSecundarios[0].nombre || null,
+          contacto_secundario_cargo: contactosSecundarios[0].cargo || null,
+          contacto_secundario_telefono: contactosSecundarios[0].telefono || null,
+          contacto_secundario_email: contactosSecundarios[0].email || null,
+        } : {}),
+        ...(contactosSecundarios.length > 1 ? {
+          contacto_terciario_nombre: contactosSecundarios[1].nombre || null,
+          contacto_terciario_cargo: contactosSecundarios[1].cargo || null,
+          contacto_terciario_telefono: contactosSecundarios[1].telefono || null,
+          contacto_terciario_email: contactosSecundarios[1].email || null,
+        } : {}),
+        // Incluir actividades de promoción en el campo JSON
+        actividades_promocion_internacional: actividadesPromocion.length > 0 
+          ? actividadesPromocion.map(a => ({
+              tipo: a.tipo,
+              lugar: a.lugar,
+              anio: a.anio,
+              observaciones: a.observaciones || '',
+            }))
+          : null,
       }
       
-      // Crear empresa según el tipo
+      // Crear empresa usando el endpoint unificado /empresas/
+      console.log("Creando empresa desde dashboard del administrador...")
+      console.log("Datos de empresa a enviar:", empresaData)
+      
       let empresaCreada: any
+      try {
+        empresaCreada = await api.post<any>('/empresas/', empresaData)
+        console.log("Empresa creada exitosamente:", empresaCreada)
+      } catch (error: any) {
+        console.error("Error al crear empresa:", error)
+        console.error("Detalles del error:", error.errorData || error.message)
+        throw error
+      }
       
-      if (tipoNegocio === 'productos') {
-  // ✅ Usar el nuevo endpoint unificado
-  empresaCreada = await api.post<any>('/empresas/', { ...baseEmpresaData, tipo_empresa_valor: 'producto' })
-        
-        // Crear productos
-        if (productos.length > 0 && productos[0].nombre) {
-          for (const producto of productos) {
-            if (producto.nombre) {
-              const productoData: any = {
-                empresa: empresaCreada.id,
-                nombre_producto: producto.nombre,
-                descripcion: producto.descripcion || '',
-          capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
-          unidad_medida: producto.unidadMedida || "kg",
-              }
-              const productoCreado = await api.post<any>('/empresas/productos/', productoData)
+      // Validar que la empresa se creó correctamente
+      if (!empresaCreada || !empresaCreada.id) {
+        console.error("Respuesta de creación de empresa inválida:", empresaCreada)
+        throw new Error('Error al crear la empresa: no se recibió un ID válido. Respuesta: ' + JSON.stringify(empresaCreada))
+      }
+      
+      console.log("ID de empresa creada:", empresaCreada.id)
+      
+      // Crear productos si existen
+      if (tipoNegocio !== 'servicios' && productos.length > 0 && productos[0].nombre) {
+        console.log(`Creando ${productos.length} producto(s) para empresa ID: ${empresaCreada.id}`)
+        for (const producto of productos) {
+          if (producto.nombre) {
+            const productoData: any = {
+              empresa: empresaCreada.id,
+              nombre_producto: producto.nombre,
+              descripcion: producto.descripcion || '',
+              capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
+              unidad_medida: producto.unidadMedida || "kg",
+            }
+            
+            const endpointProducto = tipoNegocio === 'ambos' 
+              ? '/empresas/productos-mixta/' 
+              : '/empresas/productos/'
+            
+            console.log(`Creando producto en ${endpointProducto} con datos:`, productoData)
+            const productoCreado = await api.post<any>(endpointProducto, productoData)
+            console.log("Producto creado:", productoCreado)
+            
+            // Crear posición arancelaria si existe
+            if (producto.posicionArancelaria) {
+              // Usar endpoint diferente según el tipo de empresa
+              const endpointPosicionArancelaria = tipoNegocio === 'ambos' 
+                ? '/empresas/posiciones-arancelarias-mixta/' 
+                : '/empresas/posiciones-arancelarias/'
               
-              // Crear posición arancelaria si existe
-              if (producto.posicionArancelaria) {
-                await api.post<any>('/empresas/posiciones-arancelarias/', {
-                  producto: productoCreado.id,
-                  codigo_arancelario: producto.posicionArancelaria,
-                })
-              }
+              await api.post<any>(endpointPosicionArancelaria, {
+                producto: productoCreado.id,
+                codigo_arancelario: producto.posicionArancelaria,
+              })
             }
           }
         }
-      } else if (tipoNegocio === 'servicios') {
-  // ✅ Usar el nuevo endpoint unificado
-  empresaCreada = await api.post<any>('/empresas/', { ...baseEmpresaData, tipo_empresa_valor: 'servicio' })
-        
-  // Crear servicios
-        // Crear servicios
-        if (servicios.length > 0 && servicios[0].descripcion) {
-          for (const servicio of servicios) {
-            if (servicio.descripcion) {
-      // ✅ Mapear tipo de servicio
-      const mapTipoServicio = (tipo: string) => {
-        const mapa: Record<string, string> = {
-          "Consultoría y servicios empresariales": "consultoria",
-          "Tecnologías de la información (IT)": "tecnologia_informacion",
-          "Diseño y marketing": "diseno_marketing",
-          "Capacitación y educación online": "capacitacion",
-          "Servicios culturales y eventos": "culturales_eventos",
-          "Investigación y desarrollo (I+D)": "investigacion_desarrollo",
-          "Turismo receptivo": "turismo",
-          "Otros": "otro"
-        }
-        return mapa[tipo] || 'otro'
       }
       
-      // ✅ Mapear sector atendido
-      const mapSector = (sector: string) => {
-        const mapa: Record<string, string> = {
-          "Minería": "mineria",
-          "Agroindustria": "agroindustria",
-          "Turismo": "turismo",
-          "Comercio": "comercio",
-          "Salud": "salud",
-          "PyMEs": "pymes",
-          "Otro": "otro"
-        }
-        return mapa[sector] || 'otro'
-      }
-      
-      // ✅ Mapear forma de contratación
-      const mapFormaContratacion = (forma: string) => {
-        const mapa: Record<string, string> = {
-          "Por hora": "hora",
-          "Proyecto": "proyecto",
-          "Mensual": "mensual",
-          "Otro": "otro"
-        }
-        return mapa[forma] || 'otro'
-      }
-      
-              const servicioData: any = {
-                empresa: empresaCreada.id,
-                nombre_servicio: servicio.descripcion,
-                descripcion: servicio.descripcion,
-        tipo_servicio: mapTipoServicio(servicio.tipoServicio[0]) || 'otro',
-        sector_atendido: mapSector(servicio.sectores[0]) || 'otro',
-                alcance_servicio: servicio.alcanceGeografico || 'local',
-                paises_trabaja: servicio.paisesDestino || null,
-                exporta_servicios: servicio.exportaServicios === 'si',
-                interes_exportar_servicios: servicio.interesExportar === 'si',
-                idiomas_trabajo: servicio.idiomas.join(', ') || null,
-        forma_contratacion: mapFormaContratacion(servicio.formaContratacion[0]) || null,
-                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
-                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+      // Crear servicios si existen
+      if (tipoNegocio !== 'productos' && servicios.length > 0 && servicios[0].descripcion) {
+        for (const servicio of servicios) {
+          if (servicio.descripcion) {
+            // Mapear tipo de servicio (usar los valores exactos que espera el backend)
+            const mapTipoServicio = (tipo: string) => {
+              const mapa: Record<string, string> = {
+                "Consultoría y servicios empresariales": "consultoria",
+                "Tecnologías de la información (IT)": "tecnologias", // ✅ Corregido: debe ser "tecnologias" no "tecnologia_informacion"
+                "Diseño y marketing": "diseno_marketing",
+                "Capacitación y educación online": "capacitacion",
+                "Servicios culturales y eventos": "culturales_eventos",
+                "Investigación y desarrollo (I+D)": "investigacion_desarrollo",
+                "Turismo receptivo": "turismo_receptivo", // ✅ Corregido: debe ser "turismo_receptivo" no "turismo"
+                "Otros": "otro"
               }
-              await api.post<any>('/empresas/servicios/', servicioData)
+              return mapa[tipo] || 'otro'
             }
+            
+            // Mapear sector atendido
+            const mapSector = (sector: string) => {
+              const mapa: Record<string, string> = {
+                "Minería": "mineria",
+                "Agroindustria": "agroindustria",
+                "Turismo": "turismo",
+                "Comercio": "comercio",
+                "Salud": "salud",
+                "PyMEs": "pymes",
+                "Otro": "otro"
+              }
+              return mapa[sector] || 'otro'
+            }
+            
+            // Mapear forma de contratación
+            const mapFormaContratacion = (forma: string) => {
+              const mapa: Record<string, string> = {
+                "Por hora": "hora",
+                "Proyecto": "proyecto",
+                "Mensual": "mensual",
+                "Otro": "otro"
+              }
+              return mapa[forma] || 'otro'
+            }
+            
+            const servicioData: any = {
+              empresa: empresaCreada.id,
+              nombre_servicio: servicio.descripcion,
+              descripcion: servicio.descripcion,
+              tipo_servicio: servicio.tipoServicio.length > 0 ? mapTipoServicio(servicio.tipoServicio[0]) : 'otro',
+              sector_atendido: servicio.sectores.length > 0 ? mapSector(servicio.sectores[0]) : 'otro',
+              alcance_servicio: servicio.alcanceGeografico || 'local',
+              paises_trabaja: servicio.paisesDestino || null,
+              exporta_servicios: servicio.exportaServicios === 'si',
+              interes_exportar_servicios: servicio.interesExportar === 'si',
+              idiomas_trabajo: servicio.idiomas.join(', ') || null,
+              forma_contratacion: servicio.formaContratacion.length > 0 ? mapFormaContratacion(servicio.formaContratacion[0]) : null,
+              certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
+              tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+            }
+            
+            const endpointServicio = tipoNegocio === 'ambos' 
+              ? '/empresas/servicios-mixta/' 
+              : '/empresas/servicios/'
+            
+            await api.post<any>(endpointServicio, servicioData)
           }
         }
-      } else {
-  // ✅ Usar el nuevo endpoint unificado
-  empresaCreada = await api.post<any>('/empresas/', { ...baseEmpresaData, tipo_empresa_valor: 'mixta' })
-        
-        // Crear productos
-        if (productos.length > 0 && productos[0].nombre) {
-          for (const producto of productos) {
-            if (producto.nombre) {
-              const productoData: any = {
-                empresa: empresaCreada.id,
-                nombre_producto: producto.nombre,
-                descripcion: producto.descripcion || '',
-          capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
-          unidad_medida: producto.unidadMedida || "kg",
-        }
-        const productoCreado = await api.post<any>('/empresas/productos-mixta/', productoData)
-        
-        // Crear posición arancelaria si existe
-        if (producto.posicionArancelaria) {
-          await api.post<any>('/empresas/posiciones-arancelarias/', {
-            producto: productoCreado.id,
-            codigo_arancelario: producto.posicionArancelaria,
-          })
-        }
-      }
-    }
-  }
-  
-// Crear servicios (en empresas mixtas)
-        if (servicios.length > 0 && servicios[0].descripcion) {
-          for (const servicio of servicios) {
-            if (servicio.descripcion) {
-      // ✅ Mapear tipo de servicio
-      const mapTipoServicio = (tipo: string) => {
-        const mapa: Record<string, string> = {
-          "Consultoría y servicios empresariales": "consultoria",
-          "Tecnologías de la información (IT)": "tecnologia_informacion",
-          "Diseño y marketing": "diseno_marketing",
-          "Capacitación y educación online": "capacitacion",
-          "Servicios culturales y eventos": "culturales_eventos",
-          "Investigación y desarrollo (I+D)": "investigacion_desarrollo",
-          "Turismo receptivo": "turismo",
-          "Otros": "otro"
-        }
-        return mapa[tipo] || 'otro'
       }
       
-      // ✅ Mapear sector atendido
-      const mapSector = (sector: string) => {
-        const mapa: Record<string, string> = {
-          "Minería": "mineria",
-          "Agroindustria": "agroindustria",
-          "Turismo": "turismo",
-          "Comercio": "comercio",
-          "Salud": "salud",
-          "PyMEs": "pymes",
-          "Otro": "otro"
-        }
-        return mapa[sector] || 'otro'
-      }
-      
-      // ✅ Mapear forma de contratación
-      const mapFormaContratacion = (forma: string) => {
-        const mapa: Record<string, string> = {
-          "Por hora": "hora",
-          "Proyecto": "proyecto",
-          "Mensual": "mensual",
-          "Otro": "otro"
-        }
-        return mapa[forma] || 'otro'
-      }
-      
-              const servicioData: any = {
-                empresa: empresaCreada.id,
-                nombre_servicio: servicio.descripcion,
-                descripcion: servicio.descripcion,
-        tipo_servicio: mapTipoServicio(servicio.tipoServicio[0]) || 'otro',
-        sector_atendido: mapSector(servicio.sectores[0]) || 'otro',
-                alcance_servicio: servicio.alcanceGeografico || 'local',
-                paises_trabaja: servicio.paisesDestino || null,
-                exporta_servicios: servicio.exportaServicios === 'si',
-                interes_exportar_servicios: servicio.interesExportar === 'si',
-                idiomas_trabajo: servicio.idiomas.join(', ') || null,
-        forma_contratacion: mapFormaContratacion(servicio.formaContratacion[0]) || null,
-                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
-                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
-              }
-              await api.post<any>('/empresas/servicios-mixta/', servicioData)
-            }
-          }
-}
-}
-
-// Crear contactos secundarios si existen
-for (const contacto of contactosSecundarios) {
-  if (contacto.nombre && contacto.email) {
-    await api.post<any>('/empresas/contactos/', {
-      empresa: empresaCreada.id,
-      nombre: contacto.nombre,
-      cargo: contacto.cargo,
-      telefono: contacto.telefono,
-      email: contacto.email,
-    })
-  }
-}
-
-// Crear actividades de promoción internacional si existen
-for (const actividad of actividadesPromocion) {
-  if (actividad.lugar && actividad.anio) {
-    await api.post<any>('/empresas/actividades-promocion/', {
-      empresa: empresaCreada.id,
-      tipo_actividad: actividad.tipo,
-      lugar: actividad.lugar,
-      anio: parseInt(actividad.anio),
-      observaciones: actividad.observaciones || null,
-    })
-        }
-      }
+      // Los contactos secundarios y actividades de promoción ya se incluyeron
+      // en los datos de la empresa al crearla, no necesitan endpoints separados
       
       toast({
         title: "Éxito",
         description: "Empresa creada exitosamente",
       })
       
-// Resetear el formulario
-setFormData({
-  rubro: "",
-  subRubro: "",
-  rubroProducto: "",
-  subRubroProducto: "",
-  rubroServicio: "",
-  subRubroServicio: "",
-  razonSocial: "",
-  direccion: "",
-  departamento: "",
-  municipio: "",
-  localidad: "",
-  direccionComercial: "",
-  codigoPostalComercial: "",
-  paginaWeb: "",
-  observaciones: "",
-  certificadoMiPyme: "",
-  exporta: "",
-  destinoExportacion: "",
-  interesExportar: "",
-  materialPromocion: "",
-  certificaciones: "",
-  cuit: "",
-  importa: "",
-  geolocalizacion: "",
-  nombreFantasia: "",
-  tipoSociedad: "",
-  codigoPostal: "",
-  brochureUrl: "",
-  catalogoPdf: null,
-  instagram: "",
-  facebook: "",
-  linkedin: "",
-})
-setContactoPrincipal({
-  nombre: "",
-  cargo: "",
-  telefono: "",
-  email: "",
-})
-setContactosSecundarios([])
-setProductos([{ id: "1", nombre: "", posicionArancelaria: "", descripcion: "", capacidadProductiva: "", unidadMedida: "kg" }])
-setServicios([{ id: "1", tipoServicio: [], descripcion: "", sectores: [], alcanceGeografico: "", paisesDestino: "", exportaServicios: "", interesExportar: "", idiomas: [], formaContratacion: [], certificacionesTecnicas: "", equipoTecnico: "" }])
-setActividadesPromocion([])
-setStep(1)
-setTipoNegocio("productos")
-
-// Redirigir a la lista de empresas
-router.push('/dashboard/empresas')
+      // Resetear el formulario
+      setFormData({
+        rubro: "",
+        subRubro: "",
+        rubroProducto: "",
+        subRubroProducto: "",
+        rubroServicio: "",
+        subRubroServicio: "",
+        razonSocial: "",
+        direccion: "",
+        departamento: "",
+        municipio: "",
+        localidad: "",
+        direccionComercial: "",
+        codigoPostalComercial: "",
+        paginaWeb: "",
+        observaciones: "",
+        certificadoMiPyme: "",
+        exporta: "",
+        destinoExportacion: "",
+        interesExportar: "",
+        materialPromocion: "",
+        certificaciones: "",
+        cuit: "",
+        importa: "",
+        geolocalizacion: "",
+        nombreFantasia: "",
+        tipoSociedad: "",
+        codigoPostal: "",
+        brochureUrl: "",
+        catalogoPdf: null,
+        instagram: "",
+        facebook: "",
+        linkedin: "",
+      })
+      setContactoPrincipal({
+        nombre: "",
+        cargo: "",
+        telefono: "",
+        email: "",
+      })
+      setContactosSecundarios([])
+      setProductos([{ id: "1", nombre: "", posicionArancelaria: "", descripcion: "", capacidadProductiva: "", unidadMedida: "kg" }])
+      setServicios([{ id: "1", tipoServicio: [], descripcion: "", sectores: [], alcanceGeografico: "", paisesDestino: "", exportaServicios: "", interesExportar: "", idiomas: [], formaContratacion: [], certificacionesTecnicas: "", equipoTecnico: "" }])
+      setActividadesPromocion([])
+      setStep(1)
+      setTipoNegocio("productos")
+      
+      // Redirigir a la lista de empresas
+      router.push('/dashboard/empresas')
     } catch (error: any) {
       if (!handleAuthError(error)) {
         console.error("Error al crear empresa:", error)
+        
+        // Mejorar el mensaje de error para casos comunes
+        let errorTitle = "Error al crear la empresa"
+        let errorDescription = error.message || "Por favor, revisa los datos ingresados e intenta nuevamente."
+        
+        // Detectar errores específicos
+        const errorMessage = String(error.message || '').toLowerCase()
+        if (errorMessage.includes('email') && (errorMessage.includes('already') || errorMessage.includes('exists') || errorMessage.includes('ya existe') || errorMessage.includes('duplicado'))) {
+          errorTitle = "Correo electrónico ya registrado"
+          errorDescription = "Este correo electrónico ya está registrado en el sistema. Por favor, utiliza otro correo."
+        } else if (errorMessage.includes('cuit') && (errorMessage.includes('already') || errorMessage.includes('exists') || errorMessage.includes('ya existe'))) {
+          errorTitle = "CUIT ya registrado"
+          errorDescription = "Este CUIT ya está registrado en el sistema. Por favor, verifica el número ingresado."
+        } else if (errorMessage.includes('validation') || errorMessage.includes('validación')) {
+          errorTitle = "Error de validación"
+          errorDescription = error.message || "Por favor, verifica que todos los campos estén completos y sean válidos."
+        }
+        
         toast({
-          title: "Error",
-          description: error.message || "Error al crear la empresa. Por favor, revisa los datos e intenta nuevamente.",
+          title: errorTitle,
+          description: errorDescription,
           variant: "destructive",
         })
       }

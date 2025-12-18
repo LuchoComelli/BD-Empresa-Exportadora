@@ -20,6 +20,7 @@ from .models import (
     ProductoEmpresaMixta,
     ServicioEmpresaMixta,
     PosicionArancelaria,
+    PosicionArancelariaMixta,
     MatrizClasificacionExportador,
 )
 from .serializers import (
@@ -41,6 +42,7 @@ from .serializers import (
     ProductoEmpresaMixtaSerializer,
     ServicioEmpresaMixtaSerializer,
     PosicionArancelariaSerializer,
+    PosicionArancelariaMixtaSerializer,
     MatrizClasificacionExportadorSerializer,
 )
 from apps.core.permissions import CanManageEmpresas, IsOwnerOrAdmin
@@ -327,6 +329,8 @@ class EmpresaMixtaViewSet(viewsets.ModelViewSet):
     queryset = EmpresaMixta.objects.select_related(
         "tipo_empresa",
         "id_rubro",
+        "id_subrubro_producto",
+        "id_subrubro_servicio",
         "departamento",
         "municipio",
         "localidad",
@@ -481,6 +485,24 @@ class PosicionArancelariaViewSet(viewsets.ModelViewSet):
     ]
     ordering_fields = ["codigo_arancelario"]
     ordering = ["codigo_arancelario"]
+
+
+class PosicionArancelariaMixtaViewSet(viewsets.ModelViewSet):
+    """ViewSet para posiciones arancelarias de productos mixtos"""
+
+    queryset = PosicionArancelariaMixta.objects.select_related(
+        "producto", "producto__empresa"
+    ).all()
+    serializer_class = PosicionArancelariaMixtaSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filterset_fields = ["producto", "codigo_arancelario", "es_principal"]
+    search_fields = [
+        "codigo_arancelario",
+        "descripcion_arancelaria",
+        "producto__nombre_producto",
+    ]
+    ordering_fields = ["codigo_arancelario", "es_principal"]
+    ordering = ["-es_principal", "codigo_arancelario"]
 
 
 class MatrizClasificacionExportadorViewSet(viewsets.ModelViewSet):
@@ -755,6 +777,9 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     queryset = Empresa.objects.select_related(
         "tipo_empresa",
         "id_rubro",
+        "id_subrubro",
+        "id_subrubro_producto",
+        "id_subrubro_servicio",
         "departamento",
         "municipio",
         "localidad",
