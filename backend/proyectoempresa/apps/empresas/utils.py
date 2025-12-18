@@ -1,12 +1,14 @@
 from django.http import HttpResponse
 from reportlab.lib.pagesizes import letter, A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch, cm
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import datetime
 from io import BytesIO
+import os
+from django.conf import settings
 
 def extraer_actividades_promocion(empresa):
     """
@@ -85,6 +87,48 @@ def normalize_text(text):
             normalized_words.append(word.capitalize())
     
     return ' '.join(normalized_words)
+
+def format_geolocalizacion_as_link(geolocalizacion_value):
+    """
+    Convierte coordenadas de geolocalización en un enlace clickeable de Google Maps
+    """
+    if not geolocalizacion_value or geolocalizacion_value == '-':
+        return '-'
+    
+    # Intentar parsear las coordenadas
+    try:
+        # Si es un string, intentar parsearlo
+        if isinstance(geolocalizacion_value, str):
+            # Formato esperado: "lat, lng" o "lat,lng"
+            parts = geolocalizacion_value.replace(' ', '').split(',')
+            if len(parts) == 2:
+                lat = float(parts[0])
+                lng = float(parts[1])
+            else:
+                return str(geolocalizacion_value)
+        elif isinstance(geolocalizacion_value, (dict, list)):
+            # Si es un diccionario o lista, extraer lat y lng
+            if isinstance(geolocalizacion_value, dict):
+                lat = float(geolocalizacion_value.get('lat', geolocalizacion_value.get('latitude', 0)))
+                lng = float(geolocalizacion_value.get('lng', geolocalizacion_value.get('longitude', 0)))
+            else:
+                if len(geolocalizacion_value) >= 2:
+                    lat = float(geolocalizacion_value[0])
+                    lng = float(geolocalizacion_value[1])
+                else:
+                    return str(geolocalizacion_value)
+        else:
+            return str(geolocalizacion_value)
+        
+        # Crear el enlace de Google Maps
+        google_maps_url = f"https://www.google.com/maps?q={lat},{lng}"
+        # Crear un Paragraph con enlace clickeable
+        # En ReportLab, usamos el tag <link> dentro del texto HTML
+        link_text = f'<link href="{google_maps_url}" color="blue"><u>{lat}, {lng}</u></link>'
+        return link_text
+    except (ValueError, TypeError, AttributeError, IndexError):
+        # Si no se puede parsear, devolver el valor original
+        return str(geolocalizacion_value)
 
 def generate_empresas_pdf(empresas, campos_seleccionados, tipo_empresa):
     """
@@ -872,13 +916,238 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
     # Buffer para el PDF
     buffer = BytesIO()
     
-    doc = SimpleDocTemplate(
+    # Obtener rutas de las imágenes - buscar en múltiples ubicaciones
+    possible_paths = [
+        os.path.join(settings.BASE_DIR, 'static', 'images'),
+        os.path.join(settings.BASE_DIR.parent.parent, 'backend', 'proyectoempresa', 'static', 'images'),
+        os.path.join(settings.BASE_DIR.parent.parent),  # Raíz del proyecto
+    ]
+    
+    header_footer_path = None
+    watermark_path = None
+    
+    for path_base in possible_paths:
+        hf_path = os.path.join(path_base, 'header_y_footer.png')
+        wm_path = os.path.join(path_base, 'marca_de_agua.png')
+        
+        if header_footer_path is None and os.path.exists(hf_path):
+            header_footer_path = hf_path
+        if watermark_path is None and os.path.exists(wm_path):
+            watermark_path = wm_path
+        
+        if header_footer_path and watermark_path:
+            break
+    
+    # Verificar que las imágenes existan
+    header_footer_exists = header_footer_path and os.path.exists(header_footer_path)
+    watermark_exists = watermark_path and os.path.exists(watermark_path)
+    
+    # Función para agregar marca de agua (se usa en todas las páginas)
+    def add_watermark(canvas):
+        """Agrega marca de agua en el centro de la página"""
+        if not watermark_exists:
+            return
+        
+        try:
+            page_width, page_height = landscape(A4)
+            # Calcular posición centrada
+            watermark_width = 15 * cm
+            watermark_height = 15 * cm
+            x = (page_width - watermark_width) / 2
+            y = (page_height - watermark_height) / 2
+            
+            # Agregar imagen con opacidad (marca de agua)
+            # Usar PIL para ajustar la opacidad si está disponible
+            try:
+                from PIL import Image as PILImage
+                from PIL import ImageEnhance
+                
+                # Cargar imagen y ajustar opacidad
+                img = PILImage.open(watermark_path)
+                # Convertir a RGBA si no lo es
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                # Crear una nueva imagen con opacidad reducida
+                alpha = img.split()[3] if len(img.split()) == 4 else None
+                if alpha:
+                    # Reducir opacidad al 15%
+                    alpha = alpha.point(lambda p: int(p * 0.15))
+                    img.putalpha(alpha)
+                
+                # Guardar temporalmente
+                import tempfile
+                temp_path = os.path.join(tempfile.gettempdir(), f'watermark_temp_{os.getpid()}.png')
+                img.save(temp_path, 'PNG')
+                
+                canvas.drawImage(
+                    temp_path,
+                    x, y,
+                    width=watermark_width,
+                    height=watermark_height,
+                    preserveAspectRatio=True,
+                    mask='auto'
+                )
+                
+                # Limpiar archivo temporal
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+            except ImportError:
+                # Si PIL no está disponible, usar método alternativo
+                canvas.saveState()
+                # Dibujar rectángulo semitransparente primero
+                canvas.setFillColor(colors.white)
+                canvas.setFillAlpha(0.85)
+                canvas.rect(x, y, watermark_width, watermark_height, fill=1, stroke=0)
+                canvas.restoreState()
+                
+                # Dibujar imagen encima (con opacidad reducida visualmente)
+                canvas.drawImage(
+                    watermark_path,
+                    x, y,
+                    width=watermark_width,
+                    height=watermark_height,
+                    preserveAspectRatio=True,
+                    mask='auto'
+                )
+        except Exception as e:
+            print(f"Error agregando marca de agua: {e}")
+    
+    # Función para primera página: header + marca de agua
+    def on_first_page(canvas, doc):
+        """Agrega header y marca de agua solo en la primera página"""
+        page_width, page_height = landscape(A4)
+        
+        # Agregar marca de agua
+        add_watermark(canvas)
+        
+        # Agregar header en la parte superior (más pequeño)
+        if header_footer_exists:
+            try:
+                header_height = 2.0 * cm  # Reducido de 2.5cm a 2.0cm
+                header_width = page_width
+                canvas.drawImage(
+                    header_footer_path,
+                    0, page_height - header_height,
+                    width=header_width,
+                    height=header_height,
+                    preserveAspectRatio=True,
+                    mask='auto'
+                )
+            except Exception as e:
+                print(f"Error agregando header: {e}")
+    
+    # Variable para rastrear el número máximo de página visto
+    max_page_seen = {'value': 0}
+    footer_added = {'value': False}
+    total_pages_info = {'value': None}
+    
+    # Función auxiliar para agregar footer y contacto
+    def _add_footer_and_contact(canvas, page_width, footer_height):
+        """Agrega información de contacto y footer"""
+        try:
+            # Agregar información de contacto arriba del footer (centrado)
+            contacto_text = [
+                "Contacto: Dirección de promoción de Intercambio comercial internacional y regional",
+                "Mail: intercambiocomercial@catamarca.gov.ar",
+                "Dirección: Sarmiento 589 - 6to. piso"
+            ]
+            
+            # Calcular posición para el texto de contacto (arriba del footer)
+            contacto_y_start = footer_height + 1.5 * cm
+            line_height = 0.5 * cm
+            
+            # Dibujar cada línea de contacto centrada
+            canvas.saveState()
+            canvas.setFont("Helvetica", 9)
+            canvas.setFillColor(colors.HexColor('#222A59'))
+            
+            for i, line in enumerate(contacto_text):
+                text_width = canvas.stringWidth(line, "Helvetica", 9)
+                x_centered = (page_width - text_width) / 2
+                y_position = contacto_y_start - (i * line_height)
+                canvas.drawString(x_centered, y_position, line)
+            
+            canvas.restoreState()
+            
+            # Agregar footer centrado
+            footer_width = page_width * 0.8  # 80% del ancho para centrarlo
+            footer_x = (page_width - footer_width) / 2  # Centrar horizontalmente
+            
+            canvas.drawImage(
+                header_footer_path,
+                footer_x, 0,
+                width=footer_width,
+                height=footer_height,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
+        except Exception as e:
+            print(f"Error agregando footer y contacto: {e}")
+    
+    # Función para páginas intermedias: marca de agua + footer si es última página
+    def on_later_pages(canvas, doc):
+        """Agrega marca de agua y footer si es la última página"""
+        add_watermark(canvas)
+        
+        # Detectar si es la última página y agregar footer (solo una vez)
+        if header_footer_exists and not footer_added['value']:
+            try:
+                page_width, page_height = landscape(A4)
+                footer_height = 2.0 * cm
+                current_page = canvas.getPageNumber()
+                
+                # Actualizar el número máximo de página visto
+                max_page_seen['value'] = max(max_page_seen['value'], current_page)
+                
+                # Intentar obtener el número total de páginas
+                is_last_page = False
+                try:
+                    # Intentar obtener el total de páginas
+                    total_pages = canvas.getPageCount()
+                    if total_pages and total_pages > 0:
+                        is_last_page = (current_page == total_pages)
+                        total_pages_info['value'] = total_pages
+                    elif total_pages_info['value']:
+                        # Usar el valor almacenado si getPageCount() no funciona
+                        is_last_page = (current_page == total_pages_info['value'])
+                except (AttributeError, TypeError, Exception):
+                    # Si no podemos obtener el total, intentar otra estrategia
+                    if total_pages_info['value']:
+                        # Usar el valor almacenado
+                        is_last_page = (current_page == total_pages_info['value'])
+                    else:
+                        # Intentar usar atributos internos de ReportLab
+                        try:
+                            if hasattr(canvas, '_pageNumber') and hasattr(canvas, '_pageCount'):
+                                total_pages = canvas._pageCount
+                                if total_pages:
+                                    is_last_page = (current_page == total_pages)
+                                    total_pages_info['value'] = total_pages
+                        except:
+                            pass
+                
+                # Si es la última página, agregar footer y contacto
+                if is_last_page:
+                    footer_added['value'] = True
+                    _add_footer_and_contact(canvas, page_width, footer_height)
+            except Exception as e:
+                print(f"Error en on_later_pages: {e}")
+    
+    # Clase personalizada (simple, sin override de build)
+    class CustomDocTemplate(SimpleDocTemplate):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+    
+    doc = CustomDocTemplate(
         buffer,
         pagesize=landscape(A4),
         rightMargin=1*cm,
         leftMargin=1*cm,
-        topMargin=1.5*cm,
-        bottomMargin=1.5*cm,
+        topMargin=2.5*cm,  # Reducido para header más pequeño (2.0cm)
+        bottomMargin=4.5*cm,  # Aumentado para footer + texto de contacto
         title='Exportación de Empresas'
     )
     
@@ -969,6 +1238,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                     for campo in grupo_campos:
                         value = get_field_value(empresa, campo['field'])
                         
+                        # Manejar geolocalización como enlace de Google Maps
+                        if campo['field'] == 'geolocalizacion':
+                            link_text = format_geolocalizacion_as_link(value)
+                            if link_text != '-':
+                                row.append(Paragraph(link_text, styles['Normal']))
+                            else:
+                                row.append(Paragraph('-', styles['Normal']))
+                            continue
+                        
                         if isinstance(value, bool):
                             value = 'Sí' if value else 'No'
                         elif value is None:
@@ -1028,6 +1306,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                     row = [tipo]
                     for campo in grupo_campos:
                         value = get_field_value(empresa, campo['field'])
+                        
+                        # Manejar geolocalización como enlace de Google Maps
+                        if campo['field'] == 'geolocalizacion':
+                            link_text = format_geolocalizacion_as_link(value)
+                            if link_text != '-':
+                                row.append(Paragraph(link_text, styles['Normal']))
+                            else:
+                                row.append(Paragraph('-', styles['Normal']))
+                            continue
                         
                         if isinstance(value, bool):
                             value = 'Sí' if value else 'No'
@@ -1093,6 +1380,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                     for campo in grupo_campos:
                         value = get_field_value(empresa, campo['field'])
                         
+                        # Manejar geolocalización como enlace de Google Maps
+                        if campo['field'] == 'geolocalizacion':
+                            link_text = format_geolocalizacion_as_link(value)
+                            if link_text != '-':
+                                row.append(Paragraph(link_text, styles['Normal']))
+                            else:
+                                row.append(Paragraph('-', styles['Normal']))
+                            continue
+                        
                         if isinstance(value, bool):
                             value = 'Sí' if value else 'No'
                         elif value is None or value == '-':
@@ -1144,6 +1440,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                     row = [Paragraph(normalize_text(empresa.razon_social), styles['Normal'])]
                     for campo in grupo_campos:
                         value = get_field_value(empresa, campo['field'])
+                        
+                        # Manejar geolocalización como enlace de Google Maps
+                        if campo['field'] == 'geolocalizacion':
+                            link_text = format_geolocalizacion_as_link(value)
+                            if link_text != '-':
+                                row.append(Paragraph(link_text, styles['Normal']))
+                            else:
+                                row.append(Paragraph('-', styles['Normal']))
+                            continue
                         
                         if isinstance(value, bool):
                             value = 'Sí' if value else 'No'
@@ -1209,6 +1514,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                     for campo in grupo_campos:
                         value = get_field_value(empresa, campo['field'])
                         
+                        # Manejar geolocalización como enlace de Google Maps
+                        if campo['field'] == 'geolocalizacion':
+                            link_text = format_geolocalizacion_as_link(value)
+                            if link_text != '-':
+                                row.append(Paragraph(link_text, styles['Normal']))
+                            else:
+                                row.append(Paragraph('-', styles['Normal']))
+                            continue
+                        
                         if isinstance(value, bool):
                             value = 'Sí' if value else 'No'
                         elif value is None or value == '-':
@@ -1263,6 +1577,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                     for campo in grupo_campos:
                         value = get_field_value(empresa, campo['field'])
                         
+                        # Manejar geolocalización como enlace de Google Maps
+                        if campo['field'] == 'geolocalizacion':
+                            link_text = format_geolocalizacion_as_link(value)
+                            if link_text != '-':
+                                row.append(Paragraph(link_text, styles['Normal']))
+                            else:
+                                row.append(Paragraph('-', styles['Normal']))
+                            continue
+                        
                         if isinstance(value, bool):
                             value = 'Sí' if value else 'No'
                         elif value is None or value == '-':
@@ -1304,18 +1627,25 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
                 if i + max_cols - 1 < len(campos_comercial):
                     story.append(Spacer(1, 0.3*cm))
     
-    # Footer
-    story.append(Spacer(1, 0.3*cm))
-    footer_text = Paragraph(
-        "Dirección de Intercambio Comercial Internacional y Regional - "
-        "San Martín 320, San Fernando del Valle de Catamarca - "
-        "Tel: (0383) 4437390",
-        footer_style
-    )
-    story.append(footer_text)
+    # Footer (el footer visual se agrega en la función callback)
+    # Mantener el footer de texto solo si no hay imagen de footer
+    if not header_footer_exists:
+        story.append(Spacer(1, 0.3*cm))
+        footer_text = Paragraph(
+            "Dirección de Intercambio Comercial Internacional y Regional - "
+            "San Martín 320, San Fernando del Valle de Catamarca - "
+            "Tel: (0383) 4437390",
+            footer_style
+        )
+        story.append(footer_text)
     
-    # Construir PDF
-    doc.build(story)
+    # Resetear contadores antes de construir
+    max_page_seen['value'] = 0
+    footer_added['value'] = False
+    total_pages_info['value'] = None
+    
+    # Construir PDF con header solo en primera página, marca de agua en todas, footer solo en última
+    doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
     
     # Obtener PDF
     pdf = buffer.getvalue()

@@ -320,68 +320,30 @@ export function ExportEmpresaDialog({ open, onClose, empresa }: ExportEmpresaDia
     }
 
     try {
-      // Para PDF, crear un documento HTML simple que se puede imprimir
-      const headers = selectedFields.map(fieldId => {
-        const field = availableFields.find(f => f.id === fieldId)
-        return field?.label || fieldId
-      })
-
-      const rows = selectedFields.map(fieldId => {
-        return getFieldValue(empresa, fieldId)
-      })
-
-      // Crear HTML para el PDF
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>${empresa.razon_social}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { color: #222A59; border-bottom: 2px solid #3259B5; padding-bottom: 10px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th { background-color: #3259B5; color: white; padding: 10px; text-align: left; }
-            td { padding: 10px; border-bottom: 1px solid #ddd; }
-            tr:nth-child(even) { background-color: #f9f9f9; }
-          </style>
-        </head>
-        <body>
-          <h1>${empresa.razon_social}</h1>
-          <table>
-            <thead>
-              <tr>
-                <th>Campo</th>
-                <th>Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${headers.map((header, index) => `
-                <tr>
-                  <td><strong>${header}</strong></td>
-                  <td>${rows[index] || 'N/A'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </body>
-        </html>
-      `
-
-      // Crear blob y abrir en nueva ventana para imprimir
-      const blob = new Blob([htmlContent], { type: "text/html" })
-      const url = URL.createObjectURL(blob)
-      const printWindow = window.open(url, '_blank')
+      // Importar API
+      const api = (await import("@/lib/api")).default
       
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print()
-        }
+      // Usar el mismo endpoint del backend para generar PDF con header, footer y marca de agua
+      const blob = await api.exportEmpresasSeleccionadasPDF([empresa.id], selectedFields)
+      
+      // Verificar que sea un PDF
+      if (!blob.type.includes('pdf') && blob.type !== 'application/pdf') {
+        console.warn("El blob no es un PDF, tipo recibido:", blob.type)
       }
+      
+      // Crear URL del blob y descargar
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `empresa_${empresa.razon_social.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split("T")[0]}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
       
       toast({
         title: "Éxito",
-        description: "PDF generado. Usa la función de impresión de tu navegador para guardarlo como PDF.",
+        description: "PDF exportado correctamente con header, footer y marca de agua",
       })
     } catch (error: any) {
       console.error("Error exporting PDF:", error)

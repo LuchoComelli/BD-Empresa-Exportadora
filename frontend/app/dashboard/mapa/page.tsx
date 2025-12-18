@@ -59,6 +59,7 @@ export default function MapaPage() {
   const [selectedDepartamento, setSelectedDepartamento] = useState<string | null>(null)
   const [exportingMap, setExportingMap] = useState(false)
   const [exportingDept, setExportingDept] = useState(false)
+  const [isInitializingMap, setIsInitializingMap] = useState(false)
 
   // Agregar estilos CSS para el mapa - CORREGIDO
   useEffect(() => {
@@ -82,7 +83,7 @@ export default function MapaPage() {
         width: 100% !important;
         height: 100% !important;
         min-height: 500px !important;
-        touch-action: none !important;
+        touch-action: pan-x pan-y !important;
         cursor: grab !important;
       }
       
@@ -283,16 +284,20 @@ export default function MapaPage() {
 
   // Cargar y configurar el mapa - SIMPLIFICADO
   useEffect(() => {
-    if (loading || empresas.length === 0) return
+    // No inicializar si está cargando, no hay empresas, o ya se está inicializando
+    if (loading || empresas.length === 0 || isInitializingMap) return
 
     const loadMap = async () => {
       try {
+        setIsInitializingMap(true)
+        
         const leafletModule = await import("leaflet")
         const L = (leafletModule as any).default || leafletModule
         const heatModule = await import("leaflet.heat")
 
         if (!L || !L.map) {
           console.error('Leaflet no se pudo cargar correctamente')
+          setIsInitializingMap(false)
           return
         }
 
@@ -315,86 +320,163 @@ export default function MapaPage() {
           })
         }
 
+        // Esperar a que el DOM esté listo
         await new Promise(resolve => setTimeout(resolve, 100))
 
         const mapElement = document.getElementById("empresas-map")
         if (!mapElement) {
           console.error('Map element not found')
+          setIsInitializingMap(false)
           return
         }
 
-        // Limpiar mapa anterior si existe
-        if (map) {
-          try {
-            map.eachLayer((layer: any) => {
-              try {
-                map.removeLayer(layer)
-              } catch (e) {}
-            })
-            map.remove()
-          } catch (e) {
-            console.warn('Error removing existing map:', e)
-          }
-          setMap(null)
-          setMarkers([])
+        // Verificar que el elemento tenga dimensiones antes de inicializar
+        const checkElementReady = () => {
+          if (!mapElement) return false
+          const rect = mapElement.getBoundingClientRect()
+          const hasDimensions = rect.width > 0 && rect.height > 0
+          const hasOffset = mapElement.offsetWidth > 0 && mapElement.offsetHeight > 0
+          const isVisible = mapElement.offsetParent !== null || mapElement.style.display !== 'none'
+          return hasDimensions && hasOffset && isVisible
         }
 
-        // Limpiar contenedor más agresivamente
-        const leafletProps = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet']
-        leafletProps.forEach(prop => {
-          if ((mapElement as any)[prop]) {
-            delete (mapElement as any)[prop]
+        // Esperar hasta que el elemento tenga dimensiones
+        let attempts = 0
+        while (!checkElementReady() && attempts < 20) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          attempts++
+        }
+
+        if (!checkElementReady()) {
+          console.error('Map element does not have dimensions or is not visible', {
+            width: mapElement.offsetWidth,
+            height: mapElement.offsetHeight,
+            rect: mapElement.getBoundingClientRect()
+          })
+          setIsInitializingMap(false)
+          return
+        }
+
+        // Asegurar que el elemento tenga dimensiones explícitas
+        if (mapElement.offsetWidth === 0 || mapElement.offsetHeight === 0) {
+          console.warn('Map element has zero dimensions, setting explicit size')
+          const computedStyle = window.getComputedStyle(mapElement)
+          if (!computedStyle.width || computedStyle.width === '0px' || computedStyle.width === 'auto') {
+            mapElement.style.width = '100%'
           }
-        })
-        mapElement.innerHTML = ''
-        
-        await new Promise(resolve => setTimeout(resolve, 100))
+          if (!computedStyle.height || computedStyle.height === '0px' || computedStyle.height === 'auto') {
+            mapElement.style.height = '500px'
+          }
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+
+        // Verificar si el contenedor ya tiene un mapa inicializado
+        if ((mapElement as any)._leaflet_id) {
+          console.warn('Map container already initialized, cleaning up first...')
+          // Limpiar mapa anterior si existe
+          if (map) {
+            try {
+              map.eachLayer((layer: any) => {
+                try {
+                  map.removeLayer(layer)
+                } catch (e) {}
+              })
+              map.remove()
+            } catch (e) {
+              console.warn('Error removing existing map:', e)
+            }
+            setMap(null)
+            setMarkers([])
+          }
+          
+          // Limpiar todas las propiedades de Leaflet del contenedor
+          const leafletProps = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet', '_leaflet_map']
+          leafletProps.forEach(prop => {
+            if ((mapElement as any)[prop]) {
+              try {
+                if (prop === '_leaflet_map' && (mapElement as any)[prop] && typeof (mapElement as any)[prop].remove === 'function') {
+                  (mapElement as any)[prop].remove()
+                }
+                delete (mapElement as any)[prop]
+              } catch (e) {}
+            }
+          })
+          
+          // Limpiar el contenido del contenedor
+          mapElement.innerHTML = ''
+          
+          // Esperar a que se complete la limpieza
+          await new Promise(resolve => setTimeout(resolve, 200))
+          
+          // Verificar nuevamente que el contenedor esté limpio
+          if ((mapElement as any)._leaflet_id) {
+            console.error('Map container still has _leaflet_id after cleanup, aborting initialization')
+            setIsInitializingMap(false)
+            return
+          }
+        }
 
         const catamarcaCenter: [number, number] = [-28.2, -66.0]
-        
-        // Limpieza final antes de crear el mapa
-        const leafletPropsCheck = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet', '_leaflet_map']
-        leafletPropsCheck.forEach(prop => {
-          if ((mapElement as any)[prop]) {
-            try {
-              if (prop === '_leaflet_map' && (mapElement as any)[prop].remove) {
-                (mapElement as any)[prop].remove()
-              }
-              delete (mapElement as any)[prop]
-            } catch (e) {}
-          }
+
+        // Crear mapa con configuración mejorada
+        let mapInstance: any
+        try {
+          mapInstance = L.map("empresas-map", {
+            preferCanvas: false,
+            dragging: true,
+            touchZoom: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
+            boxZoom: true,
+            keyboard: true,
+            tap: true,
+            zoomControl: true,
+            trackResize: true,
+            // Asegurar que el mapa se inicialice correctamente
+            fadeAnimation: false,
+            zoomAnimation: true
+          }).setView(catamarcaCenter, 8)
+        } catch (error) {
+          console.error('Error creating map instance:', error)
+          setIsInitializingMap(false)
+          return
+        }
+
+        // Esperar a que el mapa esté listo antes de continuar
+        await new Promise<void>((resolve) => {
+          mapInstance.whenReady(() => {
+            resolve()
+          })
         })
-        mapElement.innerHTML = ''
-        await new Promise(resolve => setTimeout(resolve, 50))
 
-        // Crear mapa
-        const mapInstance = L.map("empresas-map", {
-          preferCanvas: false,
-          dragging: true,
-          touchZoom: true,
-          scrollWheelZoom: true,
-          doubleClickZoom: true,
-          boxZoom: true,
-          keyboard: true,
-          tap: true,
-          zoomControl: true,
-          trackResize: true
-        }).setView(catamarcaCenter, 8)
-
+        // Agregar capa de tiles
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+          minZoom: 3
         }).addTo(mapInstance)
 
-        // Forzar tamaño correcto
+        // Esperar un poco más para que los tiles se carguen
+        await new Promise(resolve => setTimeout(resolve, 300))
+
+        // Forzar tamaño correcto múltiples veces para asegurar que funcione
         mapInstance.invalidateSize()
         await new Promise(resolve => setTimeout(resolve, 100))
         mapInstance.invalidateSize()
-
-        // Habilitar dragging después de crear el mapa
-        setTimeout(() => {
+        
+        // Asegurar que el dragging esté habilitado
+        if (mapInstance.dragging) {
           mapInstance.dragging.enable()
+        }
+        
+        // Verificar que el mapa tenga dimensiones válidas
+        const mapContainer = mapInstance.getContainer()
+        if (mapContainer && (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0)) {
+          console.warn('Map container has zero dimensions, forcing resize')
           mapInstance.invalidateSize()
-        }, 200)
+          await new Promise(resolve => setTimeout(resolve, 200))
+          mapInstance.invalidateSize()
+        }
 
         // Crear marcadores
         const newMarkers: any[] = []
@@ -488,9 +570,11 @@ export default function MapaPage() {
         setMap(mapInstance)
         setMarkers(newMarkers)
         setMapLoaded(true)
+        setIsInitializingMap(false)
 
       } catch (error) {
         console.error('Error loading map:', error)
+        setIsInitializingMap(false)
         toast({
           title: "Error",
           description: "No se pudo cargar el mapa",
@@ -502,6 +586,7 @@ export default function MapaPage() {
     loadMap()
 
     return () => {
+      setIsInitializingMap(false)
       const currentMap = map
       const currentMarkers = markers
       
@@ -532,9 +617,18 @@ export default function MapaPage() {
       
       const mapElement = document.getElementById("empresas-map")
       if (mapElement) {
-        if ((mapElement as any)._leaflet_id) {
-          delete (mapElement as any)._leaflet_id
-        }
+        // Limpiar todas las propiedades de Leaflet
+        const leafletProps = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet', '_leaflet_map']
+        leafletProps.forEach(prop => {
+          if ((mapElement as any)[prop]) {
+            try {
+              if (prop === '_leaflet_map' && (mapElement as any)[prop] && typeof (mapElement as any)[prop].remove === 'function') {
+                (mapElement as any)[prop].remove()
+              }
+              delete (mapElement as any)[prop]
+            } catch (e) {}
+          }
+        })
         mapElement.innerHTML = ''
       }
     }

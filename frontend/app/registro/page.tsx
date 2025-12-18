@@ -16,6 +16,7 @@ import { LocationPicker } from "@/components/map/location-picker"
 import { api } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
+import { handleTextInputChange, handleNumericInputChange, validateAndNormalizeText } from "@/lib/validations"
 
 interface ContactoSecundario {
   id: string
@@ -1129,7 +1130,10 @@ useEffect(() => {
                         id="razonSocial"
                         required
                         value={formData.razonSocial}
-                        onChange={(e) => setFormData(prev => ({ ...prev, razonSocial: toUpperCase(e.target.value) }))}
+                        onChange={(e) => {
+                          const normalized = handleTextInputChange(e.target.value, formData.razonSocial)
+                          setFormData(prev => ({ ...prev, razonSocial: toUpperCase(normalized) }))
+                        }}
                         placeholder="NOMBRE LEGAL DE LA EMPRESA"
                         className="uppercase"
                       />
@@ -1140,7 +1144,10 @@ useEffect(() => {
                       <Input
                         id="nombreFantasia"
                         value={formData.nombreFantasia}
-                        onChange={(e) => setFormData(prev => ({ ...prev, nombreFantasia: toUpperCase(e.target.value) }))}
+                        onChange={(e) => {
+                          const normalized = handleTextInputChange(e.target.value, formData.nombreFantasia)
+                          setFormData(prev => ({ ...prev, nombreFantasia: toUpperCase(normalized) }))
+                        }}
                         placeholder="NOMBRE COMERCIAL (OPCIONAL)"
                         className="uppercase"
                       />
@@ -1175,8 +1182,11 @@ useEffect(() => {
                       id="cuit"
                       required
                       value={formData.cuit}
-                      onChange={(e) => setFormData(prev => ({ ...prev, cuit: e.target.value }))}
-                      placeholder="XX-XXXXXXXX-X"
+                      onChange={(e) => {
+                        const normalized = handleNumericInputChange(e.target.value)
+                        setFormData(prev => ({ ...prev, cuit: normalized }))
+                      }}
+                      placeholder="12345678901"
                     />
                   </div>
 
@@ -1584,10 +1594,11 @@ useEffect(() => {
                         id="contacto"
                         required
                         value={contactoPrincipal.nombre}
-                        onChange={(e) =>
-                          setContactoPrincipal({ ...contactoPrincipal, nombre: toUpperCase(e.target.value) })
-                        }
-                        placeholder=" NOMBRE COMPLETO"
+                        onChange={(e) => {
+                          const normalized = handleTextInputChange(e.target.value, contactoPrincipal.nombre)
+                          setContactoPrincipal({ ...contactoPrincipal, nombre: toUpperCase(normalized) })
+                        }}
+                        placeholder="NOMBRE COMPLETO"
                         className="uppercase"
                       />
                     </div>
@@ -1598,9 +1609,10 @@ useEffect(() => {
                         id="cargo"
                         required
                         value={contactoPrincipal.cargo}
-                        onChange={(e) =>
-                          setContactoPrincipal({ ...contactoPrincipal, cargo: toUpperCase(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          const normalized = handleTextInputChange(e.target.value, contactoPrincipal.cargo)
+                          setContactoPrincipal({ ...contactoPrincipal, cargo: toUpperCase(normalized) })
+                        }}
                         placeholder="EJ: GERENTE GENERAL, DIRECTOR, PROPIETARIO"
                         className="uppercase"
                       />
@@ -1614,8 +1626,11 @@ useEffect(() => {
                           required
                           type="tel"
                           value={contactoPrincipal.telefono}
-                          onChange={(e) => setContactoPrincipal({ ...contactoPrincipal, telefono: e.target.value })}
-                          placeholder="(0383) 4XXXXXX"
+                          onChange={(e) => {
+                            const normalized = handleNumericInputChange(e.target.value)
+                            setContactoPrincipal({ ...contactoPrincipal, telefono: normalized })
+                          }}
+                          placeholder="3834123456"
                         />
                       </div>
 
@@ -1656,8 +1671,11 @@ useEffect(() => {
                         <Label>Persona de Contacto</Label>
                         <Input
                           value={contacto.nombre}
-                          onChange={(e) => actualizarContacto(contacto.id, "nombre", toUpperCase(e.target.value))}
-                          placeholder=" NOMBRE COMPLETO"
+                          onChange={(e) => {
+                            const normalized = handleTextInputChange(e.target.value, contacto.nombre)
+                            actualizarContacto(contacto.id, "nombre", toUpperCase(normalized))
+                          }}
+                          placeholder="NOMBRE COMPLETO"
                           className="uppercase"
                         />
                       </div>
@@ -1666,7 +1684,10 @@ useEffect(() => {
                         <Label>Cargo</Label>
                         <Input
                           value={contacto.cargo}
-                          onChange={(e) => actualizarContacto(contacto.id, "cargo", toUpperCase(e.target.value))}
+                          onChange={(e) => {
+                            const normalized = handleTextInputChange(e.target.value, contacto.cargo)
+                            actualizarContacto(contacto.id, "cargo", toUpperCase(normalized))
+                          }}
                           placeholder="EJ: SUBJEFE, ENCARGADO DE VENTAS"
                           className="uppercase"
                         />
@@ -1678,8 +1699,11 @@ useEffect(() => {
                           <Input
                             type="tel"
                             value={contacto.telefono}
-                            onChange={(e) => actualizarContacto(contacto.id, "telefono", e.target.value)}
-                            placeholder="(0383) 4XXXXXX"
+                            onChange={(e) => {
+                              const normalized = handleNumericInputChange(e.target.value)
+                              actualizarContacto(contacto.id, "telefono", normalized)
+                            }}
+                            placeholder="3834123456"
                           />
                         </div>
 
@@ -1730,8 +1754,11 @@ useEffect(() => {
           <Input
             id="codigoPostalComercial"
             value={formData.codigoPostalComercial}
-            onChange={(e) => setFormData(prev => ({ ...prev, codigoPostalComercial: e.target.value }))}
-            placeholder="EJ: 4700"
+            onChange={(e) => {
+              const normalized = handleNumericInputChange(e.target.value)
+              setFormData(prev => ({ ...prev, codigoPostalComercial: normalized }))
+            }}
+            placeholder="4700"
           />
         </div>
       </div>
@@ -1756,8 +1783,11 @@ useEffect(() => {
                       <Input
                         id="codigoPostal"
                         value={formData.codigoPostal}
-                        onChange={(e) => setFormData(prev => ({ ...prev, codigoPostal: e.target.value }))}
-                        placeholder="EJ: 4700"
+                        onChange={(e) => {
+                          const normalized = handleNumericInputChange(e.target.value)
+                          setFormData(prev => ({ ...prev, codigoPostal: normalized }))
+                        }}
+                        placeholder="4700"
                       />
                     </div>
 

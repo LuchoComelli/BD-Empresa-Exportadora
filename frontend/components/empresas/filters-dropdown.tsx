@@ -43,16 +43,19 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
     loadRubros()
   }, [])
 
-  // Cargar subrubros - siempre cargar, pero filtrar por rubro si hay uno seleccionado
+  // Cargar subrubros - solo cuando hay un rubro seleccionado
   useEffect(() => {
     const loadSubRubros = async () => {
+      // Solo cargar subrubros si hay un rubro seleccionado
+      if (!filters.rubro || filters.rubro === 'all') {
+        setSubRubros([])
+        return
+      }
+      
       try {
         setLoadingRubros(true)
-        // Si hay un rubro seleccionado, cargar solo los subrubros de ese rubro
-        // Si no, cargar todos los subrubros
-        const data = filters.rubro && filters.rubro !== 'all'
-          ? await api.getSubRubros(filters.rubro)
-          : await api.getSubRubros()
+        // Cargar solo los subrubros del rubro seleccionado
+        const data = await api.getSubRubros(filters.rubro)
         setSubRubros(Array.isArray(data) ? data : (data.results || []))
       } catch (error) {
         console.error("Error loading subrubros:", error)
@@ -82,18 +85,10 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
 
   const handleFilterChange = (key: string, value: string) => {
     const newFilters = { ...filters, [key]: value }
-    // Si cambia el rubro, limpiar el subrubro seleccionado si no pertenece al nuevo rubro
+    // Si cambia el rubro, limpiar el subrubro seleccionado
     if (key === 'rubro') {
-      if (value === 'all') {
-        newFilters.subRubro = 'all'
-      } else {
-        // Si hay un subrubro seleccionado, verificar si pertenece al nuevo rubro
-        if (filters.subRubro && filters.subRubro !== 'all') {
-          // Limpiar el subrubro para evitar inconsistencias
-          // El usuario deberá seleccionarlo nuevamente
-          newFilters.subRubro = 'all'
-        }
-      }
+      // Siempre limpiar el subrubro cuando cambia el rubro
+      newFilters.subRubro = 'all'
     }
     onFilterChange(newFilters)
   }
@@ -175,21 +170,28 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
               </Select>
             </div>
 
-            {/* Sub-Rubro - Siempre visible, pero filtrado por rubro si hay uno seleccionado */}
+            {/* Sub-Rubro - Solo habilitado cuando hay un rubro seleccionado */}
             <div className="space-y-2">
               <Label htmlFor="subRubro" className="text-sm">Sub-Rubro</Label>
               <Select 
                 value={filters.subRubro || "all"} 
                 onValueChange={(value) => handleFilterChange('subRubro', value)}
-                disabled={loadingRubros || (filters.rubro && filters.rubro !== 'all' && subRubros.length === 0)}
+                disabled={
+                  !filters.rubro || 
+                  filters.rubro === 'all' || 
+                  loadingRubros || 
+                  (filters.rubro && filters.rubro !== 'all' && subRubros.length === 0)
+                }
               >
                 <SelectTrigger id="subRubro" className="h-9">
                   <SelectValue placeholder={
-                    loadingRubros 
-                      ? "Cargando..." 
-                      : filters.rubro && filters.rubro !== 'all'
-                        ? "Selecciona un sub-rubro del rubro elegido"
-                        : "Todos los sub-rubros"
+                    !filters.rubro || filters.rubro === 'all'
+                      ? "Primero selecciona un rubro"
+                      : loadingRubros 
+                        ? "Cargando..." 
+                        : subRubros.length === 0
+                          ? "No hay sub-rubros disponibles"
+                          : "Selecciona un sub-rubro"
                   } />
                 </SelectTrigger>
                 <SelectContent>
@@ -201,6 +203,11 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
                   ))}
                 </SelectContent>
               </Select>
+              {(!filters.rubro || filters.rubro === 'all') && (
+                <p className="text-xs text-muted-foreground">
+                  Debes seleccionar un rubro primero
+                </p>
+              )}
               {filters.rubro && filters.rubro !== 'all' && subRubros.length === 0 && !loadingRubros && (
                 <p className="text-xs text-muted-foreground">
                   No hay sub-rubros disponibles para este rubro
