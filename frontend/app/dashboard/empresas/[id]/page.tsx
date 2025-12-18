@@ -94,6 +94,11 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
   const [localidades, setLocalidades] = useState<any[]>([])
   const [rubros, setRubros] = useState<any[]>([])
   const [subRubros, setSubRubros] = useState<any[]>([])
+  // Estados separados para empresas mixtas
+  const [rubroProducto, setRubroProducto] = useState<number | null>(null)
+  const [rubroServicio, setRubroServicio] = useState<number | null>(null)
+  const [subRubrosProductos, setSubRubrosProductos] = useState<any[]>([])
+  const [subRubrosServicios, setSubRubrosServicios] = useState<any[]>([])
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [loadingRubros, setLoadingRubros] = useState(false)
 
@@ -145,18 +150,85 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
     }
   }, [isEditing, editedData?.municipio])
 
-  // Cargar subrubros cuando cambia rubro en edición
+  // Cargar subrubros cuando cambia rubro en edición (para empresas no mixtas)
   useEffect(() => {
-  if (isEditing && editedData?.id_rubro) {
-    const rubroId = typeof editedData.id_rubro === 'object'
-      ? editedData.id_rubro.id
-      : editedData.id_rubro
-    if (rubroId) {
-      console.log('🔵 [useEffect] Cargando subrubros para rubro:', rubroId)
-      loadSubRubrosData(rubroId)
+    if (isEditing && editedData?.id_rubro && editedData?.tipo_empresa_valor !== 'mixta') {
+      const rubroId = typeof editedData.id_rubro === 'object'
+        ? editedData.id_rubro.id
+        : editedData.id_rubro
+      if (rubroId) {
+        console.log('🔵 [useEffect] Cargando subrubros para rubro:', rubroId)
+        loadSubRubrosData(rubroId)
+      }
     }
-  }
-}, [isEditing, editedData?.id_rubro])
+  }, [isEditing, editedData?.id_rubro, editedData?.tipo_empresa_valor])
+
+  // Inicializar rubros y cargar subrubros cuando se edita una empresa mixta
+  useEffect(() => {
+    if (isEditing && editedData?.tipo_empresa_valor === 'mixta' && rubros.length > 0) {
+      // Inicializar rubro de productos
+      if (editedData?.rubro_producto_nombre && !rubroProducto) {
+        // Buscar el rubro por nombre
+        const rubroEncontrado = rubros.find(r => r.nombre === editedData.rubro_producto_nombre)
+        if (rubroEncontrado) {
+          setRubroProducto(rubroEncontrado.id)
+          loadSubRubrosProductos(rubroEncontrado.id)
+        }
+      } else if (editedData?.id_subrubro_producto) {
+        // Intentar obtener desde el subrubro si viene como objeto
+        const subRubroProd = typeof editedData.id_subrubro_producto === 'object'
+          ? editedData.id_subrubro_producto
+          : null
+        if (subRubroProd?.rubro_id) {
+          setRubroProducto(subRubroProd.rubro_id)
+          loadSubRubrosProductos(subRubroProd.rubro_id)
+        } else if (subRubroProd?.rubro?.id) {
+          setRubroProducto(subRubroProd.rubro.id)
+          loadSubRubrosProductos(subRubroProd.rubro.id)
+        }
+      }
+      
+      // Inicializar rubro de servicios
+      if (editedData?.rubro_servicio_nombre && !rubroServicio) {
+        // Buscar el rubro por nombre
+        const rubroEncontrado = rubros.find(r => r.nombre === editedData.rubro_servicio_nombre)
+        if (rubroEncontrado) {
+          setRubroServicio(rubroEncontrado.id)
+          loadSubRubrosServicios(rubroEncontrado.id)
+        }
+      } else if (editedData?.id_subrubro_servicio) {
+        // Intentar obtener desde el subrubro si viene como objeto
+        const subRubroServ = typeof editedData.id_subrubro_servicio === 'object'
+          ? editedData.id_subrubro_servicio
+          : null
+        if (subRubroServ?.rubro_id) {
+          setRubroServicio(subRubroServ.rubro_id)
+          loadSubRubrosServicios(subRubroServ.rubro_id)
+        } else if (subRubroServ?.rubro?.id) {
+          setRubroServicio(subRubroServ.rubro.id)
+          loadSubRubrosServicios(subRubroServ.rubro.id)
+        }
+      }
+    }
+  }, [isEditing, editedData?.tipo_empresa_valor, editedData?.id_subrubro_producto, editedData?.id_subrubro_servicio, editedData?.rubro_producto_nombre, editedData?.rubro_servicio_nombre, rubros])
+
+  // Cargar subrubros de productos cuando cambia el rubro de productos
+  useEffect(() => {
+    if (isEditing && editedData?.tipo_empresa_valor === 'mixta' && rubroProducto) {
+      loadSubRubrosProductos(rubroProducto)
+      // Limpiar subrubro seleccionado cuando cambia el rubro
+      setEditedData(editedData ? { ...editedData, id_subrubro_producto: null } : null)
+    }
+  }, [rubroProducto])
+
+  // Cargar subrubros de servicios cuando cambia el rubro de servicios
+  useEffect(() => {
+    if (isEditing && editedData?.tipo_empresa_valor === 'mixta' && rubroServicio) {
+      loadSubRubrosServicios(rubroServicio)
+      // Limpiar subrubro seleccionado cuando cambia el rubro
+      setEditedData(editedData ? { ...editedData, id_subrubro_servicio: null } : null)
+    }
+  }, [rubroServicio])
 
 // 6. DEBUGGING TEMPORAL - Agregar esto al componente para ver el estado
 useEffect(() => {
@@ -316,6 +388,46 @@ useEffect(() => {
   }
 }
 
+  // Cargar subrubros de productos por rubro
+  const loadSubRubrosProductos = async (rubroId: any) => {
+    try {
+      setLoadingRubros(true)
+      console.log('🔍 [loadSubRubrosProductos] Cargando subrubros para rubro productos:', rubroId)
+      const data = await api.getSubRubrosPorRubro(rubroId)
+      console.log('✅ [loadSubRubrosProductos] SubRubros cargados (raw):', data)
+      
+      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
+      console.log('✅ [loadSubRubrosProductos] SubRubros array:', subRubrosArray.length, subRubrosArray)
+      
+      setSubRubrosProductos(subRubrosArray)
+    } catch (error) {
+      console.error('❌ [loadSubRubrosProductos] Error loading subrubros:', error)
+      setSubRubrosProductos([])
+    } finally {
+      setLoadingRubros(false)
+    }
+  }
+
+  // Cargar subrubros de servicios por rubro
+  const loadSubRubrosServicios = async (rubroId: any) => {
+    try {
+      setLoadingRubros(true)
+      console.log('🔍 [loadSubRubrosServicios] Cargando subrubros para rubro servicios:', rubroId)
+      const data = await api.getSubRubrosPorRubro(rubroId)
+      console.log('✅ [loadSubRubrosServicios] SubRubros cargados (raw):', data)
+      
+      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
+      console.log('✅ [loadSubRubrosServicios] SubRubros array:', subRubrosArray.length, subRubrosArray)
+      
+      setSubRubrosServicios(subRubrosArray)
+    } catch (error) {
+      console.error('❌ [loadSubRubrosServicios] Error loading subrubros:', error)
+      setSubRubrosServicios([])
+    } finally {
+      setLoadingRubros(false)
+    }
+  }
+
   const handleEdit = () => {
   console.log('🔵 [handleEdit] INICIANDO EDICIÓN')
   console.log('🔵 [handleEdit] empresa:', empresa)
@@ -366,6 +478,11 @@ useEffect(() => {
   const handleCancel = () => {
     setIsEditing(false)
     setEditedData(empresa ? { ...empresa } : null)
+    // Limpiar estados de rubros y subrubros para empresas mixtas
+    setRubroProducto(null)
+    setRubroServicio(null)
+    setSubRubrosProductos([])
+    setSubRubrosServicios([])
   }
 
 const handleSave = async () => {
@@ -385,7 +502,9 @@ const handleSave = async () => {
     console.log('📦 [handleSave] Tipo de empresa:', tipoEmpresa)
 
     // 1. GUARDAR DATOS BÁSICOS DE LA EMPRESA (sin productos/servicios)
-    const { productos, servicios, productos_mixta, servicios_mixta, brochure_file, brochure_filename, ...empresaData } = editedData
+    // ✅ IMPORTANTE: Excluir 'brochure' del destructuring porque es la URL del archivo existente,
+    // no el archivo en sí. El manejo del archivo se hace por separado más abajo.
+    const { productos, servicios, productos_mixta, servicios_mixta, brochure_file, brochure_filename, brochure, ...empresaData } = editedData
     
     // ✅ CREAR FormData para enviar archivos
     const formData = new FormData()
@@ -400,6 +519,8 @@ const handleSave = async () => {
       console.log('🗑️ [handleSave] Eliminando archivo brochure existente')
       formData.append('brochure', '') // Enviar string vacío para eliminar
     }
+    // Si no hay cambios en el archivo (no hay brochure_file y brochure no es null),
+    // simplemente no incluimos el campo 'brochure' en el FormData
     
     // Normalizar relaciones a IDs
     const dataToSend: any = {
@@ -926,22 +1047,90 @@ const handleSave = async () => {
       </div>
 
       {/* Rubro - Mostrar según tipo de empresa */}
-      {displayData?.tipo_empresa_valor === 'mixta' ? (
+      {(displayData?.tipo_empresa_valor === 'mixta' || editedData?.tipo_empresa_valor === 'mixta') ? (
         <>
           {/* Rubro de Productos */}
           <div>
             <Label>Rubro de Productos</Label>
-            <p className="mt-1 font-semibold">
-              {displayData?.rubro_producto_nombre || displayData?.rubro_nombre || 'N/A'}
-            </p>
+            {isEditing ? (
+              <Select
+                value={rubroProducto ? String(rubroProducto) : ''}
+                onValueChange={(value) => {
+                  console.log('🔵 [Rubro Productos] Cambiando rubro a:', value)
+                  setRubroProducto(parseInt(value))
+                }}
+                disabled={loadingRubros || rubros.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    loadingRubros 
+                      ? "Cargando..." 
+                      : rubros.length === 0 
+                      ? "No hay rubros disponibles" 
+                      : "Selecciona un rubro de productos"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {rubros.length > 0 ? (
+                    rubros.map((rubro) => (
+                      <SelectItem key={rubro.id} value={String(rubro.id)}>
+                        {rubro.nombre}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>
+                      No hay rubros disponibles
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="mt-1 font-semibold">
+                {displayData?.rubro_producto_nombre || displayData?.rubro_nombre || 'N/A'}
+              </p>
+            )}
           </div>
           
           {/* Rubro de Servicios */}
           <div>
             <Label>Rubro de Servicios</Label>
-            <p className="mt-1 font-semibold">
-              {displayData?.rubro_servicio_nombre || displayData?.rubro_nombre || 'N/A'}
-            </p>
+            {isEditing ? (
+              <Select
+                value={rubroServicio ? String(rubroServicio) : ''}
+                onValueChange={(value) => {
+                  console.log('🔵 [Rubro Servicios] Cambiando rubro a:', value)
+                  setRubroServicio(parseInt(value))
+                }}
+                disabled={loadingRubros || rubros.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    loadingRubros 
+                      ? "Cargando..." 
+                      : rubros.length === 0 
+                      ? "No hay rubros disponibles" 
+                      : "Selecciona un rubro de servicios"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {rubros.length > 0 ? (
+                    rubros.map((rubro) => (
+                      <SelectItem key={rubro.id} value={String(rubro.id)}>
+                        {rubro.nombre}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>
+                      No hay rubros disponibles
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="mt-1 font-semibold">
+                {displayData?.rubro_servicio_nombre || displayData?.rubro_nombre || 'N/A'}
+              </p>
+            )}
           </div>
         </>
       ) : (
@@ -983,22 +1172,110 @@ const handleSave = async () => {
 
 
                 {/* SubRubro - Mostrar según tipo de empresa */}
-        {displayData?.tipo_empresa_valor === 'mixta' ? (
+        {(displayData?.tipo_empresa_valor === 'mixta' || editedData?.tipo_empresa_valor === 'mixta') ? (
           <>
             {/* SubRubro de Productos */}
             <div>
               <Label>SubRubro de Productos</Label>
-              <p className="mt-1 font-semibold">
-                {displayData?.sub_rubro_producto_nombre || 'N/A'}
-              </p>
+              {isEditing ? (
+                <Select
+                  value={editedData?.id_subrubro_producto 
+                    ? String(typeof editedData.id_subrubro_producto === 'object' 
+                        ? editedData.id_subrubro_producto.id 
+                        : editedData.id_subrubro_producto)
+                    : ''
+                  }
+                  onValueChange={(value) => {
+                    console.log('🔵 [SubRubro Productos] Cambiando subrubro a:', value)
+                    setEditedData(editedData ? { 
+                      ...editedData, 
+                      id_subrubro_producto: parseInt(value)
+                    } : null)
+                  }}
+                  disabled={loadingRubros || !rubroProducto || subRubrosProductos.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      loadingRubros 
+                        ? "Cargando..." 
+                        : !rubroProducto
+                        ? "Selecciona primero un rubro de productos" 
+                        : subRubrosProductos.length === 0 
+                        ? "No hay subrubros disponibles" 
+                        : "Selecciona un subrubro de productos"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subRubrosProductos.length > 0 ? (
+                      subRubrosProductos.map((subRubro) => (
+                        <SelectItem key={subRubro.id} value={String(subRubro.id)}>
+                          {subRubro.nombre}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No hay subrubros disponibles
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="mt-1 font-semibold">
+                  {displayData?.sub_rubro_producto_nombre || 'N/A'}
+                </p>
+              )}
             </div>
             
             {/* SubRubro de Servicios */}
             <div>
               <Label>SubRubro de Servicios</Label>
-              <p className="mt-1 font-semibold">
-                {displayData?.sub_rubro_servicio_nombre || 'N/A'}
-              </p>
+              {isEditing ? (
+                <Select
+                  value={editedData?.id_subrubro_servicio 
+                    ? String(typeof editedData.id_subrubro_servicio === 'object' 
+                        ? editedData.id_subrubro_servicio.id 
+                        : editedData.id_subrubro_servicio)
+                    : ''
+                  }
+                  onValueChange={(value) => {
+                    console.log('🔵 [SubRubro Servicios] Cambiando subrubro a:', value)
+                    setEditedData(editedData ? { 
+                      ...editedData, 
+                      id_subrubro_servicio: parseInt(value)
+                    } : null)
+                  }}
+                  disabled={loadingRubros || !rubroServicio || subRubrosServicios.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      loadingRubros 
+                        ? "Cargando..." 
+                        : !rubroServicio
+                        ? "Selecciona primero un rubro de servicios" 
+                        : subRubrosServicios.length === 0 
+                        ? "No hay subrubros disponibles" 
+                        : "Selecciona un subrubro de servicios"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subRubrosServicios.length > 0 ? (
+                      subRubrosServicios.map((subRubro) => (
+                        <SelectItem key={subRubro.id} value={String(subRubro.id)}>
+                          {subRubro.nombre}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No hay subrubros disponibles
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="mt-1 font-semibold">
+                  {displayData?.sub_rubro_servicio_nombre || 'N/A'}
+                </p>
+              )}
             </div>
           </>
         ) : (

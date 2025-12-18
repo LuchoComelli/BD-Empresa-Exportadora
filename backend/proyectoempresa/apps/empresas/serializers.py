@@ -22,10 +22,12 @@ class TipoEmpresaSerializer(serializers.ModelSerializer):
 
 class SubRubroSerializer(serializers.ModelSerializer):
     """Serializer para sub-rubros"""
+    rubro_nombre = serializers.CharField(source='rubro.nombre', read_only=True)
+    rubro_id = serializers.IntegerField(source='rubro.id', read_only=True)
     
     class Meta:
         model = SubRubro
-        fields = ['id', 'nombre', 'descripcion', 'activo', 'orden']
+        fields = ['id', 'nombre', 'descripcion', 'activo', 'orden', 'rubro_nombre', 'rubro_id']
         read_only_fields = ['id']
 
 
@@ -404,6 +406,20 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
     
         return None
     
+    def to_internal_value(self, data):
+        """Manejar el campo brochure cuando viene como string (URL) en lugar de archivo"""
+        # Si 'brochure' está presente y es un string (no un archivo), eliminarlo de los datos
+        # porque no debe enviarse la URL del archivo existente, solo archivos nuevos o strings vacíos para eliminar
+        if 'brochure' in data and isinstance(data.get('brochure'), str):
+            brochure_value = data.get('brochure')
+            # Si es una URL (empieza con http:// o https://), eliminarlo porque es el archivo existente
+            # Solo mantenerlo si es un string vacío (para eliminar el archivo)
+            if brochure_value and (brochure_value.startswith('http://') or brochure_value.startswith('https://')):
+                # Es una URL del archivo existente, no debe enviarse
+                data = data.copy()
+                data.pop('brochure', None)
+        return super().to_internal_value(data)
+    
     def update(self, instance, validated_data):
         """Actualizar empresa incluyendo productos, servicios, subrubro y redes sociales"""
         import json
@@ -446,6 +462,19 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
                     'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
                 })
             instance.id_subrubro = id_subrubro
+        
+        # 3.5. MANEJAR BROCHURE (archivo)
+        # Si se envía un string vacío, eliminar el archivo existente
+        if 'brochure' in validated_data:
+            brochure_value = validated_data.pop('brochure')
+            # Si es un string vacío o None, eliminar el archivo
+            if brochure_value == '' or brochure_value is None:
+                if instance.brochure:
+                    instance.brochure.delete(save=False)
+                instance.brochure = None
+            else:
+                # Si es un archivo válido, asignarlo directamente
+                instance.brochure = brochure_value
     
         # 4. ACTUALIZAR OTROS CAMPOS DE LA EMPRESA
         for attr, value in validated_data.items():
@@ -848,6 +877,20 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
     
         return None
     
+    def to_internal_value(self, data):
+        """Manejar el campo brochure cuando viene como string (URL) en lugar de archivo"""
+        # Si 'brochure' está presente y es un string (no un archivo), eliminarlo de los datos
+        # porque no debe enviarse la URL del archivo existente, solo archivos nuevos o strings vacíos para eliminar
+        if 'brochure' in data and isinstance(data.get('brochure'), str):
+            brochure_value = data.get('brochure')
+            # Si es una URL (empieza con http:// o https://), eliminarlo porque es el archivo existente
+            # Solo mantenerlo si es un string vacío (para eliminar el archivo)
+            if brochure_value and (brochure_value.startswith('http://') or brochure_value.startswith('https://')):
+                # Es una URL del archivo existente, no debe enviarse
+                data = data.copy()
+                data.pop('brochure', None)
+        return super().to_internal_value(data)
+    
     def update(self, instance, validated_data):
         """Actualizar empresa incluyendo productos, servicios, subrubro y redes sociales"""
         import json
@@ -889,6 +932,19 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
                     'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
                 })
             instance.id_subrubro = id_subrubro
+        
+        # 3.5. MANEJAR BROCHURE (archivo)
+        # Si se envía un string vacío, eliminar el archivo existente
+        if 'brochure' in validated_data:
+            brochure_value = validated_data.pop('brochure')
+            # Si es un string vacío o None, eliminar el archivo
+            if brochure_value == '' or brochure_value is None:
+                if instance.brochure:
+                    instance.brochure.delete(save=False)
+                instance.brochure = None
+            else:
+                # Si es un archivo válido, asignarlo directamente
+                instance.brochure = brochure_value
     
         # 4. ACTUALIZAR OTROS CAMPOS DE LA EMPRESA
         for attr, value in validated_data.items():
@@ -1425,7 +1481,12 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
         return None
     
     def get_rubro_producto_nombre(self, obj):
-        """Obtener nombre del rubro de productos"""
+        """Obtener nombre del rubro de productos desde el subrubro"""
+        # ✅ PRIMERO: Usar el rubro del subrubro de productos
+        if obj.id_subrubro_producto and obj.id_subrubro_producto.rubro:
+            return obj.id_subrubro_producto.rubro.nombre
+        
+        # Fallback a solicitud
         try:
             from apps.registro.models import SolicitudRegistro
             # Normalizar CUIT de la empresa (sin guiones ni espacios)
@@ -1449,7 +1510,12 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
         return None
     
     def get_rubro_servicio_nombre(self, obj):
-        """Obtener nombre del rubro de servicios"""
+        """Obtener nombre del rubro de servicios desde el subrubro"""
+        # ✅ PRIMERO: Usar el rubro del subrubro de servicios
+        if obj.id_subrubro_servicio and obj.id_subrubro_servicio.rubro:
+            return obj.id_subrubro_servicio.rubro.nombre
+        
+        # Fallback a solicitud
         try:
             from apps.registro.models import SolicitudRegistro
             # Normalizar CUIT de la empresa (sin guiones ni espacios)
@@ -1513,6 +1579,20 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
             return None
     
     
+    def to_internal_value(self, data):
+        """Manejar el campo brochure cuando viene como string (URL) en lugar de archivo"""
+        # Si 'brochure' está presente y es un string (no un archivo), eliminarlo de los datos
+        # porque no debe enviarse la URL del archivo existente, solo archivos nuevos o strings vacíos para eliminar
+        if 'brochure' in data and isinstance(data.get('brochure'), str):
+            brochure_value = data.get('brochure')
+            # Si es una URL (empieza con http:// o https://), eliminarlo porque es el archivo existente
+            # Solo mantenerlo si es un string vacío (para eliminar el archivo)
+            if brochure_value and (brochure_value.startswith('http://') or brochure_value.startswith('https://')):
+                # Es una URL del archivo existente, no debe enviarse
+                data = data.copy()
+                data.pop('brochure', None)
+        return super().to_internal_value(data)
+    
     def update(self, instance, validated_data):
         """
         Actualizar empresa mixta incluyendo subrubros y redes sociales
@@ -1540,33 +1620,74 @@ class EmpresaMixtaSerializer(serializers.ModelSerializer):
             instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
         
         # 2. MANEJAR SUBRUBROS (producto y servicio)
+        # Para empresas mixtas, cada subrubro tiene su propio rubro, no validamos contra id_rubro general
         id_subrubro_producto = validated_data.pop('id_subrubro_producto', None)
         id_subrubro_servicio = validated_data.pop('id_subrubro_servicio', None)
         
-        rubro = validated_data.get('id_rubro', instance.id_rubro)
-        
-        # Si se cambia el rubro, limpiar subrubros que no pertenezcan al nuevo rubro
-        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
-            if instance.id_subrubro_producto and instance.id_subrubro_producto.rubro != validated_data['id_rubro']:
-                instance.id_subrubro_producto = None
-            if instance.id_subrubro_servicio and instance.id_subrubro_servicio.rubro != validated_data['id_rubro']:
-                instance.id_subrubro_servicio = None
-        
         # Validar y asignar subrubro de productos
         if id_subrubro_producto is not None:
-            if id_subrubro_producto.rubro != rubro:
+            from .models import SubRubro
+            # El serializer de DRF puede convertir el ID en un objeto SubRubro automáticamente
+            # Verificar si ya es un objeto o si es un ID
+            if isinstance(id_subrubro_producto, SubRubro):
+                subrubro_prod = id_subrubro_producto
+            else:
+                # Es un ID, obtener el objeto
+                try:
+                    subrubro_prod = SubRubro.objects.get(id=id_subrubro_producto)
+                except SubRubro.DoesNotExist:
+                    raise serializers.ValidationError({
+                        'id_subrubro_producto': 'El subrubro de productos seleccionado no existe'
+                    })
+            
+            # Validar que el subrubro esté activo
+            if not subrubro_prod.activo:
                 raise serializers.ValidationError({
-                    'id_subrubro_producto': 'El subrubro de productos debe pertenecer al rubro seleccionado'
+                    'id_subrubro_producto': 'El subrubro de productos seleccionado no está activo'
                 })
-            instance.id_subrubro_producto = id_subrubro_producto
+            instance.id_subrubro_producto = subrubro_prod
+        elif id_subrubro_producto is None and 'id_subrubro_producto' in validated_data:
+            # Si se envía explícitamente None, limpiar el subrubro
+            instance.id_subrubro_producto = None
         
         # Validar y asignar subrubro de servicios
         if id_subrubro_servicio is not None:
-            if id_subrubro_servicio.rubro != rubro:
+            from .models import SubRubro
+            # El serializer de DRF puede convertir el ID en un objeto SubRubro automáticamente
+            # Verificar si ya es un objeto o si es un ID
+            if isinstance(id_subrubro_servicio, SubRubro):
+                subrubro_serv = id_subrubro_servicio
+            else:
+                # Es un ID, obtener el objeto
+                try:
+                    subrubro_serv = SubRubro.objects.get(id=id_subrubro_servicio)
+                except SubRubro.DoesNotExist:
+                    raise serializers.ValidationError({
+                        'id_subrubro_servicio': 'El subrubro de servicios seleccionado no existe'
+                    })
+            
+            # Validar que el subrubro esté activo
+            if not subrubro_serv.activo:
                 raise serializers.ValidationError({
-                    'id_subrubro_servicio': 'El subrubro de servicios debe pertenecer al rubro seleccionado'
+                    'id_subrubro_servicio': 'El subrubro de servicios seleccionado no está activo'
                 })
-            instance.id_subrubro_servicio = id_subrubro_servicio
+            instance.id_subrubro_servicio = subrubro_serv
+        elif id_subrubro_servicio is None and 'id_subrubro_servicio' in validated_data:
+            # Si se envía explícitamente None, limpiar el subrubro
+            instance.id_subrubro_servicio = None
+        
+        # 2.5. MANEJAR BROCHURE (archivo)
+        # Si se envía un string vacío, eliminar el archivo existente
+        if 'brochure' in validated_data:
+            brochure_value = validated_data.pop('brochure')
+            # Si es un string vacío o None, eliminar el archivo
+            if brochure_value == '' or brochure_value is None:
+                if instance.brochure:
+                    instance.brochure.delete(save=False)
+                instance.brochure = None
+            else:
+                # Si es un archivo válido, asignarlo directamente
+                instance.brochure = brochure_value
         
         # 3. ACTUALIZAR OTROS CAMPOS
         for attr, value in validated_data.items():
@@ -1836,6 +1957,10 @@ class EmpresaSerializer(serializers.ModelSerializer):
     actividades_promocion_internacional = serializers.JSONField(required=False, allow_null=True)
     rubro_nombre = serializers.CharField(source='id_rubro.nombre', read_only=True)
     sub_rubro_nombre = serializers.SerializerMethodField()
+    sub_rubro_producto_nombre = serializers.SerializerMethodField()
+    sub_rubro_servicio_nombre = serializers.SerializerMethodField()
+    rubro_producto_nombre = serializers.SerializerMethodField()
+    rubro_servicio_nombre = serializers.SerializerMethodField()
     departamento_nombre = serializers.SerializerMethodField()
     municipio_nombre = serializers.SerializerMethodField()
     localidad_nombre = serializers.SerializerMethodField()
@@ -1924,6 +2049,46 @@ class EmpresaSerializer(serializers.ModelSerializer):
         else:
             return obj.id_subrubro.nombre if obj.id_subrubro else None
     
+    def get_sub_rubro_producto_nombre(self, obj):
+        """Obtener nombre del subrubro de productos"""
+        if obj.id_subrubro_producto:
+            return obj.id_subrubro_producto.nombre
+        return None
+    
+    def get_sub_rubro_servicio_nombre(self, obj):
+        """Obtener nombre del subrubro de servicios"""
+        if obj.id_subrubro_servicio:
+            return obj.id_subrubro_servicio.nombre
+        return None
+    
+    def get_rubro_producto_nombre(self, obj):
+        """Obtener nombre del rubro de productos desde el subrubro"""
+        # Usar el rubro del subrubro de productos
+        if obj.id_subrubro_producto and obj.id_subrubro_producto.rubro:
+            return obj.id_subrubro_producto.rubro.nombre
+        return None
+    
+    def get_rubro_servicio_nombre(self, obj):
+        """Obtener nombre del rubro de servicios desde el subrubro"""
+        # Usar el rubro del subrubro de servicios
+        if obj.id_subrubro_servicio and obj.id_subrubro_servicio.rubro:
+            return obj.id_subrubro_servicio.rubro.nombre
+        return None
+    
+    def to_internal_value(self, data):
+        """Manejar el campo brochure cuando viene como string (URL) en lugar de archivo"""
+        # Si 'brochure' está presente y es un string (no un archivo), eliminarlo de los datos
+        # porque no debe enviarse la URL del archivo existente, solo archivos nuevos o strings vacíos para eliminar
+        if 'brochure' in data and isinstance(data.get('brochure'), str):
+            brochure_value = data.get('brochure')
+            # Si es una URL (empieza con http:// o https://), eliminarlo porque es el archivo existente
+            # Solo mantenerlo si es un string vacío (para eliminar el archivo)
+            if brochure_value and (brochure_value.startswith('http://') or brochure_value.startswith('https://')):
+                # Es una URL del archivo existente, no debe enviarse
+                data = data.copy()
+                data.pop('brochure', None)
+        return super().to_internal_value(data)
+    
     def update(self, instance, validated_data):
         """Actualizar empresa con validación de subrubro y redes sociales"""
         import json
@@ -1955,35 +2120,92 @@ class EmpresaSerializer(serializers.ModelSerializer):
         
         rubro = validated_data.get('id_rubro', instance.id_rubro)
         
-        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
-            if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
-                instance.id_subrubro = None
-            if instance.id_subrubro_producto and instance.id_subrubro_producto.rubro != validated_data['id_rubro']:
-                instance.id_subrubro_producto = None
-            if instance.id_subrubro_servicio and instance.id_subrubro_servicio.rubro != validated_data['id_rubro']:
-                instance.id_subrubro_servicio = None
-        
+        # Para empresas no mixtas: validar subrubro contra rubro general
         if id_subrubro is not None:
-            if id_subrubro.rubro != rubro:
+            from .models import SubRubro
+            # El serializer de DRF puede convertir el ID en un objeto SubRubro automáticamente
+            if isinstance(id_subrubro, SubRubro):
+                subrubro_obj = id_subrubro
+            else:
+                try:
+                    subrubro_obj = SubRubro.objects.get(id=id_subrubro)
+                except SubRubro.DoesNotExist:
+                    raise serializers.ValidationError({
+                        'id_subrubro': 'El subrubro seleccionado no existe'
+                    })
+            
+            if not subrubro_obj.activo:
+                raise serializers.ValidationError({
+                    'id_subrubro': 'El subrubro seleccionado no está activo'
+                })
+            if subrubro_obj.rubro != rubro:
                 raise serializers.ValidationError({
                     'id_subrubro': 'El subrubro debe pertenecer al rubro seleccionado'
                 })
-            instance.id_subrubro = id_subrubro
+            instance.id_subrubro = subrubro_obj
+        elif id_subrubro is None and 'id_subrubro' in validated_data:
+            instance.id_subrubro = None
         
+        # Para empresas mixtas: cada subrubro tiene su propio rubro, no validamos contra id_rubro general
         if id_subrubro_producto is not None:
-            if id_subrubro_producto.rubro != rubro:
+            from .models import SubRubro
+            # El serializer de DRF puede convertir el ID en un objeto SubRubro automáticamente
+            if isinstance(id_subrubro_producto, SubRubro):
+                subrubro_prod = id_subrubro_producto
+            else:
+                try:
+                    subrubro_prod = SubRubro.objects.get(id=id_subrubro_producto)
+                except SubRubro.DoesNotExist:
+                    raise serializers.ValidationError({
+                        'id_subrubro_producto': 'El subrubro de productos seleccionado no existe'
+                    })
+            
+            if not subrubro_prod.activo:
                 raise serializers.ValidationError({
-                    'id_subrubro_producto': 'El subrubro de productos debe pertenecer al rubro seleccionado'
+                    'id_subrubro_producto': 'El subrubro de productos seleccionado no está activo'
                 })
-            instance.id_subrubro_producto = id_subrubro_producto
+            instance.id_subrubro_producto = subrubro_prod
+        elif id_subrubro_producto is None and 'id_subrubro_producto' in validated_data:
+            instance.id_subrubro_producto = None
         
         if id_subrubro_servicio is not None:
-            rubro_servicio = validated_data.get('id_rubro_servicio', instance.id_rubro)
-            if id_subrubro_servicio.rubro != rubro_servicio:
+            from .models import SubRubro
+            # El serializer de DRF puede convertir el ID en un objeto SubRubro automáticamente
+            if isinstance(id_subrubro_servicio, SubRubro):
+                subrubro_serv = id_subrubro_servicio
+            else:
+                try:
+                    subrubro_serv = SubRubro.objects.get(id=id_subrubro_servicio)
+                except SubRubro.DoesNotExist:
+                    raise serializers.ValidationError({
+                        'id_subrubro_servicio': 'El subrubro de servicios seleccionado no existe'
+                    })
+            
+            if not subrubro_serv.activo:
                 raise serializers.ValidationError({
-                    'id_subrubro_servicio': 'El subrubro de servicios debe pertenecer al rubro de servicios'
+                    'id_subrubro_servicio': 'El subrubro de servicios seleccionado no está activo'
                 })
-            instance.id_subrubro_servicio = id_subrubro_servicio
+            instance.id_subrubro_servicio = subrubro_serv
+        elif id_subrubro_servicio is None and 'id_subrubro_servicio' in validated_data:
+            instance.id_subrubro_servicio = None
+        
+        # Limpiar subrubros si se cambia el rubro (solo para empresas no mixtas)
+        if 'id_rubro' in validated_data and validated_data['id_rubro'] != instance.id_rubro:
+            if instance.id_subrubro and instance.id_subrubro.rubro != validated_data['id_rubro']:
+                instance.id_subrubro = None
+        
+        # 2.5. MANEJAR BROCHURE (archivo)
+        # Si se envía un string vacío, eliminar el archivo existente
+        if 'brochure' in validated_data:
+            brochure_value = validated_data.pop('brochure')
+            # Si es un string vacío o None, eliminar el archivo
+            if brochure_value == '' or brochure_value is None:
+                if instance.brochure:
+                    instance.brochure.delete(save=False)
+                instance.brochure = None
+            else:
+                # Si es un archivo válido, asignarlo directamente
+                instance.brochure = brochure_value
         
         # 3. ACTUALIZAR OTROS CAMPOS
         for attr, value in validated_data.items():
