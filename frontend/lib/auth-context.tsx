@@ -139,28 +139,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (isSuperuser) {
           userType = "admin"
-        }
-        // Si tiene rol de Administrador, Analista o Consulta, puede acceder al dashboard
-        else if (userData.rol_detalle?.nombre) {
-          const rolNombre = userData.rol_detalle.nombre.toLowerCase()
-          if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
-            userType = "admin"
-          } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
-            userType = "staff"
+        } else {
+          // Verificar tanto rol_detalle como rol (por si viene en diferentes formatos)
+          const rolNombre = userData.rol_detalle?.nombre || userData.rol?.nombre || ""
+          if (rolNombre) {
+            const rolNombreLower = rolNombre.toLowerCase()
+            if (rolNombreLower.includes("admin") || rolNombreLower.includes("administrador")) {
+              userType = "admin"
+            } else if (rolNombreLower.includes("analista") || rolNombreLower.includes("consulta") || rolNombreLower.includes("consultor")) {
+              userType = "staff"
+            }
           }
+        }
+        
+        // Normalizar el rol: el backend puede devolver 'rol' o 'rol_detalle'
+        let rolNormalizado = userData.rol_detalle || userData.rol
+        // Si el rol viene como objeto plano, asegurarnos de que tenga la estructura correcta
+        if (rolNormalizado && typeof rolNormalizado === 'object' && rolNormalizado.nombre) {
+          // Ya tiene la estructura correcta
+        } else if (userData.rol && typeof userData.rol === 'object' && userData.rol.nombre) {
+          rolNormalizado = userData.rol
         }
         
         const user: User = {
           id: userData.id,
           email: userData.email,
-          username: userData.username,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
+          username: userData.username || userData.email,
+          first_name: userData.first_name || userData.nombre,
+          last_name: userData.last_name || userData.apellido,
           type: userType,
           is_superuser: userData.is_superuser,
           is_staff: userData.is_staff,
           debe_cambiar_password: userData.debe_cambiar_password || false,
-          rol: userData.rol_detalle || userData.rol, // Usar rol_detalle si está disponible, sino rol
+          rol: rolNormalizado,
           empresaData: userData.empresa,
         }
         setUser(user)
@@ -239,27 +250,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isSuperuser) {
         userType = "admin"
       }
-      // Si tiene rol de Administrador, Analista o Consulta, puede acceder al dashboard
-      else if (userData.rol_detalle?.nombre) {
-        const rolNombre = userData.rol_detalle.nombre.toLowerCase()
-        if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
+      // Si tiene rol de Administrador, Analista o Consultor, puede acceder al dashboard
+      // Verificar tanto rol_detalle como rol (por si viene en diferentes formatos)
+      const rolNombre = userData.rol_detalle?.nombre || userData.rol?.nombre || ""
+      if (rolNombre) {
+        const rolNombreLower = rolNombre.toLowerCase()
+        if (rolNombreLower.includes("admin") || rolNombreLower.includes("administrador")) {
           userType = "admin"
-        } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
+        } else if (rolNombreLower.includes("analista") || rolNombreLower.includes("consulta") || rolNombreLower.includes("consultor")) {
           userType = "staff"
         }
+      }
+      
+      // Normalizar el rol: el backend puede devolver 'rol' o 'rol_detalle'
+      // Asegurarnos de que siempre tengamos un objeto con 'nombre'
+      let rolNormalizado = userData.rol_detalle || userData.rol
+      // Si el rol viene como objeto plano del login, asegurarnos de que tenga la estructura correcta
+      if (rolNormalizado && typeof rolNormalizado === 'object' && rolNormalizado.nombre) {
+        // Ya tiene la estructura correcta
+      } else if (userData.rol && typeof userData.rol === 'object' && userData.rol.nombre) {
+        rolNormalizado = userData.rol
       }
       
       const loggedUser: User = {
         id: userData.id,
         email: userData.email,
-        username: userData.username,
-        first_name: userData.first_name,
-        last_name: userData.last_name,
+        username: userData.username || userData.email,
+        first_name: userData.first_name || userData.nombre,
+        last_name: userData.last_name || userData.apellido,
         type: userType,
         is_superuser: userData.is_superuser,
         is_staff: userData.is_staff,
         debe_cambiar_password: userData.debe_cambiar_password || false,
-        rol: userData.rol_detalle || userData.rol, // Usar rol_detalle si está disponible, sino rol
+        rol: rolNormalizado,
         empresaData: userData.empresa,
       }
       
@@ -309,26 +332,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (isSuperuser) {
         userType = "admin"
-      } else if (userData.rol_detalle?.nombre) {
-        const rolNombre = userData.rol_detalle.nombre.toLowerCase()
-        if (rolNombre.includes("admin") || rolNombre.includes("administrador")) {
-          userType = "admin"
-        } else if (rolNombre.includes("analista") || rolNombre.includes("consulta") || rolNombre.includes("consultor")) {
-          userType = "staff"
+      } else {
+        // Verificar tanto rol_detalle como rol (por si viene en diferentes formatos)
+        const rolNombre = userData.rol_detalle?.nombre || userData.rol?.nombre || ""
+        if (rolNombre) {
+          const rolNombreLower = rolNombre.toLowerCase()
+          if (rolNombreLower.includes("admin") || rolNombreLower.includes("administrador")) {
+            userType = "admin"
+          } else if (rolNombreLower.includes("analista") || rolNombreLower.includes("consulta") || rolNombreLower.includes("consultor")) {
+            userType = "staff"
+          }
         }
+      }
+      
+      // Normalizar el rol: el backend puede devolver 'rol' o 'rol_detalle'
+      let rolNormalizado = userData.rol_detalle || userData.rol
+      // Si el rol viene como objeto plano, asegurarnos de que tenga la estructura correcta
+      if (rolNormalizado && typeof rolNormalizado === 'object' && rolNormalizado.nombre) {
+        // Ya tiene la estructura correcta
+      } else if (userData.rol && typeof userData.rol === 'object' && userData.rol.nombre) {
+        rolNormalizado = userData.rol
       }
       
       const updatedUser: User = {
         id: userData.id,
         email: userData.email,
-        username: userData.username,
-        first_name: userData.first_name,
-        last_name: userData.last_name,
+        username: userData.username || userData.email,
+        first_name: userData.first_name || userData.nombre,
+        last_name: userData.last_name || userData.apellido,
         type: userType,
         is_superuser: userData.is_superuser,
         is_staff: userData.is_staff,
         debe_cambiar_password: userData.debe_cambiar_password || false,
-        rol: userData.rol_detalle || userData.rol, // Usar rol_detalle si está disponible, sino rol
+        rol: rolNormalizado,
         empresaData: userData.empresa,
       }
       setUser(updatedUser)

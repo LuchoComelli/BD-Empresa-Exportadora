@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.conf import settings
+from django.utils import timezone
 from .serializers import CustomTokenObtainPairSerializer
 import logging
 
@@ -37,6 +38,10 @@ class CustomTokenObtainPairView(APIView):
                 {'detail': 'Credenciales inválidas'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+        
+        # Actualizar last_login
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
         
         # Generar tokens
         refresh = RefreshToken.for_user(user)

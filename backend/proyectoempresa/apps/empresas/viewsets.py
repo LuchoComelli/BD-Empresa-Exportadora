@@ -1,6 +1,9 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.filters import SearchFilter, OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from .models import (
     TipoEmpresa,
@@ -138,9 +141,20 @@ class EmpresaproductoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Filtrar por usuario si no es admin
-        if not self.request.user.is_staff and self.request.user.is_authenticated:
-            queryset = queryset.filter(id_usuario=self.request.user)
+        # Filtrar por usuario si no es admin/staff y no tiene rol de dashboard
+        # Los usuarios con roles de Administrador, Consultor o Analista pueden ver todas las empresas
+        if self.request.user.is_authenticated:
+            user = self.request.user
+            # Verificar si el usuario puede ver todas las empresas
+            can_view_all = (
+                user.is_superuser or 
+                user.is_staff or
+                (user.rol and user.rol.nombre in ['Administrador', 'Consultor', 'Analista'])
+            )
+            
+            # Si no puede ver todas, solo mostrar sus propias empresas
+            if not can_view_all:
+                queryset = queryset.filter(id_usuario=user)
 
         # Filtrar por categoría de matriz si se proporciona
         categoria_matriz = self.request.query_params.get("categoria_matriz")
@@ -250,9 +264,20 @@ class EmpresaservicioViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Filtrar por usuario si no es admin
-        if not self.request.user.is_staff and self.request.user.is_authenticated:
-            queryset = queryset.filter(id_usuario=self.request.user)
+        # Filtrar por usuario si no es admin/staff y no tiene rol de dashboard
+        # Los usuarios con roles de Administrador, Consultor o Analista pueden ver todas las empresas
+        if self.request.user.is_authenticated:
+            user = self.request.user
+            # Verificar si el usuario puede ver todas las empresas
+            can_view_all = (
+                user.is_superuser or 
+                user.is_staff or
+                (user.rol and user.rol.nombre in ['Administrador', 'Consultor', 'Analista'])
+            )
+            
+            # Si no puede ver todas, solo mostrar sus propias empresas
+            if not can_view_all:
+                queryset = queryset.filter(id_usuario=user)
 
         # Filtrar por categoría de matriz si se proporciona
         categoria_matriz = self.request.query_params.get("categoria_matriz")
@@ -339,9 +364,20 @@ class EmpresaMixtaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Filtrar por usuario si no es admin
-        if not self.request.user.is_staff and self.request.user.is_authenticated:
-            queryset = queryset.filter(id_usuario=self.request.user)
+        # Filtrar por usuario si no es admin/staff y no tiene rol de dashboard
+        # Los usuarios con roles de Administrador, Consultor o Analista pueden ver todas las empresas
+        if self.request.user.is_authenticated:
+            user = self.request.user
+            # Verificar si el usuario puede ver todas las empresas
+            can_view_all = (
+                user.is_superuser or 
+                user.is_staff or
+                (user.rol and user.rol.nombre in ['Administrador', 'Consultor', 'Analista'])
+            )
+            
+            # Si no puede ver todas, solo mostrar sus propias empresas
+            if not can_view_all:
+                queryset = queryset.filter(id_usuario=user)
 
         # Filtrar por categoría de matriz si se proporciona
         categoria_matriz = self.request.query_params.get("categoria_matriz")
@@ -681,6 +717,35 @@ class MatrizClasificacionExportadorViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
+# PAGINACIÓN PERSONALIZADA PARA EMPRESAS
+# ============================================================================
+
+class EmpresaPagination(PageNumberPagination):
+    """
+    Paginación personalizada que permite valores grandes de page_size
+    cuando se solicita desde el frontend
+    """
+    page_size = 20  # Valor por defecto
+    page_size_query_param = 'page_size'
+    max_page_size = 10000  # Permitir hasta 10000 resultados por página
+    
+    def get_page_size(self, request):
+        """
+        Permite que el frontend especifique un page_size grande
+        para obtener todas las empresas. Respeta el parámetro page_size de la query.
+        """
+        if self.page_size_query_param:
+            page_size = request.query_params.get(self.page_size_query_param)
+            if page_size is not None:
+                try:
+                    page_size = int(page_size)
+                    # Limitar al máximo permitido
+                    return min(page_size, self.max_page_size)
+                except (KeyError, ValueError):
+                    pass
+        return self.page_size
+
+# ============================================================================
 # VIEWSET UNIFICADO PARA EMPRESA (REEMPLAZA LOS PROXY MODELS)
 # ============================================================================
 
@@ -701,6 +766,7 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         "servicios_mixta"
     )
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         "exporta",
         "importa",
@@ -724,6 +790,7 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     ]
     ordering_fields = ["razon_social", "fecha_creacion"]
     ordering = ["-fecha_creacion"]
+    pagination_class = EmpresaPagination  # Usar paginación personalizada
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -733,9 +800,20 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Filtrar por usuario si no es admin
-        if not self.request.user.is_staff and self.request.user.is_authenticated:
-            queryset = queryset.filter(id_usuario=self.request.user)
+        # Filtrar por usuario si no es admin/staff y no tiene rol de dashboard
+        # Los usuarios con roles de Administrador, Consultor o Analista pueden ver todas las empresas
+        if self.request.user.is_authenticated:
+            user = self.request.user
+            # Verificar si el usuario puede ver todas las empresas
+            can_view_all = (
+                user.is_superuser or 
+                user.is_staff or
+                (user.rol and user.rol.nombre in ['Administrador', 'Consultor', 'Analista'])
+            )
+            
+            # Si no puede ver todas, solo mostrar sus propias empresas
+            if not can_view_all:
+                queryset = queryset.filter(id_usuario=user)
 
         # Filtrar por tipo de empresa si se proporciona
         tipo_empresa_valor = self.request.query_params.get("tipo_empresa_valor")

@@ -9,7 +9,7 @@ from .serializers import (
     DptoSerializer, MunicipioSerializer, LocalidadesSerializer,
     ConfiguracionSistemaSerializer
 )
-from .permissions import CanManageUsers
+from .permissions import CanManageUsers, IsOwnerOrAdmin
 
 User = get_user_model()
 
@@ -39,11 +39,28 @@ class RolUsuarioViewSet(viewsets.ModelViewSet):
 class UsuarioViewSet(viewsets.ModelViewSet):
     """ViewSet para usuarios"""
     queryset = User.objects.select_related('rol').all()
-    permission_classes = [permissions.IsAuthenticated, CanManageUsers]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['is_active', 'rol', 'genero']
     search_fields = ['email', 'nombre', 'apellido', 'numero_documento']
     ordering_fields = ['email', 'nombre', 'date_joined']
     ordering = ['-date_joined']
+    
+    def get_permissions(self):
+        """Permisos personalizados: permitir a usuarios actualizar su propio perfil"""
+        if self.action in ['update', 'partial_update']:
+            # Permitir que usuarios actualicen su propio perfil o que admins gestionen usuarios
+            return [permissions.IsAuthenticated(), IsOwnerOrAdmin()]
+        elif self.action in ['list', 'retrieve']:
+            # Lectura permitida para todos los usuarios autenticados
+            return [permissions.IsAuthenticated()]
+        elif self.action == 'create':
+            # Solo admins pueden crear usuarios
+            return [permissions.IsAuthenticated(), CanManageUsers()]
+        elif self.action == 'destroy':
+            # Solo admins pueden eliminar usuarios
+            return [permissions.IsAuthenticated(), CanManageUsers()]
+        # Para otras acciones (como toggle_active), usar permisos de gestión
+        return [permissions.IsAuthenticated(), CanManageUsers()]
     
     def get_queryset(self):
         """Filtrar usuarios para mostrar solo Administrador, Consultor y Analista"""
@@ -83,7 +100,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
         """Obtener información del usuario actual"""
-        serializer = UsuarioSerializer(request.user)
+        # Asegurarse de que el rol esté cargado con select_related
+        # Usar el mismo queryset base que el ViewSet para consistencia
+        user = User.objects.select_related('rol').get(pk=request.user.pk)
+        # Usar el mismo serializer que se usa para retrieve/detail
+        serializer = UsuarioSerializer(user, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['patch', 'put'], permission_classes=[permissions.IsAuthenticated])

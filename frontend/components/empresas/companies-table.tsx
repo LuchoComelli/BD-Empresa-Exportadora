@@ -24,7 +24,7 @@ interface Empresa {
 }
 
 interface CompaniesTableProps {
-  empresas: Empresa[]
+  empresas: Empresa[] // Empresas de la página actual
   loading: boolean
   filters: any
   searchQuery: string
@@ -39,6 +39,7 @@ interface CompaniesTableProps {
     totalPages: number
   }
   onPageChange: (page: number) => void
+  allEmpresas?: Empresa[] // Todas las empresas filtradas (para seleccionar todas)
 }
 
 function getCategoryFromEmpresa(empresa: Empresa): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" {
@@ -74,16 +75,26 @@ export function CompaniesTable({
   onRefresh,
   pagination,
   onPageChange,
+  allEmpresas,
 }: CompaniesTableProps) {
   const [selectAll, setSelectAll] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
+  // Usar allEmpresas si está disponible, sino usar empresas (compatibilidad hacia atrás)
+  const empresasParaSeleccionar = allEmpresas || empresas
+
   const handleSelectAll = (checked: boolean) => {
     setSelectAll(checked)
     if (checked) {
-      onSelectionChange(empresas.map(e => e.id))
+      // Seleccionar todas las empresas filtradas, no solo las de la página actual
+      const todasLasIds = empresasParaSeleccionar.map(e => e.id)
+      // Mantener las selecciones existentes y agregar las nuevas
+      const nuevasSelecciones = [...new Set([...selectedEmpresas, ...todasLasIds])]
+      onSelectionChange(nuevasSelecciones)
     } else {
-      onSelectionChange([])
+      // Deseleccionar solo las empresas de la página actual
+      const idsDeLaPagina = empresas.map(e => e.id)
+      onSelectionChange(selectedEmpresas.filter(id => !idsDeLaPagina.includes(id)))
     }
   }
 
@@ -97,12 +108,15 @@ export function CompaniesTable({
   }
 
   const isAllSelected = useMemo(() => {
+    // Verificar si todas las empresas de la página actual están seleccionadas
     return empresas.length > 0 && empresas.every(e => selectedEmpresas.includes(e.id))
   }, [empresas, selectedEmpresas])
 
   const isIndeterminate = useMemo(() => {
-    return selectedEmpresas.length > 0 && !isAllSelected
-  }, [selectedEmpresas, isAllSelected])
+    // Mostrar estado indeterminado si hay algunas seleccionadas pero no todas de la página actual
+    const algunasSeleccionadas = empresas.some(e => selectedEmpresas.includes(e.id))
+    return algunasSeleccionadas && !isAllSelected
+  }, [empresas, selectedEmpresas, isAllSelected])
 
   if (loading) {
     return (

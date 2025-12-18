@@ -51,15 +51,16 @@ export default function DashboardPage() {
       }
       
       // Verificar si el usuario tiene permiso para acceder al dashboard
+      const rolNombre = user.rol?.nombre || ""
       const canAccessDashboard = 
         user.is_superuser || 
         user.type === "admin" || 
         user.type === "staff" ||
-        user.rol?.nombre?.toLowerCase().includes("admin") ||
-        user.rol?.nombre?.toLowerCase().includes("administrador") ||
-        user.rol?.nombre?.toLowerCase().includes("analista") ||
-        user.rol?.nombre?.toLowerCase().includes("consulta") ||
-        user.rol?.nombre?.toLowerCase().includes("consultor")
+        rolNombre.toLowerCase().includes("admin") ||
+        rolNombre.toLowerCase().includes("administrador") ||
+        rolNombre.toLowerCase().includes("analista") ||
+        rolNombre.toLowerCase().includes("consulta") ||
+        rolNombre.toLowerCase().includes("consultor")
       
       if (!canAccessDashboard) {
         // Si no tiene permiso, redirigir al perfil de empresa
@@ -96,15 +97,16 @@ export default function DashboardPage() {
   }
 
   // Verificar permisos final
+  const rolNombre = user.rol?.nombre || ""
   const canAccessDashboard = 
     user.is_superuser || 
     user.type === "admin" || 
     user.type === "staff" ||
-    user.rol?.nombre?.toLowerCase().includes("admin") ||
-    user.rol?.nombre?.toLowerCase().includes("administrador") ||
-    user.rol?.nombre?.toLowerCase().includes("analista") ||
-    user.rol?.nombre?.toLowerCase().includes("consulta") ||
-    user.rol?.nombre?.toLowerCase().includes("consultor")
+    rolNombre.toLowerCase().includes("admin") ||
+    rolNombre.toLowerCase().includes("administrador") ||
+    rolNombre.toLowerCase().includes("analista") ||
+    rolNombre.toLowerCase().includes("consulta") ||
+    rolNombre.toLowerCase().includes("consultor")
 
   if (!canAccessDashboard) {
     return null

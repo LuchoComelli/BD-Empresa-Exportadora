@@ -101,6 +101,12 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         if request.user.is_superuser or request.user.is_staff:
             return True
         
+        # Si el objeto es un usuario, permitir que actualice su propio perfil
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if isinstance(obj, User):
+            return obj.id == request.user.id
+        
         # El propietario puede modificar
         if hasattr(obj, 'id_usuario'):
             return obj.id_usuario == request.user

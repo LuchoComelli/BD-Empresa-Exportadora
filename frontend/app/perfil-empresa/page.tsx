@@ -3,6 +3,8 @@
 import { useAuth } from "@/lib/auth-context"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
+import Link from "next/link"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { handleAuthError } from "@/hooks/use-dashboard-auth"
@@ -34,6 +36,8 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  Instagram,
+  Linkedin,
 } from "lucide-react"
 import {
   Dialog,
@@ -75,6 +79,14 @@ export default function PerfilEmpresaPage() {
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [loadingRubros, setLoadingRubros] = useState(false)
 
+  // Estado para configuración del footer
+  const [configuracion, setConfiguracion] = useState({
+    institucion: "Dirección de Intercambio Comercial Internacional y Regional",
+    email_contacto: "info@desarrolloproductivo.catamarca.gob.ar",
+    telefono: "(0383) 4437390",
+    direccion: "San Martín 320, San Fernando del Valle de Catamarca",
+  })
+
   // Verificar autenticación y si debe cambiar la contraseña
   useEffect(() => {
     console.log("[Perfil] Verificando autenticación y cambio de contraseña:", {
@@ -112,6 +124,25 @@ export default function PerfilEmpresaPage() {
       }
     }
   }, [user, authLoading, router])
+
+  // Cargar configuración para el footer
+  useEffect(() => {
+    const loadConfiguracion = async () => {
+      try {
+        const data = await api.getConfiguracion()
+        setConfiguracion({
+          institucion: data.institucion || "Dirección de Intercambio Comercial Internacional y Regional",
+          email_contacto: data.email_contacto || "info@desarrolloproductivo.catamarca.gob.ar",
+          telefono: data.telefono || "(0383) 4437390",
+          direccion: data.direccion || "San Martín 320, San Fernando del Valle de Catamarca",
+        })
+      } catch (error) {
+        console.error("Error cargando configuración:", error)
+        // Mantener valores por defecto en caso de error
+      }
+    }
+    loadConfiguracion()
+  }, [])
 
   // Recargar datos del usuario al montar el componente
   useEffect(() => {
@@ -406,18 +437,20 @@ export default function PerfilEmpresaPage() {
   if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
-        <header className="bg-[#222A59] text-white shadow-lg">
-          <div className="container mx-auto px-4 py-4 md:py-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-xl flex items-center justify-center">
-                  <Building2 className="w-6 h-6 md:w-8 md:h-8 text-[#222A59]" />
+        <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
+          <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 md:gap-3 min-w-0">
+              <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
+                <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
+                  <Image
+                    src="/logo.png"
+                    alt="Logo Catamarca"
+                    fill
+                    className="object-contain"
+                    priority
+                  />
                 </div>
-                <div>
-                  <h1 className="text-xl md:text-2xl font-bold">Perfil de Empresa</h1>
-                  <p className="text-xs md:text-sm text-white/80">Dirección de Intercambio Comercial Internacional y Regional</p>
-                </div>
-              </div>
+              </Link>
             </div>
           </div>
         </header>
@@ -426,6 +459,71 @@ export default function PerfilEmpresaPage() {
             <p className="text-lg text-[#6B7280]">Cargando...</p>
           </Card>
         </main>
+        {/* Footer */}
+        <footer className="bg-[#222A59] text-white py-8 md:py-12">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
+              <div>
+                <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Contacto</h4>
+                <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
+                <p className="text-white/80 text-sm mb-2">{configuracion.telefono}</p>
+                <p className="text-white/80 text-sm">{configuracion.email_contacto}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Enlaces Útiles</h4>
+                <ul className="space-y-2 text-sm text-white/80">
+                  <li>
+                    <Link href="/login" className="hover:text-white transition-colors">
+                      Iniciar Sesión
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/registro" className="hover:text-white transition-colors">
+                      Registrar Empresa
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/#beneficios" className="hover:text-white transition-colors">
+                      Beneficios
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Redes Sociales</h4>
+                <div className="flex gap-4">
+                  <a 
+                    href="https://www.instagram.com/min.integracionregional.cat?igsh=MTIzdTZkczVpZ2o4bQ=="
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                    aria-label="Instagram"
+                  >
+                    <Instagram className="w-5 h-5" />
+                  </a>
+                  <a 
+                    href="https://www.linkedin.com/company/sec-relaciones-internacionales-catamarca/posts/?feedView=all"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                    aria-label="LinkedIn"
+                  >
+                    <Linkedin className="w-5 h-5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="relative w-full max-w-2xl h-auto">
+                <img
+                  src="/footer.png"
+                  alt="Footer Catamarca"
+                  className="w-full h-auto object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     )
   }
@@ -434,18 +532,20 @@ export default function PerfilEmpresaPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
-        <header className="bg-[#222A59] text-white shadow-lg">
-          <div className="container mx-auto px-4 py-4 md:py-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-xl flex items-center justify-center">
-                  <Building2 className="w-6 h-6 md:w-8 md:h-8 text-[#222A59]" />
+        <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
+          <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 md:gap-3 min-w-0">
+              <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
+                <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
+                  <Image
+                    src="/logo.png"
+                    alt="Logo Catamarca"
+                    fill
+                    className="object-contain"
+                    priority
+                  />
                 </div>
-                <div>
-                  <h1 className="text-xl md:text-2xl font-bold">Perfil de Empresa</h1>
-                  <p className="text-xs md:text-sm text-white/80">Dirección de Intercambio Comercial Internacional y Regional</p>
-                </div>
-              </div>
+              </Link>
             </div>
           </div>
         </header>
@@ -499,19 +599,22 @@ export default function PerfilEmpresaPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
       {/* Header */}
-      <header className="bg-[#222A59] text-white shadow-lg">
-        <div className="container mx-auto px-4 py-4 md:py-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-xl flex items-center justify-center">
-                <Building2 className="w-6 h-6 md:w-8 md:h-8 text-[#222A59]" />
+      <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
+        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
+              <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
+                <Image
+                  src="/logo.png"
+                  alt="Logo Catamarca"
+                  fill
+                  className="object-contain"
+                  priority
+                />
               </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold">Perfil de Empresa</h1>
-                <p className="text-xs md:text-sm text-white/80">Dirección de Intercambio Comercial Internacional y Regional</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
+            </Link>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
               {!isEditing ? (
                 <Button
                   onClick={() => {
@@ -889,7 +992,6 @@ export default function PerfilEmpresaPage() {
               </Button>
             </div>
           </div>
-        </div>
       </header>
 
       {/* Main Content */}
@@ -2380,6 +2482,75 @@ export default function PerfilEmpresaPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-[#222A59] text-white py-8 md:py-12">
+        <div className="container mx-auto px-4">
+          {/* Grid de contenido */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
+            <div>
+              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Contacto</h4>
+              <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
+              <p className="text-white/80 text-sm mb-2">{configuracion.telefono}</p>
+              <p className="text-white/80 text-sm">{configuracion.email_contacto}</p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Enlaces Útiles</h4>
+              <ul className="space-y-2 text-sm text-white/80">
+                <li>
+                  <Link href="/login" className="hover:text-white transition-colors">
+                    Iniciar Sesión
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/registro" className="hover:text-white transition-colors">
+                    Registrar Empresa
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/#beneficios" className="hover:text-white transition-colors">
+                    Beneficios
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Redes Sociales</h4>
+              <div className="flex gap-4">
+                <a 
+                  href="https://www.instagram.com/min.integracionregional.cat?igsh=MTIzdTZkczVpZ2o4bQ=="
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                  aria-label="Instagram"
+                >
+                  <Instagram className="w-5 h-5" />
+                </a>
+                <a 
+                  href="https://www.linkedin.com/company/sec-relaciones-internacionales-catamarca/posts/?feedView=all"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+                  aria-label="LinkedIn"
+                >
+                  <Linkedin className="w-5 h-5" />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Imagen del footer al final */}
+          <div className="flex flex-col items-center">
+            <div className="relative w-full max-w-2xl h-auto">
+              <img
+                src="/footer.png"
+                alt="Footer Catamarca"
+                className="w-full h-auto object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      </footer>
 
       {/* Modal obligatorio para cambiar contraseña - NO SE PUEDE CERRAR */}
       <Dialog open={showPasswordChangeModal} onOpenChange={() => {}}>

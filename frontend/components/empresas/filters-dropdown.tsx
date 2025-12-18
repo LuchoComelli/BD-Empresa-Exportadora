@@ -43,22 +43,22 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
     loadRubros()
   }, [])
 
-  // Cargar subrubros cuando se selecciona un rubro
+  // Cargar subrubros - siempre cargar, pero filtrar por rubro si hay uno seleccionado
   useEffect(() => {
     const loadSubRubros = async () => {
-      if (filters.rubro && filters.rubro !== 'all') {
-        try {
-          setLoadingRubros(true)
-          const data = await api.getSubRubrosPorRubro(filters.rubro)
-          setSubRubros(Array.isArray(data) ? data : (data.results || []))
-        } catch (error) {
-          console.error("Error loading subrubros:", error)
-          setSubRubros([])
-        } finally {
-          setLoadingRubros(false)
-        }
-      } else {
+      try {
+        setLoadingRubros(true)
+        // Si hay un rubro seleccionado, cargar solo los subrubros de ese rubro
+        // Si no, cargar todos los subrubros
+        const data = filters.rubro && filters.rubro !== 'all'
+          ? await api.getSubRubros(filters.rubro)
+          : await api.getSubRubros()
+        setSubRubros(Array.isArray(data) ? data : (data.results || []))
+      } catch (error) {
+        console.error("Error loading subrubros:", error)
         setSubRubros([])
+      } finally {
+        setLoadingRubros(false)
       }
     }
     loadSubRubros()
@@ -82,8 +82,18 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
 
   const handleFilterChange = (key: string, value: string) => {
     const newFilters = { ...filters, [key]: value }
-    if (key === 'rubro' && value === 'all') {
-      newFilters.subRubro = 'all'
+    // Si cambia el rubro, limpiar el subrubro seleccionado si no pertenece al nuevo rubro
+    if (key === 'rubro') {
+      if (value === 'all') {
+        newFilters.subRubro = 'all'
+      } else {
+        // Si hay un subrubro seleccionado, verificar si pertenece al nuevo rubro
+        if (filters.subRubro && filters.subRubro !== 'all') {
+          // Limpiar el subrubro para evitar inconsistencias
+          // El usuario deberá seleccionarlo nuevamente
+          newFilters.subRubro = 'all'
+        }
+      }
     }
     onFilterChange(newFilters)
   }
@@ -165,29 +175,38 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
               </Select>
             </div>
 
-            {/* Sub-Rubro */}
-            {filters.rubro && filters.rubro !== 'all' && (
-              <div className="space-y-2">
-                <Label htmlFor="subRubro" className="text-sm">Sub-Rubro</Label>
-                <Select 
-                  value={filters.subRubro || "all"} 
-                  onValueChange={(value) => handleFilterChange('subRubro', value)}
-                  disabled={loadingRubros}
-                >
-                  <SelectTrigger id="subRubro" className="h-9">
-                    <SelectValue placeholder={loadingRubros ? "Cargando..." : "Todos los sub-rubros"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {subRubros.map((subRubro) => (
-                      <SelectItem key={subRubro.id} value={String(subRubro.id)}>
-                        {subRubro.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {/* Sub-Rubro - Siempre visible, pero filtrado por rubro si hay uno seleccionado */}
+            <div className="space-y-2">
+              <Label htmlFor="subRubro" className="text-sm">Sub-Rubro</Label>
+              <Select 
+                value={filters.subRubro || "all"} 
+                onValueChange={(value) => handleFilterChange('subRubro', value)}
+                disabled={loadingRubros || (filters.rubro && filters.rubro !== 'all' && subRubros.length === 0)}
+              >
+                <SelectTrigger id="subRubro" className="h-9">
+                  <SelectValue placeholder={
+                    loadingRubros 
+                      ? "Cargando..." 
+                      : filters.rubro && filters.rubro !== 'all'
+                        ? "Selecciona un sub-rubro del rubro elegido"
+                        : "Todos los sub-rubros"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {subRubros.map((subRubro) => (
+                    <SelectItem key={subRubro.id} value={String(subRubro.id)}>
+                      {subRubro.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {filters.rubro && filters.rubro !== 'all' && subRubros.length === 0 && !loadingRubros && (
+                <p className="text-xs text-muted-foreground">
+                  No hay sub-rubros disponibles para este rubro
+                </p>
+              )}
+            </div>
 
             {/* Departamento */}
             <div className="space-y-2">

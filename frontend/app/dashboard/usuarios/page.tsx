@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import api from "@/lib/api"
 import { useRouter } from "next/navigation"
 import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
+import { useToast } from "@/hooks/use-toast"
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,7 @@ interface Rol {
 export default function UsuariosPage() {
   const router = useRouter()
   const { user, isLoading: authLoading } = useDashboardAuth()
+  const { toast } = useToast()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [roles, setRoles] = useState<Rol[]>([])
   
@@ -126,6 +128,11 @@ export default function UsuariosPage() {
     } catch (error: any) {
       if (!handleAuthError(error)) {
         console.error("Error loading usuarios:", error)
+        toast({
+          title: "Error al cargar usuarios",
+          description: "No se pudieron cargar los usuarios. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
       }
       setUsuarios([])
     } finally {
@@ -149,6 +156,11 @@ export default function UsuariosPage() {
       // de forma silenciosa usando handleAuthError para evitar el mensaje en consola.
       if (!handleAuthError(error)) {
         console.error("Error loading roles:", error)
+        toast({
+          title: "Error al cargar roles",
+          description: "No se pudieron cargar los roles. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
       }
     }
   }
@@ -159,7 +171,11 @@ export default function UsuariosPage() {
       
       // Validar que el rol esté seleccionado
       if (!formData.rol) {
-        alert("Por favor, selecciona un rol para el usuario")
+        toast({
+          title: "Rol requerido",
+          description: "Por favor, selecciona un rol para el usuario",
+          variant: "destructive",
+        })
         return
       }
       
@@ -187,11 +203,18 @@ export default function UsuariosPage() {
         telefono: "",
       })
       loadUsuarios()
-      alert("Usuario creado exitosamente")
+      toast({
+        title: "Usuario creado",
+        description: "El usuario ha sido creado exitosamente",
+      })
     } catch (error: any) {
       console.error("Error creating usuario:", error)
       const errorMessage = error.message || "Error al crear el usuario. Por favor, intenta nuevamente."
-      alert(errorMessage)
+      toast({
+        title: "Error al crear usuario",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoadingAction(false)
     }
@@ -248,11 +271,18 @@ export default function UsuariosPage() {
         telefono: "",
       })
       loadUsuarios()
-      alert("Usuario actualizado exitosamente")
+      toast({
+        title: "Usuario actualizado",
+        description: "El usuario ha sido actualizado exitosamente",
+      })
     } catch (error: any) {
       console.error("Error updating usuario:", error)
       const errorMessage = error.message || "Error al actualizar el usuario. Por favor, intenta nuevamente."
-      alert(errorMessage)
+      toast({
+        title: "Error al actualizar usuario",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoadingAction(false)
     }
@@ -282,10 +312,17 @@ export default function UsuariosPage() {
       setShowRoleDialog(false)
       setSelectedUsuario(null)
       loadUsuarios()
-      alert("Rol actualizado exitosamente")
+      toast({
+        title: "Rol actualizado",
+        description: "El rol del usuario ha sido actualizado exitosamente",
+      })
     } catch (error: any) {
       console.error("Error updating role:", error)
-      alert(error.message || "Error al actualizar el rol. Por favor, intenta nuevamente.")
+      toast({
+        title: "Error al actualizar rol",
+        description: error.message || "Error al actualizar el rol. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     } finally {
       setLoadingAction(false)
     }
@@ -293,6 +330,8 @@ export default function UsuariosPage() {
 
   const handleToggleActive = async (usuario: Usuario) => {
     const action = usuario.is_active ? 'desactivar' : 'activar'
+    const actionPast = usuario.is_active ? 'desactivado' : 'activado'
+    
     if (!confirm(`¿Estás seguro de que deseas ${action} a ${usuario.nombre} ${usuario.apellido}?\n\nNota: Esto realizará un soft delete (desactivación) para mantener el registro en las auditorías.`)) {
       return
     }
@@ -301,12 +340,19 @@ export default function UsuariosPage() {
       setLoadingAction(true)
       const response = await api.toggleActiveUsuario(usuario.id)
       loadUsuarios()
-      const message = response?.message || `Usuario ${action}do exitosamente`
-      alert(message)
+      const message = response?.message || `El usuario ha sido ${actionPast} exitosamente`
+      toast({
+        title: usuario.is_active ? "Usuario desactivado" : "Usuario activado",
+        description: message,
+      })
     } catch (error: any) {
       console.error("Error toggling active:", error)
-      const errorMessage = error.message || "Error al cambiar el estado del usuario. Por favor, intenta nuevamente."
-      alert(errorMessage)
+      const errorMessage = error.message || `Error al ${action} el usuario. Por favor, intenta nuevamente.`
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoadingAction(false)
     }

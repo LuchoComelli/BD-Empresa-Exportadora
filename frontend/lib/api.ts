@@ -441,13 +441,18 @@ async getEmpresas(params?: {
     queryParams.append('tipo_empresa_valor', params.tipo_empresa)
   }
   
-  // Obtener todas las empresas del backend (usar page_size grande para evitar paginación)
-  // El backend tiene paginación por defecto de 20, así que pedimos más
+  // Si se especifica page_size, usarlo; si no, usar un valor grande para obtener todas
+  const requestedPageSize = params?.page_size || 10000;
   const page = params?.page || 1;
-  const pageSize = params?.page_size || 10;
   
-  // Pedir un page_size grande para obtener todas las empresas
-  queryParams.append('page_size', '1000'); // Suficientemente grande para obtener todas
+  // Si el page_size es muy grande (>= 1000), asumimos que queremos todas las empresas
+  // y no aplicamos paginación en el frontend
+  const wantsAllEmpresas = requestedPageSize >= 1000;
+  
+  // Pedir al backend con un page_size muy grande para obtener todas las empresas
+  // Usar un valor grande para evitar límites del backend
+  const backendPageSize = wantsAllEmpresas ? 10000 : requestedPageSize;
+  queryParams.append('page_size', String(backendPageSize));
   
   const query = queryParams.toString()
   const endpoint = `/empresas/${query ? `?${query}` : ''}`.replace(/\/$/, '')
@@ -462,6 +467,66 @@ async getEmpresas(params?: {
     // Respuesta paginada del backend
     allEmpresas = response.results;
     total = response.count || response.results.length;
+    
+    // Si queremos todas las empresas, verificar si necesitamos hacer peticiones adicionales
+    if (wantsAllEmpresas) {
+      // Si el backend tiene más empresas de las que devolvió, o si devolvió exactamente 20
+      // (que es un límite común), hacer peticiones adicionales
+      const necesitaMasPeticiones = total > allEmpresas.length || 
+                                     (allEmpresas.length === 20 && total >= 20);
+      
+      if (necesitaMasPeticiones) {
+        console.log(`[API] El backend tiene ${total} empresas pero solo devolvió ${allEmpresas.length}. Obteniendo el resto...`);
+        
+        // Hacer peticiones adicionales para obtener todas las empresas
+        const backendPageSize = 1000; // Tamaño de página para las peticiones adicionales
+        const totalPages = total > 0 ? Math.ceil(total / backendPageSize) : 10; // Si no sabemos el total, intentar hasta 10 páginas
+        
+        for (let p = 2; p <= totalPages; p++) {
+          const additionalParams = new URLSearchParams(queryParams.toString());
+          additionalParams.set('page', String(p));
+          additionalParams.set('page_size', String(backendPageSize));
+          
+          const additionalEndpoint = `/empresas/${additionalParams.toString() ? `?${additionalParams.toString()}` : ''}`.replace(/\/$/, '');
+          try {
+            const additionalResponse = await this.get<any>(additionalEndpoint);
+            if (additionalResponse.results && Array.isArray(additionalResponse.results)) {
+              if (additionalResponse.results.length === 0) {
+                // Si no hay más resultados, detener
+                console.log(`[API] No hay más empresas en la página ${p}`);
+                break;
+              }
+              
+              allEmpresas = [...allEmpresas, ...additionalResponse.results];
+              console.log(`[API] Página ${p}: obtenidas ${additionalResponse.results.length} empresas adicionales. Total acumulado: ${allEmpresas.length}`);
+              
+              // Si ya tenemos todas las empresas según el count, detener
+              if (total > 0 && allEmpresas.length >= total) {
+                console.log(`[API] Ya se obtuvieron todas las ${total} empresas`);
+                break;
+              }
+              
+              // Si el backend devolvió menos empresas de las esperadas, puede que no haya más
+              if (additionalResponse.results.length < backendPageSize) {
+                console.log(`[API] El backend devolvió menos empresas de las esperadas. Probablemente ya tenemos todas.`);
+                break;
+              }
+            } else {
+              // Si no hay results, no hay más empresas
+              break;
+            }
+          } catch (error) {
+            console.warn(`[API] Error obteniendo página ${p}:`, error);
+            break; // Si hay error, detener las peticiones adicionales
+          }
+        }
+        
+        // Actualizar el total con el número real de empresas obtenidas
+        if (allEmpresas.length > total) {
+          total = allEmpresas.length;
+        }
+      }
+    }
   } else if (Array.isArray(response)) {
     // Respuesta directa como array
     allEmpresas = response;
@@ -477,7 +542,18 @@ async getEmpresas(params?: {
   });
   const empresasUnicas = Array.from(empresasMap.values());
   
-  // Aplicar paginación en el frontend sobre todas las empresas obtenidas
+  // Si queremos todas las empresas, devolver todas sin paginar
+  if (wantsAllEmpresas) {
+    console.log('[API] Devolviendo todas las empresas:', empresasUnicas.length);
+    return {
+      results: empresasUnicas,
+      count: empresasUnicas.length,
+      allEmpresas: empresasUnicas // Propiedad adicional para compatibilidad
+    };
+  }
+  
+  // Aplicar paginación en el frontend solo si no queremos todas
+  const pageSize = params?.page_size || 10;
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedEmpresas = empresasUnicas.slice(startIndex, endIndex);
@@ -1073,9 +1149,17 @@ async deleteServicioMixta(servicioId: number): Promise<void> {
     return this.get<any[]>(`/empresas/rubros/?activo=true`);
   }
 
-  // Obtener subrubros por rubro
+  // Obtener todos los subrubros
+  async getSubRubros(rubroId?: string): Promise<any[]> {
+    if (rubroId) {
+      return this.get<any[]>(`/empresas/subrubros/?rubro=${rubroId}&activo=true`);
+    }
+    return this.get<any[]>(`/empresas/subrubros/?activo=true`);
+  }
+
+  // Obtener subrubros por rubro (método legacy, usar getSubRubros con parámetro)
   async getSubRubrosPorRubro(rubroId: string): Promise<any[]> {
-    return this.get<any[]>(`/empresas/subrubros/?rubro=${rubroId}&activo=true`);
+    return this.getSubRubros(rubroId);
   }
 
   // ========== CONFIGURACIÓN DEL SISTEMA ==========

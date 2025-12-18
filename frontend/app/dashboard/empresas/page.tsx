@@ -52,12 +52,10 @@ export default function EmpresasPage() {
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [empresaAEliminar, setEmpresaAEliminar] = useState<Empresa | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 10,
-    total: 0,
-    totalPages: 0,
-  })
+  // Removemos la paginación - cargaremos todas las empresas
+  const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(10) // Solo para mostrar en la tabla, no para la API
 
   // Verificar autenticación
   useEffect(() => {
@@ -68,15 +66,16 @@ export default function EmpresasPage() {
       }
       
       // Verificar si el usuario tiene permiso para acceder al dashboard
+      const rolNombre = user.rol?.nombre || ""
       const canAccessDashboard = 
         user.is_superuser || 
         user.type === "admin" || 
         user.type === "staff" ||
-        user.rol?.nombre?.toLowerCase().includes("admin") ||
-        user.rol?.nombre?.toLowerCase().includes("administrador") ||
-        user.rol?.nombre?.toLowerCase().includes("analista") ||
-        user.rol?.nombre?.toLowerCase().includes("consulta") ||
-        user.rol?.nombre?.toLowerCase().includes("consultor")
+        rolNombre.toLowerCase().includes("admin") ||
+        rolNombre.toLowerCase().includes("administrador") ||
+        rolNombre.toLowerCase().includes("analista") ||
+        rolNombre.toLowerCase().includes("consulta") ||
+        rolNombre.toLowerCase().includes("consultor")
       
       if (!canAccessDashboard) {
         router.push("/perfil-empresa")
@@ -86,14 +85,13 @@ export default function EmpresasPage() {
   }, [user, authLoading, router])
 
   const loadEmpresas = async () => {
-    console.log('[DEBUG] Cargando empresas con página:', pagination.page)
-  console.log('[DEBUG] Total páginas calculadas:', pagination.totalPages)
-  console.log('[DEBUG] Filtros actuales:', filters)
+    console.log('[DEBUG] Cargando todas las empresas')
+    console.log('[DEBUG] Filtros actuales:', filters)
     try {
       setLoading(true)
       const params: any = {
-        page: pagination.page,
-        page_size: pagination.pageSize,
+        // No enviar paginación - queremos todas las empresas
+        page_size: 10000, // Número muy grande para obtener todas
       }
 
       // Búsqueda mejorada - busca en múltiples campos
@@ -144,55 +142,38 @@ const response = await api.getEmpresas(params)
 console.log('[DEBUG] Response completa:', response)
 console.log('[Empresas Page] Response received:', response)
 
-// Si la respuesta tiene paginación (DRF pagination)
+// Obtener todas las empresas sin paginación
+let allEmpresasData: Empresa[] = []
+
 if (response.results) {
   console.log('[Empresas Page] Results count:', response.results.length)
-  console.log('[Empresas Page] First empresa:', response.results[0])
-  
-  // Asegurar que cada empresa tenga un ID válido
-  const empresasWithIds = response.results.map((empresa: any) => {
+  allEmpresasData = response.results.map((empresa: any) => {
     if (!empresa.id) {
       console.warn('[Empresas Page] Empresa without ID:', empresa)
     }
     return empresa
   })
-  
-  const totalCount = response.count || response.results.length
-  const calculatedTotalPages = totalCount > 0 ? Math.ceil(totalCount / pagination.pageSize) : 1
-  
-  console.log('[DEBUG] Total count:', totalCount)
-  console.log('[DEBUG] Page size:', pagination.pageSize)
-  console.log('[DEBUG] Calculated total pages:', calculatedTotalPages)
-  
-  setEmpresas(empresasWithIds)
-  setPagination(prev => ({
-    ...prev,
-    total: totalCount,
-    totalPages: calculatedTotalPages,
-  }))
 } else if (Array.isArray(response)) {
-  // Si es un array simple
   console.log('[Empresas Page] Array response, count:', response.length)
-  
-  const totalCount = response.length
-  const calculatedTotalPages = totalCount > 0 ? Math.ceil(totalCount / pagination.pageSize) : 1
-  
-  setEmpresas(response)
-  setPagination(prev => ({
-    ...prev,
-    total: totalCount,
-    totalPages: calculatedTotalPages,
-  }))
+  allEmpresasData = response
 } else {
-  // Si viene en otro formato
   console.warn('[Empresas Page] Unexpected response format:', response)
-  setEmpresas([])
-  setPagination(prev => ({
-    ...prev,
-    total: 0,
-    totalPages: 1,
-  }))
+  allEmpresasData = []
 }
+
+// Guardar todas las empresas
+setAllEmpresas(allEmpresasData)
+
+// Calcular paginación solo para la visualización
+const totalCount = allEmpresasData.length
+const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 1
+
+// Obtener las empresas de la página actual
+const startIndex = (currentPage - 1) * pageSize
+const endIndex = startIndex + pageSize
+const empresasForPage = allEmpresasData.slice(startIndex, endIndex)
+
+setEmpresas(empresasForPage)
 } catch (error: any) {
   // Manejar errores de autenticación silenciosamente
   const errorMessage = error?.message || String(error)
@@ -219,39 +200,50 @@ if (response.results) {
 }
   }
 
+  // Cargar todas las empresas cuando cambian los filtros o búsqueda
   useEffect(() => {
     // Solo cargar empresas si el usuario está autenticado y tiene permisos
     if (!authLoading && user) {
+      const rolNombre = user.rol?.nombre || ""
       const canAccessDashboard = 
         user.is_superuser || 
         user.type === "admin" || 
         user.type === "staff" ||
-        user.rol?.nombre?.toLowerCase().includes("admin") ||
-        user.rol?.nombre?.toLowerCase().includes("administrador") ||
-        user.rol?.nombre?.toLowerCase().includes("analista") ||
-        user.rol?.nombre?.toLowerCase().includes("consulta") ||
-        user.rol?.nombre?.toLowerCase().includes("consultor")
+        rolNombre.toLowerCase().includes("admin") ||
+        rolNombre.toLowerCase().includes("administrador") ||
+        rolNombre.toLowerCase().includes("analista") ||
+        rolNombre.toLowerCase().includes("consulta") ||
+        rolNombre.toLowerCase().includes("consultor")
       
       if (canAccessDashboard) {
         loadEmpresas()
+        setCurrentPage(1) // Reset a la primera página cuando cambian los filtros
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, searchQuery, pagination.page, user, authLoading])
+  }, [filters, searchQuery, user, authLoading])
+
+  // Actualizar empresas mostradas cuando cambia la página actual
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    const empresasForPage = allEmpresas.slice(startIndex, endIndex)
+    setEmpresas(empresasForPage)
+  }, [currentPage, allEmpresas, pageSize])
 
   const handleFilterChange = (newFilters: any) => {
     setFilters({ ...filters, ...newFilters })
-    setPagination({ ...pagination, page: 1 }) // Reset to first page
+    setCurrentPage(1) // Reset to first page
   }
 
   const handleClearFilters = () => {
     setFilters({})
-    setPagination({ ...pagination, page: 1 })
+    setCurrentPage(1)
   }
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value)
-    setPagination({ ...pagination, page: 1 }) // Reset to first page
+    setCurrentPage(1) // Reset to first page
   }
 
   const handleExport = () => {
@@ -282,13 +274,15 @@ if (response.results) {
   }
 
   const handlePageChange = (page: number) => {
-  // Validar que la página esté en el rango válido
-  if (page < 1 || page > pagination.totalPages) {
-    console.warn(`Intento de acceder a página inválida: ${page}. Total páginas: ${pagination.totalPages}`)
-    return
+    // Validar que la página esté en el rango válido
+    const totalPages = allEmpresas.length > 0 ? Math.ceil(allEmpresas.length / pageSize) : 1
+    if (page < 1 || page > totalPages) {
+      console.warn(`Intento de acceder a página inválida: ${page}. Total páginas: ${totalPages}`)
+      return
+    }
+    setCurrentPage(page)
+    // Las selecciones se mantienen porque están en el estado global
   }
-  setPagination({ ...pagination, page })
-}
 
   const handleDelete = async (id: number) => {
   // Buscar la empresa para obtener su información
@@ -431,8 +425,14 @@ const confirmarEliminacion = async () => {
             onSelectionChange={setSelectedEmpresas}
             onDelete={handleDelete}
             onRefresh={loadEmpresas}
-            pagination={pagination}
+            pagination={{
+              page: currentPage,
+              pageSize: pageSize,
+              total: allEmpresas.length,
+              totalPages: allEmpresas.length > 0 ? Math.ceil(allEmpresas.length / pageSize) : 1,
+            }}
             onPageChange={handlePageChange}
+            allEmpresas={allEmpresas}
           />
         </div>
 
@@ -443,7 +443,7 @@ const confirmarEliminacion = async () => {
             setShowExportDialog(false)
             console.log('[Export] Dialog cerrado')
           }}
-          empresas={empresas.filter(e => selectedEmpresas.includes(e.id))}
+          empresas={allEmpresas.filter(e => selectedEmpresas.includes(e.id))}
         />
 
         {/* Delete Confirmation Dialog */}

@@ -139,19 +139,51 @@ export default function HomePage() {
               </Link>
             </div>
           )}
-          {user && (
-            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-              <Link href="/dashboard">
-                <Button
-                  size="sm"
-                  className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
-                >
-                  <span className="hidden sm:inline">Ir al Dashboard</span>
-                  <span className="sm:hidden">Dashboard</span>
-                </Button>
-              </Link>
-            </div>
-          )}
+          {user && (() => {
+            // Determinar si el usuario puede acceder al dashboard
+            const rolNombre = user.rol?.nombre || ""
+            const canAccessDashboard = 
+              user.is_superuser || 
+              user.type === "admin" || 
+              user.type === "staff" ||
+              rolNombre.toLowerCase().includes("admin") ||
+              rolNombre.toLowerCase().includes("administrador") ||
+              rolNombre.toLowerCase().includes("analista") ||
+              rolNombre.toLowerCase().includes("consulta") ||
+              rolNombre.toLowerCase().includes("consultor")
+            
+            // Si es empresa, mostrar botón para ir a perfil
+            if (user.type === "empresa" && !canAccessDashboard) {
+              return (
+                <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                  <Link href="/perfil-empresa">
+                    <Button
+                      size="sm"
+                      className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
+                    >
+                      <span className="hidden sm:inline">Ir a mi Perfil</span>
+                      <span className="sm:hidden">Perfil</span>
+                    </Button>
+                  </Link>
+                </div>
+              )
+            }
+            
+            // Si es admin, analista o consultor, mostrar botón para ir al dashboard
+            return (
+              <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                <Link href="/dashboard">
+                  <Button
+                    size="sm"
+                    className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
+                  >
+                    <span className="hidden sm:inline">Ir al Dashboard</span>
+                    <span className="sm:hidden">Dashboard</span>
+                  </Button>
+                </Link>
+              </div>
+            )
+          })()}
         </div>
       </header>
 

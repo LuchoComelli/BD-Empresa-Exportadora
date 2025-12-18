@@ -198,7 +198,7 @@ export default function MapaPage() {
         }
 
         // Obtener todas las empresas (sin límite de paginación)
-        params.page_size = 1000
+        params.page_size = 10000
 
         const response = await api.getEmpresas(params)
         const empresasData = Array.isArray(response) ? response : (response.results || [])
