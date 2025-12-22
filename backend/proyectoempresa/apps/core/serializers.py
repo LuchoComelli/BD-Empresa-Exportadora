@@ -302,6 +302,40 @@ class LocalidadesSerializer(serializers.ModelSerializer):
 class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
     """Serializer para configuración del sistema"""
     
+    def validate(self, data):
+        """Validar que los rangos de densidad sean consecutivos"""
+        densidad_baja_max = data.get('densidad_baja_max', self.instance.densidad_baja_max if self.instance else 5)
+        densidad_media_max = data.get('densidad_media_max', self.instance.densidad_media_max if self.instance else 20)
+        densidad_alta_max = data.get('densidad_alta_max', self.instance.densidad_alta_max if self.instance else 40)
+        
+        # Validar que densidad_baja_max sea mayor que 0
+        if densidad_baja_max < 1:
+            raise serializers.ValidationError({
+                'densidad_baja_max': 'La densidad baja debe ser al menos 1 empresa.'
+            })
+        
+        # Validar que densidad_media_max sea mayor que densidad_baja_max
+        if densidad_media_max <= densidad_baja_max:
+            raise serializers.ValidationError({
+                'densidad_media_max': f'La densidad media debe ser mayor que la densidad baja ({densidad_baja_max}).'
+            })
+        
+        # Validar que densidad_alta_max sea mayor que densidad_media_max
+        if densidad_alta_max <= densidad_media_max:
+            raise serializers.ValidationError({
+                'densidad_alta_max': f'La densidad alta debe ser mayor que la densidad media ({densidad_media_max}).'
+            })
+        
+        densidad_muy_alta_min = data.get('densidad_muy_alta_min', self.instance.densidad_muy_alta_min if self.instance else 41)
+        
+        # Validar que densidad_muy_alta_min sea mayor que densidad_alta_max
+        if densidad_muy_alta_min <= densidad_alta_max:
+            raise serializers.ValidationError({
+                'densidad_muy_alta_min': f'La densidad muy alta debe ser mayor que la densidad alta ({densidad_alta_max}).'
+            })
+        
+        return data
+    
     class Meta:
         model = ConfiguracionSistema
         fields = [
@@ -311,6 +345,7 @@ class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
             'beneficio1_titulo', 'beneficio1_descripcion',
             'beneficio2_titulo', 'beneficio2_descripcion',
             'beneficio3_titulo', 'beneficio3_descripcion',
+            'densidad_baja_max', 'densidad_media_max', 'densidad_alta_max', 'densidad_muy_alta_min',
             'fecha_creacion', 'fecha_actualizacion',
             'creado_por', 'actualizado_por'
         ]

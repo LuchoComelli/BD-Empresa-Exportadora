@@ -361,20 +361,28 @@ def cargar_rubros_subrubros():
     rubros_actualizados = 0
     subrubros_actualizados = 0
     
+    # Definir qué rubros son de servicio
+    RUBROS_SERVICIO = [6, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+    
     try:
         for rubro_data in RUBROS_DATA:
+            # Determinar el tipo de rubro
+            rubro_id = rubro_data['id']
+            tipo_rubro = 'servicio' if rubro_id in RUBROS_SERVICIO else 'producto'
+            
             # Crear o actualizar rubro
             rubro, created = Rubro.objects.get_or_create(
-                id=rubro_data['id'],
+                id=rubro_id,
                 defaults={
                     'nombre': rubro_data['nombre'],
-                    'descripcion': rubro_data['descripcion']
+                    'descripcion': rubro_data['descripcion'],
+                    'tipo': tipo_rubro
                 }
             )
             
             if created:
                 rubros_creados += 1
-                print(f"✅ Rubro creado: {rubro.nombre} (ID: {rubro.id})")
+                print(f"✅ Rubro creado: {rubro.nombre} (ID: {rubro.id}, Tipo: {tipo_rubro})")
             else:
                 # Actualizar datos si es necesario
                 updated = False
@@ -384,11 +392,14 @@ def cargar_rubros_subrubros():
                 if rubro.descripcion != rubro_data['descripcion']:
                     rubro.descripcion = rubro_data['descripcion']
                     updated = True
+                if rubro.tipo != tipo_rubro:
+                    rubro.tipo = tipo_rubro
+                    updated = True
                 
                 if updated:
                     rubro.save()
                     rubros_actualizados += 1
-                    print(f"🔄 Rubro actualizado: {rubro.nombre} (ID: {rubro.id})")
+                    print(f"🔄 Rubro actualizado: {rubro.nombre} (ID: {rubro.id}, Tipo: {tipo_rubro})")
             
             # Crear o actualizar subrubros
             for subrubro_data in rubro_data['subrubros']:

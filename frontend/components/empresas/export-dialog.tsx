@@ -131,6 +131,44 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
     }
   }
 
+  const getFieldValue = (empresa: any, fieldName: string): any => {
+    let value = empresa[fieldName]
+    
+    // Si el valor es null o undefined, retornar vacío
+    if (value === null || value === undefined) return ""
+    
+    // Formatear fechas
+    if (fieldName === 'fecha_creacion' || (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/))) {
+      try {
+        const date = new Date(value)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('es-AR', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit' 
+          })
+        }
+      } catch (e) {
+        // Si falla el parseo, continuar con el valor original
+      }
+    }
+    
+    // Formatear booleanos
+    if (typeof value === 'boolean') return value ? 'Sí' : 'No'
+    
+    // Manejar objetos
+    if (typeof value === 'object') {
+      if (Array.isArray(value)) {
+        return value.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join('; ')
+      }
+      if (value.nombre) return value.nombre
+      if (value.razon_social) return value.razon_social
+      return JSON.stringify(value)
+    }
+    
+    return String(value)
+  }
+
   const exportToCSV = () => {
     if (selectedFields.length === 0) {
       alert("Por favor selecciona al menos un campo para exportar")
@@ -143,7 +181,7 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'nombre_fantasia': 'nombre_fantasia',
       'cuit_cuil': 'cuit_cuil',
       'tipo_sociedad': 'tipo_sociedad',
-      'tipo_empresa': 'tipo_empresa',
+      'tipo_empresa': 'tipo_empresa_nombre',
       'fecha_creacion': 'fecha_creacion',
       'rubro_principal': 'rubro_nombre',
       'categoria_matriz': 'categoria_matriz',
@@ -182,28 +220,8 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'observaciones': 'observaciones',
     }
 
-    // Organizar campos por categoría
-    const fieldsByCategory: Record<string, typeof availableFields> = {}
-    selectedFields.forEach(fieldId => {
-      const field = availableFields.find(f => f.id === fieldId)
-      if (field) {
-        const category = field.category || 'Otros'
-        if (!fieldsByCategory[category]) {
-          fieldsByCategory[category] = []
-        }
-        fieldsByCategory[category].push(field)
-      }
-    })
-
     // Función helper para escapar valores CSV
     const escapeCSV = (value: any): string => {
-      if (value === null || value === undefined) return ""
-      if (typeof value === 'boolean') value = value ? 'Sí' : 'No'
-      if (typeof value === 'object') {
-        if (value.nombre) value = value.nombre
-        else if (value.razon_social) value = value.razon_social
-        else value = JSON.stringify(value)
-      }
       const stringValue = String(value)
       if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
         return `"${stringValue.replace(/"/g, '""')}"`
@@ -211,41 +229,51 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       return stringValue
     }
 
-    // Construir CSV con estructura organizada
+    // Obtener los campos seleccionados en el orden correcto
+    const selectedFieldsData = selectedFields
+      .map(fieldId => availableFields.find(f => f.id === fieldId))
+      .filter(f => f !== undefined)
+
+    const headers = selectedFieldsData.map(f => f!.label)
+
+    // Construir CSV con formato de tabla (columnas y filas)
     const csvLines: string[] = []
     
     // Encabezado
-    csvLines.push("EXPORTACIÓN DE EMPRESAS")
-    csvLines.push(`Fecha: ${new Date().toLocaleDateString('es-AR')}`)
-    csvLines.push(`Total de empresas: ${empresas.length}`)
-    csvLines.push("") // Línea vacía
-
-    // Para cada empresa, organizar datos por categorías
-    empresas.forEach((empresa, index) => {
-      // Encabezado de empresa
-      csvLines.push(`=== EMPRESA ${index + 1}: ${empresa.razon_social || 'Sin nombre'} ===`)
-      csvLines.push("")
-
-      // Iterar por categorías
-      Object.keys(fieldsByCategory).forEach(category => {
-        const categoryFields = fieldsByCategory[category]
+    csvLines.push(headers.map(h => escapeCSV(h)).join(','))
+    
+    // Datos
+    empresas.forEach(empresa => {
+      const row = selectedFieldsData.map(field => {
+        const realFieldName = fieldMap[field!.id] || field!.id
         
-        // Encabezado de categoría
-        csvLines.push(`--- ${category.toUpperCase()} ---`)
+        // Obtener valor del campo, verificando múltiples ubicaciones posibles
+        let value = empresa[realFieldName] || empresa[field!.id] || ""
         
-        // Agregar campos de esta categoría
-        categoryFields.forEach(field => {
-          const realFieldName = fieldMap[field.id] || field.id
-          let value = empresa[realFieldName] || empresa[field.id] || ""
-          value = escapeCSV(value)
-          
-          csvLines.push(`${field.label},${value}`)
-        })
+        // Si no hay valor, intentar obtenerlo de relaciones o campos alternativos
+        if (!value || value === "") {
+          // Manejar campos especiales que pueden venir de relaciones
+          if (field!.id === 'tipo_empresa') {
+            value = empresa.tipo_empresa?.nombre || empresa.tipo_empresa_nombre || empresa.tipo_empresa || ""
+          } else if (field!.id === 'provincia') {
+            // La provincia generalmente viene del departamento
+            value = empresa.departamento?.provincia?.nombre || empresa.provincia || 'Catamarca'
+          } else if (field!.id === 'rubro_principal') {
+            value = empresa.id_rubro?.nombre || empresa.rubro_nombre || empresa.rubro_principal || ""
+          } else if (field!.id === 'departamento') {
+            value = empresa.departamento?.nombre || empresa.departamento_nombre || empresa.departamento || ""
+          } else if (field!.id === 'municipio') {
+            value = empresa.municipio?.nombre || empresa.municipio_nombre || empresa.municipio || ""
+          } else if (field!.id === 'localidad') {
+            value = empresa.localidad?.nombre || empresa.localidad_nombre || empresa.localidad || ""
+          }
+        }
         
-        csvLines.push("") // Línea vacía entre categorías
+        // Usar getFieldValue para formatear correctamente (incluye fechas)
+        value = getFieldValue({ ...empresa, [realFieldName]: value }, realFieldName)
+        return escapeCSV(value)
       })
-      
-      csvLines.push("") // Línea vacía entre empresas
+      csvLines.push(row.join(','))
     })
 
     const csvContent = csvLines.join("\n")
@@ -263,6 +291,12 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
     URL.revokeObjectURL(url)
   }
 
+  const escapeHTML = (text: string): string => {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
+
   const exportToExcel = () => {
     if (selectedFields.length === 0) {
       alert("Por favor selecciona al menos un campo para exportar")
@@ -275,7 +309,7 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'nombre_fantasia': 'nombre_fantasia',
       'cuit_cuil': 'cuit_cuil',
       'tipo_sociedad': 'tipo_sociedad',
-      'tipo_empresa': 'tipo_empresa',
+      'tipo_empresa': 'tipo_empresa_nombre',
       'fecha_creacion': 'fecha_creacion',
       'rubro_principal': 'rubro_nombre',
       'categoria_matriz': 'categoria_matriz',
@@ -301,99 +335,105 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'contacto_secundario_email': 'contacto_secundario_email',
       'exporta': 'exporta',
       'destinoexporta': 'destinoexporta',
-      'tipoexporta': 'tipoexporta',
       'importa': 'importa',
-      'tipoimporta': 'tipoimporta',
-      'frecuenciaimporta': 'frecuenciaimporta',
       'interes_exportar': 'interes_exportar',
       'certificadopyme': 'certificadopyme',
-      'certificacionesbool': 'certificacionesbool',
       'certificaciones': 'certificaciones',
-      'certificaciones_otros': 'certificaciones_otros',
       'promo2idiomas': 'promo2idiomas',
       'idiomas_trabaja': 'idiomas_trabaja',
-      'capacidadproductiva': 'capacidadproductiva',
-      'tiempocapacidad': 'tiempocapacidad',
-      'otracapacidad': 'otracapacidad',
-      'participoferianacional': 'participoferianacional',
-      'feriasnacionales': 'feriasnacionales',
-      'participoferiainternacional': 'participoferiainternacional',
-      'feriasinternacionales': 'feriasinternacionales',
+      'ferias': 'ferias',
+      'rondas': 'rondas',
+      'misiones': 'misiones',
       'observaciones': 'observaciones',
-      'puntaje': 'puntaje',
-      'descripcion': 'descripcion',
     }
 
-    // Organizar campos por categoría
-    const fieldsByCategory: Record<string, typeof availableFields> = {}
-    selectedFields.forEach(fieldId => {
-      const field = availableFields.find(f => f.id === fieldId)
-      if (field) {
-        const category = field.category || 'Otros'
-        if (!fieldsByCategory[category]) {
-          fieldsByCategory[category] = []
-        }
-        fieldsByCategory[category].push(field)
-      }
-    })
+    // Obtener los campos seleccionados en el orden correcto
+    const selectedFieldsData = selectedFields
+      .map(fieldId => availableFields.find(f => f.id === fieldId))
+      .filter(f => f !== undefined)
 
-    // Función helper para escapar valores
-    const escapeValue = (value: any): string => {
-      if (value === null || value === undefined) return ""
-      if (typeof value === 'boolean') value = value ? 'Sí' : 'No'
-      if (typeof value === 'object') {
-        if (value.nombre) value = value.nombre
-        else if (value.razon_social) value = value.razon_social
-        else value = JSON.stringify(value)
-      }
-      const stringValue = String(value)
-      if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
-        return `"${stringValue.replace(/"/g, '""')}"`
-      }
-      return stringValue
-    }
-
-    // Construir Excel con estructura organizada (formato CSV que Excel puede abrir)
-    const excelLines: string[] = []
+    const headers = selectedFieldsData.map(f => f!.label)
     
-    // Encabezado
-    excelLines.push("EXPORTACIÓN DE EMPRESAS")
-    excelLines.push(`Fecha: ${new Date().toLocaleDateString('es-AR')}`)
-    excelLines.push(`Total de empresas: ${empresas.length}`)
-    excelLines.push("") // Línea vacía
-
-    // Para cada empresa, organizar datos por categorías
-    empresas.forEach((empresa, index) => {
-      // Encabezado de empresa
-      excelLines.push(`=== EMPRESA ${index + 1}: ${empresa.razon_social || 'Sin nombre'} ===`)
-      excelLines.push("")
-
-      // Iterar por categorías
-      Object.keys(fieldsByCategory).forEach(category => {
-        const categoryFields = fieldsByCategory[category]
+    // Crear contenido HTML para Excel (formato tabla con estilos)
+    let htmlContent = `
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            table {
+              border-collapse: collapse;
+              width: 100%;
+            }
+            th {
+              background-color: #3259B5;
+              color: white;
+              font-weight: bold;
+              padding: 8px;
+              text-align: left;
+              border: 1px solid #ddd;
+            }
+            td {
+              padding: 6px;
+              border: 1px solid #ddd;
+            }
+            tr:nth-child(even) {
+              background-color: #f2f2f2;
+            }
+          </style>
+        </head>
+        <body>
+          <table>
+            <thead>
+              <tr>
+                ${headers.map(h => `<th>${escapeHTML(h)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+    `
+    
+    empresas.forEach(empresa => {
+      htmlContent += '<tr>'
+      selectedFieldsData.forEach(field => {
+        const realFieldName = fieldMap[field!.id] || field!.id
         
-        // Encabezado de categoría
-        excelLines.push(`--- ${category.toUpperCase()} ---`)
+        // Obtener valor del campo, verificando múltiples ubicaciones posibles
+        let value = empresa[realFieldName] || empresa[field!.id] || ""
         
-        // Agregar campos de esta categoría
-        categoryFields.forEach(field => {
-          const realFieldName = fieldMap[field.id] || field.id
-          let value = empresa[realFieldName] || empresa[field.id] || ""
-          value = escapeValue(value)
-          
-          excelLines.push(`${field.label},${value}`)
-        })
+        // Si no hay valor, intentar obtenerlo de relaciones o campos alternativos
+        if (!value || value === "") {
+          // Manejar campos especiales que pueden venir de relaciones
+          if (field!.id === 'tipo_empresa') {
+            value = empresa.tipo_empresa?.nombre || empresa.tipo_empresa_nombre || empresa.tipo_empresa || ""
+          } else if (field!.id === 'provincia') {
+            // La provincia generalmente viene del departamento
+            value = empresa.departamento?.provincia?.nombre || empresa.provincia || 'Catamarca'
+          } else if (field!.id === 'rubro_principal') {
+            value = empresa.id_rubro?.nombre || empresa.rubro_nombre || empresa.rubro_principal || ""
+          } else if (field!.id === 'departamento') {
+            value = empresa.departamento?.nombre || empresa.departamento_nombre || empresa.departamento || ""
+          } else if (field!.id === 'municipio') {
+            value = empresa.municipio?.nombre || empresa.municipio_nombre || empresa.municipio || ""
+          } else if (field!.id === 'localidad') {
+            value = empresa.localidad?.nombre || empresa.localidad_nombre || empresa.localidad || ""
+          }
+        }
         
-        excelLines.push("") // Línea vacía entre categorías
+        // Usar getFieldValue para formatear correctamente (incluye fechas)
+        value = getFieldValue({ ...empresa, [realFieldName]: value }, realFieldName)
+        const stringValue = String(value)
+        htmlContent += `<td>${escapeHTML(stringValue)}</td>`
       })
-      
-      excelLines.push("") // Línea vacía entre empresas
+      htmlContent += '</tr>'
     })
-
-    const excelContent = excelLines.join("\n")
-
-    // Create blob with Excel MIME type (CSV format that Excel can open)
-    const blob = new Blob(['\ufeff' + excelContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
+    
+    htmlContent += `
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `
+    
+    const blob = new Blob(['\ufeff' + htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
     const link = document.createElement("a")
     const url = URL.createObjectURL(blob)
     link.setAttribute("href", url)

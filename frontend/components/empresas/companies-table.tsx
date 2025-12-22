@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, Edit, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { Eye, Edit, Trash2, ChevronLeft, ChevronRight, Loader2, RotateCcw } from "lucide-react"
 import Link from "next/link"
 
 interface Empresa {
@@ -21,6 +21,7 @@ interface Empresa {
   correo?: string
   telefono?: string
   fecha_creacion: string
+  eliminado?: boolean
 }
 
 interface CompaniesTableProps {
@@ -31,6 +32,7 @@ interface CompaniesTableProps {
   selectedEmpresas: number[]
   onSelectionChange: (selected: number[]) => void
   onDelete?: (id: number) => void
+  onRestore?: (id: number) => void
   onRefresh?: () => void
   pagination: {
     page: number
@@ -72,6 +74,7 @@ export function CompaniesTable({
   selectedEmpresas,
   onSelectionChange,
   onDelete,
+  onRestore,
   onRefresh,
   pagination,
   onPageChange,
@@ -79,6 +82,7 @@ export function CompaniesTable({
 }: CompaniesTableProps) {
   const [selectAll, setSelectAll] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [restoringId, setRestoringId] = useState<number | null>(null)
 
   // Usar allEmpresas si está disponible, sino usar empresas (compatibilidad hacia atrás)
   const empresasParaSeleccionar = allEmpresas || empresas
@@ -211,25 +215,47 @@ export function CompaniesTable({
                         <Edit className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (onDelete) {
-                          setDeletingId(empresa.id)
-                          onDelete(empresa.id)
-                        }
-                      }}
-                      disabled={deletingId === empresa.id}
-                      title="Eliminar"
-                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      {deletingId === empresa.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                      ) : (
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      )}
-                    </Button>
+                    {empresa.eliminado ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (onRestore) {
+                            setRestoringId(empresa.id)
+                            onRestore(empresa.id)
+                          }
+                        }}
+                        disabled={restoringId === empresa.id}
+                        title="Activar"
+                        className="h-8 w-8 p-0 hover:bg-green-500/10 hover:text-green-600"
+                      >
+                        {restoringId === empresa.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                        ) : (
+                          <RotateCcw className="h-4 w-4 text-green-600" />
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (onDelete) {
+                            setDeletingId(empresa.id)
+                            onDelete(empresa.id)
+                          }
+                        }}
+                        disabled={deletingId === empresa.id}
+                        title="Eliminar"
+                        className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        {deletingId === empresa.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -384,25 +410,47 @@ export function CompaniesTable({
                             <Edit className="h-3 w-3 lg:h-4 lg:w-4" />
                           </Link>
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            if (onDelete) {
-                              setDeletingId(empresa.id)
-                              onDelete(empresa.id)
-                            }
-                          }}
-                          disabled={deletingId === empresa.id}
-                          title="Eliminar"
-                          className="hover:bg-destructive/10 hover:text-destructive h-7 w-7 lg:h-8 lg:w-8 p-0"
-                        >
-                          {deletingId === empresa.id ? (
-                            <Loader2 className="h-3 w-3 lg:h-4 lg:w-4 animate-spin text-destructive" />
-                          ) : (
-                            <Trash2 className="h-3 w-3 lg:h-4 lg:w-4 text-destructive" />
-                          )}
-                        </Button>
+                        {empresa.eliminado ? (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              if (onRestore) {
+                                setRestoringId(empresa.id)
+                                onRestore(empresa.id)
+                              }
+                            }}
+                            disabled={restoringId === empresa.id}
+                            title="Activar"
+                            className="hover:bg-green-500/10 hover:text-green-600 h-7 w-7 lg:h-8 lg:w-8 p-0"
+                          >
+                            {restoringId === empresa.id ? (
+                              <Loader2 className="h-3 w-3 lg:h-4 lg:w-4 animate-spin text-green-600" />
+                            ) : (
+                              <RotateCcw className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
+                            )}
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              if (onDelete) {
+                                setDeletingId(empresa.id)
+                                onDelete(empresa.id)
+                              }
+                            }}
+                            disabled={deletingId === empresa.id}
+                            title="Eliminar"
+                            className="hover:bg-destructive/10 hover:text-destructive h-7 w-7 lg:h-8 lg:w-8 p-0"
+                          >
+                            {deletingId === empresa.id ? (
+                              <Loader2 className="h-3 w-3 lg:h-4 lg:w-4 animate-spin text-destructive" />
+                            ) : (
+                              <Trash2 className="h-3 w-3 lg:h-4 lg:w-4 text-destructive" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

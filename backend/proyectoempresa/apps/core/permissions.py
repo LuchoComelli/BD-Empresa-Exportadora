@@ -109,10 +109,25 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         
         # El propietario puede modificar
         if hasattr(obj, 'id_usuario'):
-            return obj.id_usuario == request.user
+            if obj.id_usuario:
+                # Comparar por ID directamente (más confiable)
+                # Esto funciona incluso si los objetos de usuario no son exactamente iguales
+                obj_usuario_id = getattr(obj.id_usuario, 'id', None)
+                if obj_usuario_id is not None:
+                    return obj_usuario_id == request.user.id
+                # Fallback a comparación de objetos
+                return obj.id_usuario == request.user
+            return False
         
         if hasattr(obj, 'usuario'):
-            return obj.usuario == request.user
+            if obj.usuario:
+                # Comparar por ID directamente (más confiable)
+                obj_usuario_id = getattr(obj.usuario, 'id', None)
+                if obj_usuario_id is not None:
+                    return obj_usuario_id == request.user.id
+                # Fallback a comparación de objetos
+                return obj.usuario == request.user
+            return False
         
         return False
 

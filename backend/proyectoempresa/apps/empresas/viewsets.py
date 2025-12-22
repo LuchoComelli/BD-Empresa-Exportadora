@@ -66,6 +66,7 @@ class RubroViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ["nombre", "descripcion"]
     ordering_fields = ["orden", "nombre"]
     ordering = ["orden", "nombre"]
+    pagination_class = None  # Desactivar paginación para rubros
 
 
 class SubRubroViewSet(viewsets.ReadOnlyModelViewSet):
@@ -889,7 +890,7 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         "servicios_empresa",
         "servicios_mixta"
     )
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas, IsOwnerOrAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         "exporta",
@@ -922,7 +923,34 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         return EmpresaSerializer
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # Verificar si se solicita ver empresas eliminadas
+        eliminado_param = self.request.query_params.get("eliminado", "").lower()
+        mostrar_eliminadas = eliminado_param == "true"
+        mostrar_todas = eliminado_param == "all"
+        
+        # Si se solicitan eliminadas o todas, usar all_objects para incluir todas las empresas
+        if mostrar_eliminadas or mostrar_todas:
+            queryset = Empresa.all_objects.select_related(
+                "tipo_empresa",
+                "id_rubro",
+                "id_subrubro",
+                "id_subrubro__rubro",
+                "id_subrubro_producto",
+                "id_subrubro_producto__rubro",
+                "id_subrubro_servicio",
+                "id_subrubro_servicio__rubro",
+                "departamento",
+                "municipio",
+                "localidad",
+                "id_usuario",
+            ).prefetch_related(
+                "productos_empresa__posicion_arancelaria",
+                "productos_mixta__posiciones_arancelarias",
+                "servicios_empresa",
+                "servicios_mixta"
+            )
+        else:
+            queryset = super().get_queryset()
 
         # Filtrar por usuario si no es admin/staff y no tiene rol de dashboard
         # Los usuarios con roles de Administrador, Consultor o Analista pueden ver todas las empresas
@@ -947,9 +975,32 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         # Filtrar por categoría de matriz si se proporciona
         categoria_matriz = self.request.query_params.get("categoria_matriz")
         if categoria_matriz:
+            # Mapear los valores del frontend a los valores de la base de datos
+            categoria_map = {
+                'Exportadora': 'exportadora',
+                'Potencial': 'potencial_exportadora',
+                'Potencial Exportadora': 'potencial_exportadora',
+                'Etapa Inicial': 'etapa_inicial',
+                # También aceptar los valores directos de la BD por si acaso
+                'exportadora': 'exportadora',
+                'potencial_exportadora': 'potencial_exportadora',
+                'etapa_inicial': 'etapa_inicial',
+            }
+            categoria_db = categoria_map.get(categoria_matriz, categoria_matriz.lower())
             queryset = queryset.filter(
-                clasificaciones_exportador__categoria=categoria_matriz
+                clasificaciones_exportador__categoria=categoria_db
             ).distinct()
+
+        # Filtrar por departamento si se proporciona (puede ser ID o nombre)
+        departamento_param = self.request.query_params.get("departamento")
+        if departamento_param:
+            # Intentar primero como ID (número)
+            try:
+                departamento_id = int(departamento_param)
+                queryset = queryset.filter(departamento_id=departamento_id)
+            except ValueError:
+                # Si no es un número, buscar por nombre
+                queryset = queryset.filter(departamento__nombre__icontains=departamento_param)
 
         # Filtrar por sub_rubro si se proporciona
         sub_rubro = self.request.query_params.get('sub_rubro')
@@ -976,6 +1027,15 @@ class EmpresaViewSet(viewsets.ModelViewSet):
             certificadopyme_bool = certificadopyme_param.lower() == "true"
             queryset = queryset.filter(certificadopyme=certificadopyme_bool)
 
+        # Filtrar por estado de eliminación
+        if mostrar_eliminadas:
+            # Solo mostrar eliminadas
+            queryset = queryset.filter(eliminado=True)
+        elif not mostrar_todas:
+            # Por defecto, solo mostrar activas (no eliminadas)
+            queryset = queryset.filter(eliminado=False)
+        # Si mostrar_todas es True, no aplicar filtro (mostrar todas)
+
         return queryset
 
     def perform_create(self, serializer):
@@ -988,12 +1048,104 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         """
         Realizar soft delete en lugar de eliminación permanente.
         Marca la empresa como eliminada y guarda quién la eliminó.
+        También desactiva el usuario asociado para impedir el login.
         """
         from django.utils import timezone
+        from apps.core.models import Usuario
+        
         instance.eliminado = True
         instance.fecha_eliminacion = timezone.now()
         instance.eliminado_por = self.request.user
         instance.save()
+        
+        # Desactivar el usuario asociado si existe
+        if instance.id_usuario:
+            usuario = instance.id_usuario
+            usuario.is_active = False
+            usuario.save(update_fields=['is_active'])
+
+    def get_object(self):
+        """
+        Sobrescribir get_object para usar all_objects cuando se necesita acceder a empresas eliminadas.
+        Esto es necesario para acciones como 'restore', 'retrieve' y 'update' que necesitan encontrar empresas eliminadas.
+        """
+        # Acciones que necesitan acceder a empresas eliminadas
+        acciones_con_eliminadas = ['restore', 'retrieve', 'update', 'partial_update']
+        
+        if self.action in acciones_con_eliminadas:
+            lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+            lookup_value = self.kwargs[lookup_url_kwarg]
+            filter_kwargs = {self.lookup_field: lookup_value}
+            
+            # Usar all_objects para incluir empresas eliminadas
+            queryset = Empresa.all_objects.select_related(
+                "tipo_empresa",
+                "id_rubro",
+                "id_subrubro",
+                "id_subrubro__rubro",
+                "id_subrubro_producto",
+                "id_subrubro_producto__rubro",
+                "id_subrubro_servicio",
+                "id_subrubro_servicio__rubro",
+                "departamento",
+                "municipio",
+                "localidad",
+                "id_usuario",
+            ).prefetch_related(
+                "productos_empresa__posicion_arancelaria",
+                "productos_mixta__posiciones_arancelarias",
+                "servicios_empresa",
+                "servicios_mixta"
+            )
+            
+            # Aplicar filtros de permisos si es necesario
+            if self.request.user.is_authenticated:
+                user = self.request.user
+                can_view_all = (
+                    user.is_superuser or 
+                    user.is_staff or
+                    (user.rol and user.rol.nombre in ['Administrador', 'Consultor', 'Analista'])
+                )
+                
+                if not can_view_all:
+                    queryset = queryset.filter(id_usuario=user)
+            
+            obj = queryset.get(**filter_kwargs)
+            self.check_object_permissions(self.request, obj)
+            return obj
+        
+        # Para otras acciones, usar el comportamiento por defecto
+        return super().get_object()
+
+    @action(detail=True, methods=['post'], url_path='restore')
+    def restore(self, request, pk=None):
+        """
+        Restaurar una empresa eliminada (soft delete).
+        Marca la empresa como no eliminada y reactiva el usuario asociado.
+        """
+        empresa = self.get_object()
+        if not empresa.eliminado:
+            return Response(
+                {'error': 'La empresa no está eliminada'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        empresa.eliminado = False
+        empresa.fecha_eliminacion = None
+        empresa.eliminado_por = None
+        empresa.save()
+        
+        # Reactivar el usuario asociado si existe
+        if empresa.id_usuario:
+            usuario = empresa.id_usuario
+            usuario.is_active = True
+            usuario.save(update_fields=['is_active'])
+        
+        # Refrescar el objeto desde la base de datos para asegurar que todos los campos estén actualizados
+        empresa.refresh_from_db()
+        
+        serializer = self.get_serializer(empresa)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"])
     def exportadoras(self, request):

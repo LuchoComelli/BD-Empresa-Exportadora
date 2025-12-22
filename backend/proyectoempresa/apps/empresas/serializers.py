@@ -84,6 +84,11 @@ class PosicionArancelariaMixtaSerializer(serializers.ModelSerializer):
 
 class ProductoEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para productos de empresa"""
+    # Sobrescribir el campo empresa para usar all_objects (incluye empresas eliminadas)
+    empresa = serializers.PrimaryKeyRelatedField(
+        queryset=Empresa.all_objects.all(),
+        required=False
+    )
     posicion_arancelaria = serializers.SerializerMethodField(read_only=True)
     codigo_arancelario_input = serializers.CharField(
         write_only=True, 
@@ -180,6 +185,11 @@ class ProductoEmpresaSerializer(serializers.ModelSerializer):
 
 class ServicioEmpresaSerializer(serializers.ModelSerializer):
     """Serializer para servicios de empresa"""
+    # Sobrescribir el campo empresa para usar all_objects (incluye empresas eliminadas)
+    empresa = serializers.PrimaryKeyRelatedField(
+        queryset=Empresa.all_objects.all(),
+        required=False
+    )
     # Campos alias para facilitar el consumo desde el frontend
     sectores = serializers.SerializerMethodField()
     alcance_geografico = serializers.CharField(source='alcance_servicio', read_only=True)
@@ -1301,6 +1311,11 @@ class EmpresaservicioSerializer(serializers.ModelSerializer):
 
 class ProductoEmpresaMixtaSerializer(serializers.ModelSerializer):
     """Serializer para productos de empresa mixta"""
+    # Sobrescribir el campo empresa para usar all_objects (incluye empresas eliminadas)
+    empresa = serializers.PrimaryKeyRelatedField(
+        queryset=Empresa.all_objects.all(),
+        required=False
+    )
     
     class Meta:
         model = ProductoEmpresaMixta
@@ -1314,6 +1329,11 @@ class ProductoEmpresaMixtaSerializer(serializers.ModelSerializer):
 
 class ServicioEmpresaMixtaSerializer(serializers.ModelSerializer):
     """Serializer para servicios de empresa mixta"""
+    # Sobrescribir el campo empresa para usar all_objects (incluye empresas eliminadas)
+    empresa = serializers.PrimaryKeyRelatedField(
+        queryset=Empresa.all_objects.all(),
+        required=False
+    )
     # Aliases para compatibilidad con frontend
     sectores = serializers.SerializerMethodField()
     alcance_geografico = serializers.CharField(source='alcance_servicio', read_only=True)
@@ -2059,7 +2079,8 @@ class EmpresaListSerializer(serializers.ModelSerializer):
             'tipo_empresa_nombre', 'tipo_empresa', 'tipo_empresa_valor', 
             'rubro_nombre', 'id_subrubro', 'id_subrubro_producto', 'id_subrubro_servicio',
             'sub_rubro_nombre', 'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 
-            'categoria_matriz', 'geolocalizacion', 'municipio_nombre', 'localidad_nombre'
+            'categoria_matriz', 'geolocalizacion', 'municipio_nombre', 'localidad_nombre',
+            'eliminado'
         ]
 
 
@@ -2092,6 +2113,13 @@ class EmpresaSerializer(serializers.ModelSerializer):
     linkedin_write = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     categoria_matriz = serializers.SerializerMethodField()
     tipo_empresa_valor = serializers.CharField(read_only=True)
+    usuario_email = serializers.SerializerMethodField()
+    
+    def get_usuario_email(self, obj):
+        """Obtener el email del usuario asociado a la empresa"""
+        if obj.id_usuario:
+            return obj.id_usuario.email
+        return None
     
     def get_categoria_matriz(self, obj):
         """Obtener la categoría de la matriz de clasificación"""

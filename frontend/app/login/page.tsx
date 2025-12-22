@@ -36,14 +36,30 @@ export default function LoginPage() {
 
     console.log("[v0] Login attempt:", formData.email)
 
-    const success = await login(formData.email, formData.password)
+    try {
+      const success = await login(formData.email, formData.password)
 
-    if (success) {
-      // El login redirigirá automáticamente según el tipo de usuario
-      // El modal de cambio de contraseña aparecerá en /perfil-empresa si es necesario
-      setIsLoading(false)
-    } else {
-      setError("Credenciales inválidas. Por favor, verifica tu correo y contraseña.")
+      if (success) {
+        // El login redirigirá automáticamente según el tipo de usuario
+        // El modal de cambio de contraseña aparecerá en /perfil-empresa si es necesario
+        setIsLoading(false)
+      } else {
+        setError("Credenciales inválidas. Por favor, verifica tu correo y contraseña.")
+        toast({
+          title: "Error al iniciar sesión",
+          description: "Credenciales inválidas. Por favor, verifica tu correo y contraseña.",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || "Error al iniciar sesión. Verifica tus credenciales."
+      setError(errorMessage)
+      toast({
+        title: "Error al iniciar sesión",
+        description: errorMessage,
+        variant: "destructive",
+      })
       setIsLoading(false)
     }
   }

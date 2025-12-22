@@ -431,6 +431,7 @@ async getEmpresas(params?: {
   categoria_matriz?: string;
   promo2idiomas?: string;
   certificadopyme?: string;
+  eliminado?: string;
   page?: number;
   page_size?: number;
 }): Promise<any> {
@@ -445,6 +446,7 @@ async getEmpresas(params?: {
   if (params?.categoria_matriz) queryParams.append('categoria_matriz', params.categoria_matriz);
   if (params?.promo2idiomas) queryParams.append('promo2idiomas', params.promo2idiomas);
   if (params?.certificadopyme) queryParams.append('certificadopyme', params.certificadopyme);
+  if (params?.eliminado) queryParams.append('eliminado', params.eliminado);
   
   // ✅ Usar el nuevo endpoint unificado /empresas/
   // Si se especifica tipo_empresa, agregarlo como filtro
@@ -934,7 +936,11 @@ async getEmpresas(params?: {
   }
 
   // Eliminar una empresa por ID
-async deleteEmpresa(id: number, tipo_empresa?: string): Promise<void> {
+  async restoreEmpresa(id: number): Promise<any> {
+    return this.post<any>(`/empresas/${id}/restore/`, {});
+  }
+
+  async deleteEmpresa(id: number, tipo_empresa?: string): Promise<void> {
   // ✅ Usar el nuevo endpoint unificado
   try {
     await this.delete(`/empresas/${id}/`);
@@ -1170,9 +1176,16 @@ async deleteServicioMixta(servicioId: number): Promise<void> {
     return this.get<any[]>(`/empresas/rubros/?tipo=${tipo}&activo=true`);
   }
 
-  // Obtener todos los rubros
+  // Obtener todos los rubros (sin paginación)
   async getRubros(): Promise<any[]> {
-    return this.get<any[]>(`/empresas/rubros/?activo=true`);
+    // Obtener todos los rubros sin paginación usando page_size grande
+    const data = await this.get<any>(`/empresas/rubros/?activo=true&page_size=1000`);
+    // La API puede devolver un array directamente o un objeto paginado con 'results'
+    if (Array.isArray(data)) {
+      return data;
+    }
+    // Si es un objeto paginado, devolver los results
+    return data.results || [];
   }
 
   // Obtener todos los subrubros
@@ -1210,6 +1223,10 @@ async deleteServicioMixta(servicioId: number): Promise<void> {
     beneficio2_descripcion?: string;
     beneficio3_titulo?: string;
     beneficio3_descripcion?: string;
+    densidad_baja_max?: number;
+    densidad_media_max?: number;
+    densidad_alta_max?: number;
+    densidad_muy_alta_min?: number;
   }): Promise<any> {
     // El ViewSet es singleton, así que usamos el endpoint sin ID o con el método PUT/PATCH directo
     // Primero obtenemos la configuración para obtener el ID

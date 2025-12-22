@@ -313,8 +313,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true
     } catch (error: any) {
       console.error("Login error:", error)
-      alert(error.message || "Error al iniciar sesión. Verifica tus credenciales.")
-      return false
+      // No mostrar alert aquí, dejar que el componente maneje el error
+      throw error
     }
   }
 

@@ -285,9 +285,9 @@ def enviar_email_rechazo(solicitud):
     
     try:
         # Intentar renderizar el template
-        message = render_to_string('registro/emails/rechazo.html', {
-            'solicitud': solicitud,
-        })
+    message = render_to_string('registro/emails/rechazo.html', {
+        'solicitud': solicitud,
+    })
     except Exception as e:
         # Si el template no existe, crear un mensaje simple
         import logging
@@ -461,7 +461,7 @@ def crear_empresa_desde_solicitud(solicitud):
             # Si no existe, crear uno nuevo
             try:
                 rubro = Rubro.objects.create(
-                    nombre=solicitud.rubro_principal,
+        nombre=solicitud.rubro_principal,
                     descripcion=solicitud.descripcion_actividad or ''
                 )
             except Exception as e:
@@ -574,15 +574,15 @@ def crear_empresa_desde_solicitud(solicitud):
         usuario_empresa.save()
         logger.info(f"Usuario existente actualizado: {usuario_empresa.email}")
     except User.DoesNotExist:
-        usuario_empresa = User.objects.create_user(
-            email=solicitud.correo,
+    usuario_empresa = User.objects.create_user(
+        email=solicitud.correo,
             password=solicitud.cuit_cuil,
-            nombre=solicitud.nombre_contacto,
+        nombre=solicitud.nombre_contacto,
             apellido=solicitud.apellido_contacto,
-            rol=rol_empresa,
-            telefono=solicitud.telefono_contacto,
-            departamento=solicitud.departamento,
-            municipio=solicitud.municipio,
+        rol=rol_empresa,
+        telefono=solicitud.telefono_contacto,
+        departamento=solicitud.departamento,
+        municipio=solicitud.municipio,
             localidad=solicitud.localidad,
             is_active=True,
             debe_cambiar_password=True  # Marcar que debe cambiar la contraseña

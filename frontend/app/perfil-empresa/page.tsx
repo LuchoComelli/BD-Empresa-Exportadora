@@ -39,6 +39,8 @@ import {
   Instagram,
   Linkedin,
   ArrowLeft,
+  Loader2,
+  Lock,
 } from "lucide-react"
 import {
   Dialog,
@@ -47,6 +49,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { CompanyMap } from "@/components/map/company-map"
 import { LocationPicker } from "@/components/map/location-picker"
 
@@ -91,6 +94,27 @@ export default function PerfilEmpresaPage() {
   // Estado para actividades de promoción internacional
   const [actividadesPromocion, setActividadesPromocion] = useState<any[]>([])
 
+  // Estados para edición de geolocalización
+  const [geoEditMode, setGeoEditMode] = useState<'view' | 'editing'>('view')
+  const [tempGeoCoordinates, setTempGeoCoordinates] = useState<{ lat: number; lng: number } | null>(null)
+  const [showGeoConfirmDialog, setShowGeoConfirmDialog] = useState(false)
+
+  // Estados para cambio de email y contraseña
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [emailData, setEmailData] = useState({
+    newEmail: "",
+    confirmEmail: "",
+  })
+  const [passwordData, setPasswordData] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  })
+  const [showPasswords, setShowPasswords] = useState({
+    new: false,
+    confirm: false,
+  })
+  const [savingUserConfig, setSavingUserConfig] = useState(false)
+
   // Funciones para manejar actividades de promoción internacional
   const agregarActividad = (tipo: "feria" | "mision" | "ronda") => {
     setActividadesPromocion([...actividadesPromocion, { 
@@ -111,6 +135,180 @@ export default function PerfilEmpresaPage() {
   }
 
   const toUpperCase = (value: string) => value.toUpperCase()
+
+  // Cargar perfil de usuario
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const data = await api.getCurrentUser()
+        setUserProfile(data)
+        setEmailData({
+          newEmail: data.email || "",
+          confirmEmail: data.email || "",
+        })
+      } catch (error) {
+        console.error("Error cargando perfil de usuario:", error)
+      }
+    }
+    if (user) {
+      loadUserProfile()
+    }
+  }, [user])
+
+  // Función para cambiar email
+  const handleChangeEmail = async () => {
+    if (!emailData.newEmail || !emailData.confirmEmail) {
+      toast({
+        title: "Campos requeridos",
+        description: "Por favor completa todos los campos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (emailData.newEmail !== emailData.confirmEmail) {
+      toast({
+        title: "Error",
+        description: "Los emails no coinciden",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setSavingUserConfig(true)
+      
+      await api.updateMe({
+        email: emailData.newEmail,
+      })
+
+      const updatedData = await api.getCurrentUser()
+      setUserProfile(updatedData)
+      await refreshUser()
+
+      setEmailData({
+        newEmail: updatedData.email || "",
+        confirmEmail: updatedData.email || "",
+      })
+
+      toast({
+        title: "Éxito",
+        description: "Email actualizado correctamente. Por favor, inicia sesión nuevamente con tu nuevo email.",
+      })
+    } catch (error: any) {
+      console.error("Error cambiando email:", error)
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo cambiar el email. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setSavingUserConfig(false)
+    }
+  }
+
+  // Función para cambiar contraseña
+  const handleChangePassword = async () => {
+    if (!passwordData.newPassword || !passwordData.confirmPassword) {
+      toast({
+        title: "Campos requeridos",
+        description: "Por favor completa todos los campos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Las contraseñas no coinciden",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwordData.newPassword.length < 8) {
+      toast({
+        title: "Contraseña débil",
+        description: "La contraseña debe tener al menos 8 caracteres",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setSavingUserConfig(true)
+      
+      await api.updateMe({
+        password: passwordData.newPassword,
+      })
+
+      setPasswordData({
+        newPassword: "",
+        confirmPassword: "",
+      })
+
+      toast({
+        title: "Éxito",
+        description: "Contraseña actualizada correctamente",
+      })
+    } catch (error: any) {
+      console.error("Error cambiando contraseña:", error)
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo cambiar la contraseña. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setSavingUserConfig(false)
+    }
+  }
+
+  // Función para guardar la nueva geolocalización
+  const handleSaveGeoLocation = async () => {
+    if (!tempGeoCoordinates || !empresaData || !solicitudId) return
+
+    try {
+      setIsSaving(true)
+      const geoString = `${tempGeoCoordinates.lat},${tempGeoCoordinates.lng}`
+      
+      const updatedEmpresa = await api.updateEmpresa(solicitudId, {
+        geolocalizacion: geoString
+      })
+
+      // Actualizar empresaData con la nueva geolocalización
+      setEmpresaData((prev: any) => ({
+        ...prev,
+        geolocalizacion: geoString
+      }))
+      
+      // También actualizar editedData si está en modo edición para que el cambio se refleje inmediatamente
+      if (editedData) {
+        setEditedData((prev: any) => ({
+          ...prev,
+          geolocalizacion: geoString
+        }))
+      }
+      
+      setGeoEditMode('view')
+      setTempGeoCoordinates(null)
+      setShowGeoConfirmDialog(false)
+      
+      toast({
+        title: "Ubicación actualizada",
+        description: "La geolocalización se ha actualizado correctamente.",
+      })
+    } catch (error: any) {
+      console.error("Error actualizando geolocalización:", error)
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo actualizar la geolocalización.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   // Estado para configuración del footer
   const [configuracion, setConfiguracion] = useState({
@@ -582,7 +780,7 @@ export default function PerfilEmpresaPage() {
 
   // Mostrar carga mientras se verifica el usuario
   if (authLoading || !user) {
-    return (
+  return (
       <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] w-full max-w-full overflow-x-hidden">
         <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
           <div className="w-full px-2 sm:px-4 py-2 md:py-3 flex items-center justify-between gap-2">
@@ -709,21 +907,21 @@ export default function PerfilEmpresaPage() {
   if (!empresaData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] w-full max-w-full overflow-x-hidden">
-        <header className="bg-[#222A59] text-white shadow-lg">
+      <header className="bg-[#222A59] text-white shadow-lg">
           <div className="w-full px-4 py-4 md:py-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-xl flex items-center justify-center">
-                  <Building2 className="w-6 h-6 md:w-8 md:h-8 text-[#222A59]" />
-                </div>
-                <div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-xl flex items-center justify-center">
+                <Building2 className="w-6 h-6 md:w-8 md:h-8 text-[#222A59]" />
+              </div>
+              <div>
                   <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Perfil de Empresa</h1>
                   <p className="text-xs sm:text-sm md:text-base text-white/80">Dirección de Intercambio Comercial Internacional y Regional</p>
-                </div>
               </div>
-              <Button
-                onClick={logout}
-                variant="outline"
+            </div>
+            <Button
+              onClick={logout}
+              variant="outline"
                 className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 px-2 sm:px-3 md:px-4"
               >
                 <LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
@@ -952,6 +1150,9 @@ export default function PerfilEmpresaPage() {
                       setRubroServicio(null)
                       setSubRubrosProductos([])
                       setSubRubrosServicios([])
+                      // Limpiar estados de edición de geolocalización
+                      setGeoEditMode('view')
+                      setTempGeoCoordinates(null)
                       setBrochure_file(null)
                     }}
                     variant="outline"
@@ -1759,9 +1960,9 @@ export default function PerfilEmpresaPage() {
                 <LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                 <span className="hidden xs:inline">Cerrar Sesión</span>
                 <span className="xs:hidden">Salir</span>
-              </Button>
-            </div>
+            </Button>
           </div>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -1775,8 +1976,8 @@ export default function PerfilEmpresaPage() {
                 <p className="text-xs sm:text-sm md:text-base text-white/80 mb-2 break-words">Nombre de Fantasía: {empresaData.nombreFantasia}</p>
               )}
               <p className="text-xs sm:text-sm md:text-base text-white/90 mb-4 break-words">CUIT: {empresaData.cuit || 'N/A'}</p>
+              </div>
             </div>
-          </div>
         </Card>
 
         <Tabs defaultValue="general" className="w-full max-w-full">
@@ -1787,6 +1988,7 @@ export default function PerfilEmpresaPage() {
               <TabsTrigger value="comercial" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Comercial</TabsTrigger>
               <TabsTrigger value="productos-servicios" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Productos/Servicios</TabsTrigger>
               <TabsTrigger value="certificaciones" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Certificaciones</TabsTrigger>
+              <TabsTrigger value="configuracion" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Configuración</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1967,17 +2169,18 @@ export default function PerfilEmpresaPage() {
                   )}
                 </div>
 
-                {/* Email */}
+                {/* Email (Email del usuario para iniciar sesión) */}
                 <div className="min-w-0 w-full">
                   <Label>Email</Label>
                   {isEditing ? (
                     <Input
                       type="email"
-                      value={editedData?.correo || editedData?.email || ''}
-                      onChange={(e) => setEditedData(editedData ? { ...editedData, correo: e.target.value, email: e.target.value } : null)}
+                      value={userProfile?.email || user?.email || ''}
+                      disabled
+                      className="bg-muted"
                     />
                   ) : (
-                    <p className="mt-1 font-semibold">{empresaData?.correo || empresaData?.email || 'N/A'}</p>
+                    <p className="mt-1 font-semibold">{userProfile?.email || user?.email || 'N/A'}</p>
                   )}
                 </div>
 
@@ -2278,7 +2481,7 @@ export default function PerfilEmpresaPage() {
                   </div>
                 )}
               </CardContent>
-            </Card>
+        </Card>
           </TabsContent>
 
           <TabsContent value="ubicacion" className="space-y-6 w-full max-w-full mt-0">
@@ -2308,10 +2511,10 @@ export default function PerfilEmpresaPage() {
                       ) : (
                         <p className="mt-1 font-semibold">{empresaData?.direccion || 'N/A'}</p>
                       )}
-                    </div>
+              </div>
 
                     {/* Código Postal */}
-                    <div>
+                      <div>
                       <Label>Código Postal</Label>
                       {isEditing ? (
                         <Input
@@ -2327,10 +2530,10 @@ export default function PerfilEmpresaPage() {
                       ) : (
                         <p className="mt-1 font-semibold">{empresaData?.codigo_postal || empresaData?.codigoPostal || 'N/A'}</p>
                       )}
-                    </div>
+                      </div>
 
                     {/* Departamento */}
-                    <div>
+                      <div>
                       <Label>Departamento</Label>
                       {isEditing ? (
                         <Select
@@ -2371,7 +2574,7 @@ export default function PerfilEmpresaPage() {
                            'N/A'}
                         </p>
                       )}
-                    </div>
+                      </div>
 
                     {/* Municipio */}
                     <div>
@@ -2462,7 +2665,7 @@ export default function PerfilEmpresaPage() {
                            'N/A'}
                         </p>
                       )}
-                    </div>
+                  </div>
 
                     {/* Geolocalización / Mapa */}
                     {(() => {
@@ -2503,44 +2706,94 @@ export default function PerfilEmpresaPage() {
                         return null
                       }
 
-                      // Si estamos editando, siempre mostrar el LocationPicker
-                      if (isEditing) {
-                        // Obtener coordenadas para mostrar en el LocationPicker
-                        const coordString = getValidCoordinates(editedData?.geolocalizacion) || 
-                                          getValidCoordinates(empresaData?.geolocalizacion) || 
-                                          ''
-
-                        return (
-                          <div className="md:col-span-2">
-                            <Label>Ubicación en el Mapa</Label>
-                            <div className="mt-2 relative z-0">
-                              <LocationPicker
-                                value={coordString}
-                                onChange={(coords) => {
-                                  const [lat, lng] = coords.split(',').map((v: string) => parseFloat(v.trim()))
-                                  if (!isNaN(lat) && !isNaN(lng)) {
-                                    setEditedData(editedData ? { 
-                                      ...editedData, 
-                                      geolocalizacion: { lat, lng } 
-                                    } : null)
-                                  }
-                                }}
-                              />
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-2">
-                              Puedes hacer clic en el mapa para seleccionar la ubicación de tu empresa
-                            </p>
-                          </div>
-                        )
-                      }
-                      
                       // Si no estamos editando, mostrar el mapa solo si hay coordenadas válidas
                       const coordString = getValidCoordinates(empresaData?.geolocalizacion)
                       if (!coordString) return null
                       
                       const coordinates = parseCoordinates(coordString)
                       if (!coordinates) return null
-                      
+
+                      // Si estamos en modo edición general y no estamos editando el mapa específicamente
+                      if (isEditing && geoEditMode !== 'editing') {
+                        return (
+                          <div className="md:col-span-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <Label>Ubicación en el Mapa</Label>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setGeoEditMode('editing')
+                                  setTempGeoCoordinates(coordinates)
+                                }}
+                                className="gap-2"
+                              >
+                                <MapPin className="h-4 w-4" />
+                                Editar Mapa
+                              </Button>
+              </div>
+                            <div className="mt-2 relative z-0">
+                              <CompanyMap
+                                coordinates={coordinates}
+                                address={empresaData?.direccion || empresaData?.razon_social || empresaData?.razonSocial}
+                              />
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      // Modo edición activa del mapa
+                      if (geoEditMode === 'editing') {
+                        const currentCoords = tempGeoCoordinates || coordinates
+                        const coordStringForPicker = `${currentCoords.lat},${currentCoords.lng}`
+                        
+                        return (
+                          <div className="md:col-span-2">
+                            <Label>Ubicación en el Mapa</Label>
+                            <div className="mt-2 relative z-0">
+                              <LocationPicker
+                                value={coordStringForPicker}
+                                onChange={(coords) => {
+                                  const [lat, lng] = coords.split(',').map((v: string) => parseFloat(v.trim()))
+                                  if (!isNaN(lat) && !isNaN(lng)) {
+                                    setTempGeoCoordinates({ lat, lng })
+                                  }
+                                }}
+                                centerLat={currentCoords.lat}
+                                centerLng={currentCoords.lng}
+                                zoomLevel={15}
+                              />
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  setGeoEditMode('view')
+                                  setTempGeoCoordinates(null)
+                                }}
+                                className="flex-1"
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Cancelar
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  if (tempGeoCoordinates) {
+                                    setShowGeoConfirmDialog(true)
+                                  }
+                                }}
+                                className="flex-1 bg-[#3259B5] hover:bg-[#3259B5]/90"
+                                disabled={!tempGeoCoordinates || isSaving}
+                              >
+                                <Save className="h-4 w-4 mr-2" />
+                                Confirmar
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      // Modo visualización (no edición)
                       return (
                         <div className="md:col-span-2">
                           <Label>Ubicación en el Mapa</Label>
@@ -2630,7 +2883,7 @@ export default function PerfilEmpresaPage() {
                     ) : (
                       <p className="mt-1 font-semibold">{empresaData?.exporta || 'N/A'}</p>
                     )}
-                  </div>
+                </div>
 
                   {/* Mostrar "Interés en Exportar" solo si NO exporta */}
                   {((editedData?.exporta || empresaData?.exporta) === "No, solo ventas nacionales" || (editedData?.exporta || empresaData?.exporta) === "No") && (
@@ -2728,7 +2981,7 @@ export default function PerfilEmpresaPage() {
                   </div>
 
                   {isEditing ? (
-                    <div className="space-y-4">
+                <div className="space-y-4">
                       {actividadesPromocion.map((actividad) => (
                         <div
                           key={actividad.id}
@@ -2754,7 +3007,7 @@ export default function PerfilEmpresaPage() {
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
+                  <div>
                               <Label>Lugar</Label>
                               <Input
                                 value={actividad.lugar}
@@ -2762,7 +3015,7 @@ export default function PerfilEmpresaPage() {
                                 placeholder="CIUDAD, PAÍS"
                                 className="uppercase"
                               />
-                            </div>
+                    </div>
                             <div>
                               <Label>Año</Label>
                               <Input
@@ -2776,10 +3029,10 @@ export default function PerfilEmpresaPage() {
                                 placeholder="2024"
                                 pattern="[0-9]{4}"
                               />
-                            </div>
+                  </div>
                           </div>
 
-                          <div>
+                  <div>
                             <Label>Observaciones</Label>
                             <Textarea
                               value={actividad.observaciones || ""}
@@ -2822,7 +3075,7 @@ export default function PerfilEmpresaPage() {
                           <Plus className="w-4 h-4 mr-2" />
                           Agregar Ronda
                         </Button>
-                      </div>
+                  </div>
                     </div>
                   ) : (
                     empresaData?.actividades_promocion_internacional && 
@@ -2863,8 +3116,8 @@ export default function PerfilEmpresaPage() {
                               </div>
                               <span className="px-3 py-1 bg-[#222A59] text-white text-xs font-semibold rounded-full">
                                 {actividad.anio || 'N/A'}
-                              </span>
-                            </div>
+                    </span>
+                  </div>
                             
                             <div className="space-y-2">
                               <div className="flex items-start gap-2">
@@ -2875,7 +3128,7 @@ export default function PerfilEmpresaPage() {
                                 <div className="flex-1">
                                   <p className="text-xs text-gray-500">Lugar</p>
                                   <p className="font-medium text-[#222A59]">{actividad.lugar || 'No especificado'}</p>
-                                </div>
+                </div>
                               </div>
                               
                               {actividad.observaciones && (
@@ -2905,7 +3158,7 @@ export default function PerfilEmpresaPage() {
                   )}
                 </div>
               </CardContent>
-            </Card>
+              </Card>
           </TabsContent>
 
           <TabsContent value="productos-servicios" className="space-y-6 w-full max-w-full mt-0">
@@ -2988,7 +3241,7 @@ export default function PerfilEmpresaPage() {
                                         }}
                                         placeholder="Nombre del producto"
                                       />
-                                    </div>
+              </div>
 
                                     {/* Descripción */}
                                     <div>
@@ -3171,13 +3424,13 @@ export default function PerfilEmpresaPage() {
                               </div>
                             )}
                           </div>
-                        ))}
-                      </div>
+                ))}
+              </div>
                       ) : (
                         <p className="text-muted-foreground py-4">No hay productos registrados</p>
                       )
                     })()}
-                  </div>
+          </div>
                 )}
 
                 {/* SERVICIOS */}
@@ -3217,7 +3470,7 @@ export default function PerfilEmpresaPage() {
                           Agregar Servicio
                         </Button>
                       )}
-                    </div>
+              </div>
 
                     {(() => {
                       const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
@@ -3229,7 +3482,7 @@ export default function PerfilEmpresaPage() {
                       const serviciosArray = Array.isArray(serviciosToShow) ? serviciosToShow : []
                       
                       return serviciosArray && serviciosArray.length > 0 ? (
-                        <div className="space-y-4">
+              <div className="space-y-4">
                           {serviciosArray.map((servicio: any, index: number) => (
                             <div key={servicio.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                               {isEditing ? (
@@ -3255,7 +3508,7 @@ export default function PerfilEmpresaPage() {
                                           }}
                                           placeholder="Nombre del servicio"
                                         />
-                                      </div>
+                      </div>
 
                                       {/* Descripción */}
                                       <div>
@@ -3275,7 +3528,7 @@ export default function PerfilEmpresaPage() {
                                           placeholder="Descripción del servicio"
                                           rows={3}
                                         />
-                                      </div>
+                      </div>
 
                                       {/* Tipo de Servicio y Sector */}
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -3308,7 +3561,7 @@ export default function PerfilEmpresaPage() {
                                               <SelectItem value="otro">Otro</SelectItem>
                                             </SelectContent>
                                           </Select>
-                                        </div>
+                    </div>
 
                                         <div>
                                           <Label>Sector Atendido</Label>
@@ -3326,8 +3579,8 @@ export default function PerfilEmpresaPage() {
                                             }}
                                             placeholder="Ej: Minería, Turismo"
                                           />
-                                        </div>
-                                      </div>
+                  </div>
+              </div>
 
                                       {/* Alcance y Forma de Contratación */}
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -3356,9 +3609,9 @@ export default function PerfilEmpresaPage() {
                                               <SelectItem value="internacional">Internacional</SelectItem>
                                             </SelectContent>
                                           </Select>
-                                        </div>
+              </div>
 
-                                        <div>
+                <div>
                                           <Label>Forma de Contratación</Label>
                                           <Select
                                             value={Array.isArray(servicio.forma_contratacion) ? servicio.forma_contratacion[0] : servicio.forma_contratacion || 'hora'}
@@ -3383,7 +3636,7 @@ export default function PerfilEmpresaPage() {
                                               <SelectItem value="otro">Otro</SelectItem>
                                             </SelectContent>
                                           </Select>
-                                        </div>
+                </div>
                                       </div>
                                     </div>
 
@@ -3415,34 +3668,34 @@ export default function PerfilEmpresaPage() {
                                     )}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                                       {servicio.tipo_servicio && (
-                                        <div>
+                <div>
                                           <span className="text-sm font-medium">Tipo: </span>
                                           <span className="text-sm">
                                             {Array.isArray(servicio.tipo_servicio) 
                                               ? servicio.tipo_servicio.join(', ') 
                                               : servicio.tipo_servicio}
                                           </span>
-                                        </div>
+                </div>
                                       )}
                                       {(servicio.sector_atendido || (servicio.sectores && servicio.sectores.length > 0)) && (
-                                        <div>
+                <div>
                                           <span className="text-sm font-medium">Sectores Atendidos: </span>
                                           <span className="text-sm">
                                             {servicio.sector_atendido || 
                                              (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores)}
                                           </span>
-                                        </div>
+                </div>
                                       )}
                                       {(servicio.alcance_geografico || servicio.alcance_servicio) && (
-                                        <div>
+                <div>
                                           <span className="text-sm font-medium">Alcance Geográfico: </span>
                                           <span className="text-sm">
                                             {servicio.alcance_geografico || servicio.alcance_servicio || 'N/A'}
                                           </span>
-                                        </div>
+                </div>
                                       )}
                                       {servicio.forma_contratacion && (
-                                        <div>
+                <div>
                                           <span className="text-sm font-medium">Forma de Contratación: </span>
                                           <span className="text-sm">
                                             {Array.isArray(servicio.forma_contratacion) 
@@ -3580,7 +3833,142 @@ export default function PerfilEmpresaPage() {
                   ) : (
                     <p className="mt-1 font-semibold">{empresaData?.observaciones || 'N/A'}</p>
                   )}
+              </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="configuracion" className="space-y-6 w-full max-w-full mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-[#222A59] flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Cambiar Email
+                </CardTitle>
+                <CardDescription>
+                  Actualiza tu dirección de correo electrónico para iniciar sesión
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="currentEmail">Email Actual</Label>
+                  <Input
+                    id="currentEmail"
+                    type="email"
+                    value={userProfile?.email || ''}
+                    disabled
+                    className="bg-muted"
+                  />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newEmail">Nuevo Email</Label>
+                  <Input
+                    id="newEmail"
+                    type="email"
+                    value={emailData.newEmail}
+                    onChange={(e) => setEmailData({ ...emailData, newEmail: e.target.value })}
+                    placeholder="nuevo@email.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmEmail">Confirmar Nuevo Email</Label>
+                  <Input
+                    id="confirmEmail"
+                    type="email"
+                    value={emailData.confirmEmail}
+                    onChange={(e) => setEmailData({ ...emailData, confirmEmail: e.target.value })}
+                    placeholder="nuevo@email.com"
+                  />
+                </div>
+                <Button
+                  onClick={handleChangeEmail}
+                  disabled={savingUserConfig}
+                  className="w-full bg-[#3259B5] hover:bg-[#3259B5]/90"
+                >
+                  {savingUserConfig ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Guardar Email
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-[#222A59] flex items-center gap-2">
+                  <Lock className="h-5 w-5" />
+                  Cambiar Contraseña
+                </CardTitle>
+                <CardDescription>
+                  Actualiza tu contraseña para iniciar sesión
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">Nueva Contraseña</Label>
+                  <div className="relative">
+                    <Input
+                      id="newPassword"
+                      type={showPasswords.new ? "text" : "password"}
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      placeholder="Mínimo 8 caracteres"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                    >
+                      {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirmar Nueva Contraseña</Label>
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showPasswords.confirm ? "text" : "password"}
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      placeholder="Repite la contraseña"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                    >
+                      {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={savingUserConfig}
+                  className="w-full bg-[#3259B5] hover:bg-[#3259B5]/90"
+                >
+                  {savingUserConfig ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Guardar Contraseña
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -3597,7 +3985,7 @@ export default function PerfilEmpresaPage() {
               <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
               <p className="text-white/80 text-sm mb-2">{configuracion.telefono}</p>
               <p className="text-white/80 text-sm">{configuracion.email_contacto}</p>
-            </div>
+                </div>
             <div>
               <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Enlaces Útiles</h4>
               <ul className="space-y-2 text-sm text-white/80">
@@ -3651,7 +4039,7 @@ export default function PerfilEmpresaPage() {
                 alt="Footer Catamarca"
                 className="w-full h-auto object-contain"
               />
-            </div>
+                </div>
           </div>
         </div>
       </footer>
@@ -3699,11 +4087,11 @@ export default function PerfilEmpresaPage() {
                     <Eye className="h-4 w-4" />
                   )}
                 </button>
-              </div>
+          </div>
               <p className="text-xs text-muted-foreground">
                 La contraseña debe tener al menos 8 caracteres
               </p>
-            </div>
+        </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirmar Nueva Contraseña</Label>
@@ -3815,6 +4203,37 @@ export default function PerfilEmpresaPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de confirmación para cambio de geolocalización */}
+      <AlertDialog open={showGeoConfirmDialog} onOpenChange={setShowGeoConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Está seguro de cambiar la ubicación del mapa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción cambiará la geolocalización de la empresa. Una vez confirmado, la nueva ubicación se guardará permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowGeoConfirmDialog(false)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSaveGeoLocation}
+              className="bg-[#3259B5] hover:bg-[#3259B5]/90"
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Confirmar Cambio"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

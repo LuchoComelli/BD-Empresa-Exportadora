@@ -38,6 +38,7 @@ interface Empresa {
   correo?: string
   telefono?: string
   fecha_creacion: string
+  eliminado?: boolean
 }
 
 export default function EmpresasPage() {
@@ -135,6 +136,18 @@ export default function EmpresasPage() {
 
       if (filters.certificadopyme && filters.certificadopyme !== 'all') {
         params.certificadopyme = filters.certificadopyme === 'si' ? 'true' : 'false'
+      }
+
+      // Filtro de empresas eliminadas
+      if (filters.eliminado) {
+        if (filters.eliminado === 'eliminadas') {
+          params.eliminado = 'true'
+        } else if (filters.eliminado === 'todas') {
+          // No enviar el parámetro para mostrar todas (activas y eliminadas)
+          // Pero necesitamos usar all_objects en el backend
+          params.eliminado = 'all'
+        }
+        // Si es 'activas', no enviar el parámetro (comportamiento por defecto)
       }
 
      console.log('[DEBUG] Params enviados al backend:', params)
@@ -341,6 +354,39 @@ const confirmarEliminacion = async () => {
   }
 }
 
+const handleRestore = async (id: number) => {
+  // Buscar la empresa para obtener su información
+  const empresa = empresas.find(e => e.id === id)
+  if (!empresa) {
+    toast({
+      title: "Empresa no encontrada",
+      description: "No se pudo encontrar la empresa especificada",
+      variant: "destructive",
+    })
+    return
+  }
+
+  try {
+    await api.restoreEmpresa(id)
+    
+    toast({
+      title: "Empresa activada",
+      description: `La empresa "${empresa.razon_social}" ha sido activada exitosamente`,
+      variant: "default",
+    })
+    
+    // Recargar la lista
+    await loadEmpresas()
+  } catch (error: any) {
+    console.error("Error restoring empresa:", error)
+    toast({
+      title: "Error al activar",
+      description: error.message || "Error al activar la empresa. Por favor, intenta nuevamente.",
+      variant: "destructive",
+    })
+  }
+}
+
   // Mostrar carga mientras se verifica el usuario
   if (authLoading || !user) {
     return (
@@ -433,6 +479,7 @@ const confirmarEliminacion = async () => {
             selectedEmpresas={selectedEmpresas}
             onSelectionChange={setSelectedEmpresas}
             onDelete={handleDelete}
+            onRestore={handleRestore}
             onRefresh={loadEmpresas}
             pagination={{
               page: currentPage,

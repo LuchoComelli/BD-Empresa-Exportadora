@@ -414,6 +414,27 @@ class ConfiguracionSistema(TimestampedModel):
         default="Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora",
         verbose_name="Beneficio 3 - Descripción"
     )
+    # Configuración de densidad del mapa de calor
+    densidad_baja_max = models.IntegerField(
+        default=5,
+        verbose_name="Densidad Baja - Máximo",
+        help_text="Máximo número de empresas para densidad baja (1 hasta este valor)"
+    )
+    densidad_media_max = models.IntegerField(
+        default=20,
+        verbose_name="Densidad Media - Máximo",
+        help_text="Máximo número de empresas para densidad media"
+    )
+    densidad_alta_max = models.IntegerField(
+        default=40,
+        verbose_name="Densidad Alta - Máximo",
+        help_text="Máximo número de empresas para densidad alta"
+    )
+    densidad_muy_alta_min = models.IntegerField(
+        default=41,
+        verbose_name="Densidad Muy Alta - Mínimo",
+        help_text="Mínimo número de empresas para densidad muy alta (desde este valor en adelante)"
+    )
     
     class Meta:
         db_table = 'configuracion_sistema'
@@ -442,6 +463,10 @@ class ConfiguracionSistema(TimestampedModel):
                 'beneficio2_descripcion': 'Conecta con oportunidades de exportación y participa en ferias internacionales',
                 'beneficio3_titulo': 'Capacitación y Asesoramiento',
                 'beneficio3_descripcion': 'Recibe apoyo técnico y capacitación para mejorar tu capacidad exportadora',
+                'densidad_baja_max': 5,
+                'densidad_media_max': 20,
+                'densidad_alta_max': 40,
+                'densidad_muy_alta_min': 41,
             }
         )
         return config

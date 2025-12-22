@@ -31,13 +31,19 @@ interface Empresa {
   lng?: number
 }
 
-// Función para obtener color según cantidad de empresas (fuera del componente)
-const getColorPorCantidad = (cantidad: number): string => {
-  if (cantidad === 0) return '#e5e7eb'      // gris claro - sin empresas
-  if (cantidad <= 5) return '#10b981'       // verde - pocas
-  if (cantidad <= 20) return '#fbbf24'      // amarillo - moderado
-  if (cantidad <= 40) return '#f97316'      // naranja - bastantes
-  return '#ef4444'                          // rojo - muchas
+// Función para obtener color según cantidad de empresas (usa valores configurables)
+const getColorPorCantidad = (
+  cantidad: number, 
+  densidadBajaMax: number = 5,
+  densidadMediaMax: number = 20,
+  densidadAltaMax: number = 40,
+  densidadMuyAltaMin: number = 41
+): string => {
+  if (cantidad === 0) return '#e5e7eb'      // gris claro - sin empresas (no modificable)
+  if (cantidad <= densidadBajaMax) return '#10b981'       // verde - baja
+  if (cantidad <= densidadMediaMax) return '#fbbf24'      // amarillo - media
+  if (cantidad < densidadMuyAltaMin) return '#f97316'      // naranja - alta
+  return '#ef4444'                          // rojo - muy alta
 }
 
 export default function MapaPage() {
@@ -60,6 +66,12 @@ export default function MapaPage() {
   const [exportingMap, setExportingMap] = useState(false)
   const [exportingDept, setExportingDept] = useState(false)
   const [isInitializingMap, setIsInitializingMap] = useState(false)
+  const [densidadConfig, setDensidadConfig] = useState({
+    densidad_baja_max: 5,
+    densidad_media_max: 20,
+    densidad_alta_max: 40,
+    densidad_muy_alta_min: 41
+  })
 
   // Agregar estilos CSS para el mapa - CORREGIDO
   useEffect(() => {
@@ -163,6 +175,27 @@ export default function MapaPage() {
         document.head.removeChild(style)
       }
     }
+  }, [])
+
+  // Cargar configuración de densidad
+  useEffect(() => {
+    const loadConfiguracion = async () => {
+      try {
+        const config = await api.getConfiguracion()
+        if (config) {
+          setDensidadConfig({
+            densidad_baja_max: config.densidad_baja_max ?? 5,
+            densidad_media_max: config.densidad_media_max ?? 20,
+            densidad_alta_max: config.densidad_alta_max ?? 40,
+            densidad_muy_alta_min: config.densidad_muy_alta_min ?? 41
+          })
+        }
+      } catch (error) {
+        console.error('Error cargando configuración de densidad:', error)
+        // Usar valores por defecto si falla
+      }
+    }
+    loadConfiguracion()
   }, [])
 
   // Cargar empresas
@@ -660,7 +693,13 @@ export default function MapaPage() {
               .trim()
             
             const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-            const color = getColorPorCantidad(cantidad)
+            const color = getColorPorCantidad(
+              cantidad,
+              densidadConfig.densidad_baja_max,
+              densidadConfig.densidad_media_max,
+              densidadConfig.densidad_alta_max,
+              densidadConfig.densidad_muy_alta_min
+            )
             
             return {
               fillColor: color,
@@ -707,7 +746,7 @@ export default function MapaPage() {
     }
 
     updateDepartamentosLayer()
-  }, [map, empresasPorDepartamento])
+  }, [map, empresasPorDepartamento, densidadConfig])
 
   const toggleHeatmap = () => {
     if (!map || !departamentosLayer) return
@@ -813,7 +852,13 @@ export default function MapaPage() {
               .trim()
             
             const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-            const color = getColorPorCantidad(cantidad)
+            const color = getColorPorCantidad(
+              cantidad,
+              densidadConfig.densidad_baja_max,
+              densidadConfig.densidad_media_max,
+              densidadConfig.densidad_alta_max,
+              densidadConfig.densidad_muy_alta_min
+            )
             
             return {
               fillColor: color,
@@ -1203,7 +1248,12 @@ export default function MapaPage() {
         .trim()
       
       const cantidad = empresasPorDepartamento[nombreNormalizado] || 0
-      const color = getColorPorCantidad(cantidad)
+      const color = getColorPorCantidad(
+        cantidad,
+        densidadConfig.densidad_baja_max,
+        densidadConfig.densidad_media_max,
+        densidadConfig.densidad_alta_max
+      )
       
       const deptGeoJSON = L.geoJSON(targetFeature, {
         style: {
@@ -1866,7 +1916,15 @@ export default function MapaPage() {
                             <div className="flex items-center gap-3">
                               <div 
                                 className="w-4 h-4 rounded flex-shrink-0" 
-                                style={{ backgroundColor: getColorPorCantidad(cantidad) }}
+                                style={{ 
+                                  backgroundColor: getColorPorCantidad(
+                                    cantidad,
+                                    densidadConfig.densidad_baja_max,
+                                    densidadConfig.densidad_media_max,
+                                    densidadConfig.densidad_alta_max,
+                                    densidadConfig.densidad_muy_alta_min
+                                  )
+                                }}
                               />
                               <div className="text-left">
                                 <p className="font-medium">{nombreOriginal}</p>

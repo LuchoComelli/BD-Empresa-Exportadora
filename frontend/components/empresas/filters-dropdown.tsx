@@ -327,6 +327,24 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Estado de Eliminación */}
+            <div className="space-y-2">
+              <Label htmlFor="eliminado" className="text-sm">Estado</Label>
+              <Select 
+                value={filters.eliminado || "activas"} 
+                onValueChange={(value) => handleFilterChange('eliminado', value)}
+              >
+                <SelectTrigger id="eliminado" className="h-9">
+                  <SelectValue placeholder="Solo activas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="activas">Solo Activas</SelectItem>
+                  <SelectItem value="eliminadas">Solo Eliminadas</SelectItem>
+                  <SelectItem value="todas">Todas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </PopoverContent>

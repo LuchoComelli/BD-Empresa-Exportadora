@@ -808,14 +808,14 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
         'certificadopyme': {'field': 'certificadopyme', 'section': 'comercial', 'label': 'Certificado MiPYME'},
         'certificaciones': {'field': 'certificaciones', 'section': 'comercial', 'label': 'Certificaciones'},
         
-        # Promoción
+        # Promoción y Material
         'promo2idiomas': {'field': 'promo2idiomas', 'section': 'comercial', 'label': 'Material en Múltiples Idiomas'},
         'idiomas_trabaja': {'field': 'idiomas_trabaja', 'section': 'comercial', 'label': 'Idiomas de Trabajo'},
         
-        
+        # Actividades de Internacionalización
         'ferias': {'field': 'ferias', 'section': 'comercial', 'label': 'Ferias'},
-        'rondas': {'field': 'rondas', 'section': 'comercial', 'label': 'Rondas'},
-        'misiones': {'field': 'misiones', 'section': 'comercial', 'label': 'Misiones'},
+        'rondas': {'field': 'rondas', 'section': 'comercial', 'label': 'Rondas de Negocios'},
+        'misiones': {'field': 'misiones', 'section': 'comercial', 'label': 'Misiones Comerciales'},
         
         # Otros
         'observaciones': {'field': 'observaciones', 'section': 'comercial', 'label': 'Observaciones'},
@@ -861,11 +861,23 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
             if items:
                 return ', '.join(items)
             return '-'
+        
         # Campos que requieren acceso a relaciones
         if field_name == 'rubro_nombre':
             if empresa.id_rubro:
                 return empresa.id_rubro.nombre if hasattr(empresa.id_rubro, 'nombre') else str(empresa.id_rubro)
             return '-'
+        elif field_name == 'sub_rubro_nombre':
+            # Para empresas mixtas, mostrar ambos subrubros si existen
+            if empresa.tipo_empresa_valor == 'mixta':
+                sub_prod = empresa.id_subrubro_producto.nombre if empresa.id_subrubro_producto else None
+                sub_serv = empresa.id_subrubro_servicio.nombre if empresa.id_subrubro_servicio else None
+                if sub_prod and sub_serv:
+                    return f"{sub_prod} / {sub_serv}"
+                return sub_prod or sub_serv or '-'
+            else:
+                # Para empresas de producto o servicio único
+                return empresa.id_subrubro.nombre if empresa.id_subrubro else '-'
         elif field_name == 'departamento_nombre':
             if empresa.departamento:
                 return empresa.departamento.nombre if hasattr(empresa.departamento, 'nombre') else str(empresa.departamento)
@@ -897,6 +909,28 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
             except:
                 pass
             return 'N/A'
+        elif field_name == 'actividades_promocion_internacional':
+            # Devolver el JSON como string formateado
+            actividades = extraer_actividades_promocion(empresa)
+            if any(actividades.values()):
+                result = []
+                if actividades['ferias']:
+                    result.append(f"Ferias: {', '.join(actividades['ferias'])}")
+                if actividades['rondas']:
+                    result.append(f"Rondas: {', '.join(actividades['rondas'])}")
+                if actividades['misiones']:
+                    result.append(f"Misiones: {', '.join(actividades['misiones'])}")
+                return '; '.join(result) if result else '-'
+            return '-'
+        elif field_name == 'estado':
+            # El estado puede venir de la solicitud de registro
+            try:
+                solicitud = empresa.solicitudes_registro.first()
+                if solicitud:
+                    return solicitud.get_estado_display() if hasattr(solicitud, 'get_estado_display') else str(solicitud.estado) if hasattr(solicitud, 'estado') else 'Aprobada'
+            except:
+                pass
+            return 'Aprobada'  # Valor por defecto para empresas aprobadas
         # Campos directos del modelo
         elif hasattr(empresa, field_name):
             value = getattr(empresa, field_name)
@@ -1023,14 +1057,16 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
         # Agregar marca de agua
         add_watermark(canvas)
         
-        # Agregar header en la parte superior (más pequeño)
+        # Agregar header en la parte superior (más pequeño) con margen
         if header_footer_exists:
             try:
                 header_height = 2.0 * cm  # Reducido de 2.5cm a 2.0cm
+                header_margin_top = 0.5 * cm  # Margen arriba para que no toque el borde
                 header_width = page_width
+                header_y = page_height - header_height - header_margin_top
                 canvas.drawImage(
                     header_footer_path,
-                    0, page_height - header_height,
+                    0, header_y,
                     width=header_width,
                     height=header_height,
                     preserveAspectRatio=True,
@@ -1056,7 +1092,8 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
             ]
             
             # Calcular posición para el texto de contacto (arriba del footer)
-            contacto_y_start = footer_height + 1.5 * cm
+            footer_margin_bottom = 0.5 * cm  # Margen abajo para que no toque el borde
+            contacto_y_start = footer_height + footer_margin_bottom + 1.5 * cm
             line_height = 0.5 * cm
             
             # Dibujar cada línea de contacto centrada
@@ -1072,13 +1109,15 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
             
             canvas.restoreState()
             
-            # Agregar footer centrado
+            # Agregar footer centrado con margen abajo
             footer_width = page_width * 0.8  # 80% del ancho para centrarlo
             footer_x = (page_width - footer_width) / 2  # Centrar horizontalmente
+            footer_margin_bottom = 0.5 * cm  # Margen abajo para que no toque el borde
+            footer_y = footer_margin_bottom
             
             canvas.drawImage(
                 header_footer_path,
-                footer_x, 0,
+                footer_x, footer_y,
                 width=footer_width,
                 height=footer_height,
                 preserveAspectRatio=True,

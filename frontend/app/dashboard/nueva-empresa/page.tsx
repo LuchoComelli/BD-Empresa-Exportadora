@@ -310,33 +310,54 @@ useEffect(() => {
       // ✅ CAMBIAR: Obtener todos los rubros y luego dividir/usar según disponibilidad
       const data = await api.getRubros()
       const allRubros = Array.isArray(data) ? data : (data.results || data)
-      const productosList = (allRubros || []).filter((r: any) => r.tipo === 'producto' || r.tipo === 'mixto')
-      const serviciosList = (allRubros || []).filter((r: any) => r.tipo === 'servicio' || r.tipo === 'mixto')
+      
+      // Debug: verificar qué rubros se están recibiendo
+      console.log('[Nueva Empresa] Respuesta API completa:', data)
+      console.log('[Nueva Empresa] Tipo de respuesta:', Array.isArray(data) ? 'Array' : typeof data)
+      console.log('[Nueva Empresa] Total rubros recibidos:', allRubros.length)
+      if (allRubros.length > 0) {
+        console.log('[Nueva Empresa] Primer rubro (ejemplo):', allRubros[0])
+        console.log('[Nueva Empresa] Campos del primer rubro:', Object.keys(allRubros[0]))
+        console.log('[Nueva Empresa] Tipo del primer rubro:', allRubros[0].tipo)
+      }
+      const rubrosServicio = allRubros.filter((r: any) => r.tipo === 'servicio')
+      console.log('[Nueva Empresa] Rubros con tipo servicio:', rubrosServicio.length, rubrosServicio)
+      console.log('[Nueva Empresa] Rubros de servicio en BD:', rubrosServicio.map((r: any) => `${r.nombre} (tipo: ${r.tipo || 'SIN TIPO'})`))
+      
+      // Verificar si hay rubros sin tipo
+      const rubrosSinTipo = allRubros.filter((r: any) => !r.tipo || r.tipo === undefined)
+      if (rubrosSinTipo.length > 0) {
+        console.warn('[Nueva Empresa] ⚠️ Rubros sin campo tipo:', rubrosSinTipo.length, rubrosSinTipo.map((r: any) => r.nombre))
+      }
+      
+      // Filtrar y ordenar alfabéticamente
+      const productosList = (allRubros || [])
+        .filter((r: any) => r.tipo === 'producto' || r.tipo === 'mixto')
+        .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre))
+      const serviciosList = (allRubros || [])
+        .filter((r: any) => r.tipo === 'servicio' || r.tipo === 'mixto')
+        .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre))
+      
+      console.log('[Nueva Empresa] Tipo negocio:', tipoNegocio)
+      console.log('[Nueva Empresa] Productos filtrados:', productosList.length, productosList.map((r: any) => r.nombre))
+      console.log('[Nueva Empresa] Servicios filtrados:', serviciosList.length, serviciosList.map((r: any) => r.nombre))
 
         if (tipoNegocio === 'productos') {
         setRubrosProductos(productosList || [])
           setRubrosServicios([])
         setRubros(productosList || [])
+        console.log('[Nueva Empresa] Estado actualizado - productos:', productosList.length)
         } else if (tipoNegocio === 'servicios') {
-        // Si no hay rubros específicamente de servicio, caemos a los de producto
-        if (serviciosList.length > 0) {
+        // Mostrar solo rubros de servicios
           setRubrosServicios(serviciosList || [])
-          setRubros(productosList.length > 0 ? serviciosList : productosList || [])
-        } else {
-          setRubrosServicios(productosList || [])
-          setRubros(productosList || [])
-        }
+          setRubros(serviciosList || [])
           setRubrosProductos([])
+          console.log('[Nueva Empresa] Estado actualizado - servicios:', serviciosList.length, serviciosList.map((r: any) => r.nombre))
         } else if (tipoNegocio === 'ambos') {
         setRubrosProductos(productosList || [])
-        // Si no hay rubros específicamente de servicio, usar los mismos que productos (incluyendo mixtos)
-        if (serviciosList.length > 0) {
           setRubrosServicios(serviciosList || [])
-        } else {
-          // Si no hay rubros de servicio, mostrar los mismos que productos para que el usuario pueda seleccionar
-          setRubrosServicios(productosList || [])
-        }
           setRubros([])
+          console.log('[Nueva Empresa] Estado actualizado - ambos')
         }
 
       // Limpiar selecciones
@@ -375,7 +396,11 @@ useEffect(() => {
         setLoadingRubros(true)
         const data = await api.getSubRubrosPorRubro(formData.rubro)
         const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
-        setSubrubros(subrubrosArray || [])
+        // Ordenar alfabéticamente
+        const subrubrosOrdenados = (subrubrosArray || []).sort((a: any, b: any) => 
+          a.nombre.localeCompare(b.nombre)
+        )
+        setSubrubros(subrubrosOrdenados)
         setFormData(prev => ({ ...prev, subRubro: "" }))
       } catch (error) {
         console.error('Error cargando subrubros:', error)
@@ -398,7 +423,11 @@ useEffect(() => {
         setLoadingRubros(true)
         const data = await api.getSubRubrosPorRubro(formData.rubroProducto)
         const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
-        setSubrubrosProductos(subrubrosArray || [])
+        // Ordenar alfabéticamente
+        const subrubrosOrdenados = (subrubrosArray || []).sort((a: any, b: any) => 
+          a.nombre.localeCompare(b.nombre)
+        )
+        setSubrubrosProductos(subrubrosOrdenados)
         setFormData(prev => ({ ...prev, subRubroProducto: "" }))
       } catch (error) {
         console.error('Error cargando subrubros de productos:', error)
@@ -421,7 +450,11 @@ useEffect(() => {
         setLoadingRubros(true)
         const data = await api.getSubRubrosPorRubro(formData.rubroServicio)
         const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
-        setSubrubrosServicios(subrubrosArray || [])
+        // Ordenar alfabéticamente
+        const subrubrosOrdenados = (subrubrosArray || []).sort((a: any, b: any) => 
+          a.nombre.localeCompare(b.nombre)
+        )
+        setSubrubrosServicios(subrubrosOrdenados)
         setFormData(prev => ({ ...prev, subRubroServicio: "" }))
       } catch (error) {
         console.error('Error cargando subrubros de servicios:', error)
@@ -689,12 +722,12 @@ useEffect(() => {
       // Crear productos si existen
       if (tipoNegocio !== 'servicios' && productos.length > 0 && productos[0].nombre) {
         console.log(`Creando ${productos.length} producto(s) para empresa ID: ${empresaCreada.id}`)
-        for (const producto of productos) {
-          if (producto.nombre) {
-            const productoData: any = {
-              empresa: empresaCreada.id,
-              nombre_producto: producto.nombre,
-              descripcion: producto.descripcion || '',
+          for (const producto of productos) {
+            if (producto.nombre) {
+              const productoData: any = {
+                empresa: empresaCreada.id,
+                nombre_producto: producto.nombre,
+                descripcion: producto.descripcion || '',
               capacidad_productiva: producto.capacidadProductiva ? parseFloat(producto.capacidadProductiva.replace(/,/g, '')) : null,
               unidad_medida: producto.unidadMedida || "kg",
             }
@@ -706,27 +739,27 @@ useEffect(() => {
             console.log(`Creando producto en ${endpointProducto} con datos:`, productoData)
             const productoCreado = await api.post<any>(endpointProducto, productoData)
             console.log("Producto creado:", productoCreado)
-            
-            // Crear posición arancelaria si existe
-            if (producto.posicionArancelaria) {
+              
+              // Crear posición arancelaria si existe
+              if (producto.posicionArancelaria) {
               // Usar endpoint diferente según el tipo de empresa
               const endpointPosicionArancelaria = tipoNegocio === 'ambos' 
                 ? '/empresas/posiciones-arancelarias-mixta/' 
                 : '/empresas/posiciones-arancelarias/'
               
               await api.post<any>(endpointPosicionArancelaria, {
-                producto: productoCreado.id,
-                codigo_arancelario: producto.posicionArancelaria,
-              })
+                  producto: productoCreado.id,
+                  codigo_arancelario: producto.posicionArancelaria,
+                })
+              }
             }
           }
         }
-      }
-      
+        
       // Crear servicios si existen
       if (tipoNegocio !== 'productos' && servicios.length > 0 && servicios[0].descripcion) {
-        for (const servicio of servicios) {
-          if (servicio.descripcion) {
+          for (const servicio of servicios) {
+            if (servicio.descripcion) {
             // Mapear tipo de servicio (usar los valores exactos que espera el backend)
             const mapTipoServicio = (tipo: string) => {
               const mapa: Record<string, string> = {
@@ -767,21 +800,21 @@ useEffect(() => {
               return mapa[forma] || 'otro'
             }
             
-            const servicioData: any = {
-              empresa: empresaCreada.id,
-              nombre_servicio: servicio.descripcion,
-              descripcion: servicio.descripcion,
+              const servicioData: any = {
+                empresa: empresaCreada.id,
+                nombre_servicio: servicio.descripcion,
+                descripcion: servicio.descripcion,
               tipo_servicio: servicio.tipoServicio.length > 0 ? mapTipoServicio(servicio.tipoServicio[0]) : 'otro',
               sector_atendido: servicio.sectores.length > 0 ? mapSector(servicio.sectores[0]) : 'otro',
-              alcance_servicio: servicio.alcanceGeografico || 'local',
-              paises_trabaja: servicio.paisesDestino || null,
-              exporta_servicios: servicio.exportaServicios === 'si',
-              interes_exportar_servicios: servicio.interesExportar === 'si',
-              idiomas_trabajo: servicio.idiomas.join(', ') || null,
+                alcance_servicio: servicio.alcanceGeografico || 'local',
+                paises_trabaja: servicio.paisesDestino || null,
+                exporta_servicios: servicio.exportaServicios === 'si',
+                interes_exportar_servicios: servicio.interesExportar === 'si',
+                idiomas_trabajo: servicio.idiomas.join(', ') || null,
               forma_contratacion: servicio.formaContratacion.length > 0 ? mapFormaContratacion(servicio.formaContratacion[0]) : null,
-              certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
-              tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
-            }
+                certificaciones_tecnicas: servicio.certificacionesTecnicas || null,
+                tiene_equipo_tecnico: servicio.equipoTecnico === 'si',
+              }
             
             const endpointServicio = tipoNegocio === 'ambos' 
               ? '/empresas/servicios-mixta/' 
@@ -853,7 +886,7 @@ useEffect(() => {
       router.push('/dashboard/empresas')
     } catch (error: any) {
       if (!handleAuthError(error)) {
-        console.error("Error al crear empresa:", error)
+      console.error("Error al crear empresa:", error)
         
         // Mejorar el mensaje de error para casos comunes
         let errorTitle = "Error al crear la empresa"
@@ -872,11 +905,11 @@ useEffect(() => {
           errorDescription = error.message || "Por favor, verifica que todos los campos estén completos y sean válidos."
         }
         
-        toast({
+      toast({
           title: errorTitle,
           description: errorDescription,
-          variant: "destructive",
-        })
+        variant: "destructive",
+      })
       }
     } finally {
       setLoading(false)
@@ -1568,20 +1601,6 @@ useEffect(() => {
                                 </div>
                               ))}
                             </div>
-                          </div>
-
-                          <div>
-                            <Label>Certificaciones Técnicas</Label>
-                            <p className="text-xs text-[#6B7280] mb-3">
-                              ISO 9001, ISO 14001, SCRUM, AWS, u otras certificaciones específicas
-                            </p>
-                            <Textarea
-                              value={servicio.certificacionesTecnicas}
-                              onChange={(e) => actualizarServicio(servicio.id, "certificacionesTecnicas", toUpperCase(e.target.value))}
-                              placeholder="AGREGUE LAS CERTIFICACIONES TÉCNICAS"
-                              rows={3}
-                              className="uppercase"
-                            />
                           </div>
 
                           <div>

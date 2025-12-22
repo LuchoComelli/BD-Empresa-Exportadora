@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Save, Globe, Loader2, AlertCircle } from "lucide-react"
+import { Save, Globe, Loader2, AlertCircle, Map } from "lucide-react"
 import api from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { useDashboardAuth, handleAuthError } from "@/hooks/use-dashboard-auth"
@@ -28,6 +28,10 @@ interface Configuracion {
   beneficio2_descripcion: string
   beneficio3_titulo: string
   beneficio3_descripcion: string
+  densidad_baja_max?: number
+  densidad_media_max?: number
+  densidad_alta_max?: number
+  densidad_muy_alta_min?: number
 }
 
 export default function ConfiguracionPage() {
@@ -49,7 +53,11 @@ export default function ConfiguracionPage() {
     beneficio2_titulo: "",
     beneficio2_descripcion: "",
     beneficio3_titulo: "",
-    beneficio3_descripcion: ""
+    beneficio3_descripcion: "",
+    densidad_baja_max: 5,
+    densidad_media_max: 20,
+    densidad_alta_max: 40,
+    densidad_muy_alta_min: 41
   })
   const { toast } = useToast()
 
@@ -97,7 +105,11 @@ export default function ConfiguracionPage() {
         beneficio2_titulo: data.beneficio2_titulo || "",
         beneficio2_descripcion: data.beneficio2_descripcion || "",
         beneficio3_titulo: data.beneficio3_titulo || "",
-        beneficio3_descripcion: data.beneficio3_descripcion || ""
+        beneficio3_descripcion: data.beneficio3_descripcion || "",
+        densidad_baja_max: data.densidad_baja_max ?? 5,
+        densidad_media_max: data.densidad_media_max ?? 20,
+        densidad_alta_max: data.densidad_alta_max ?? 40,
+        densidad_muy_alta_min: data.densidad_muy_alta_min ?? 41
       })
     } catch (error: any) {
       if (!handleAuthError(error)) {
@@ -114,6 +126,43 @@ export default function ConfiguracionPage() {
   }
 
   const handleSave = async () => {
+    // Validar rangos antes de guardar
+    if (formData.densidad_baja_max < 1) {
+      toast({
+        title: "Error de validación",
+        description: "La densidad baja debe ser al menos 1 empresa.",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (formData.densidad_media_max <= formData.densidad_baja_max) {
+      toast({
+        title: "Error de validación",
+        description: `La densidad media (${formData.densidad_media_max}) debe ser mayor que la densidad baja (${formData.densidad_baja_max}).`,
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (formData.densidad_alta_max <= formData.densidad_media_max) {
+      toast({
+        title: "Error de validación",
+        description: `La densidad alta (${formData.densidad_alta_max}) debe ser mayor que la densidad media (${formData.densidad_media_max}).`,
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (formData.densidad_muy_alta_min <= formData.densidad_alta_max) {
+      toast({
+        title: "Error de validación",
+        description: `La densidad muy alta (${formData.densidad_muy_alta_min}) debe ser mayor que la densidad alta (${formData.densidad_alta_max}).`,
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setSaving(true)
       console.log("Guardando configuración:", formData)
@@ -133,7 +182,11 @@ export default function ConfiguracionPage() {
         beneficio2_titulo: updated.beneficio2_titulo || "",
         beneficio2_descripcion: updated.beneficio2_descripcion || "",
         beneficio3_titulo: updated.beneficio3_titulo || "",
-        beneficio3_descripcion: updated.beneficio3_descripcion || ""
+        beneficio3_descripcion: updated.beneficio3_descripcion || "",
+        densidad_baja_max: updated.densidad_baja_max ?? 5,
+        densidad_media_max: updated.densidad_media_max ?? 20,
+        densidad_alta_max: updated.densidad_alta_max ?? 40,
+        densidad_muy_alta_min: updated.densidad_muy_alta_min ?? 41
       })
       toast({
         title: "Éxito",
@@ -391,6 +444,185 @@ export default function ConfiguracionPage() {
                   />
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[#222A59] flex items-center gap-2">
+              <Map className="h-5 w-5" />
+              Configuración del Mapa de Calor
+            </CardTitle>
+            <CardDescription>Define los rangos de densidad para el mapa de calor de empresas</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Nota:</strong> Los rangos deben ser consecutivos. Si la densidad baja es hasta 10 empresas, 
+                la densidad media debe comenzar en 11, y así sucesivamente.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="densidad-baja">
+                  Densidad Baja - Máximo
+                  <span className="text-muted-foreground text-xs ml-2">(1 hasta este valor)</span>
+                </Label>
+                <Input
+                  id="densidad-baja"
+                  type="number"
+                  min="1"
+                  value={formData.densidad_baja_max}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 1
+                    setFormData({ 
+                      ...formData, 
+                      densidad_baja_max: value,
+                      // Ajustar densidad_media_max si es necesario
+                      densidad_media_max: Math.max(formData.densidad_media_max, value + 1)
+                    })
+                  }}
+                  className={formData.densidad_baja_max >= formData.densidad_media_max ? "border-red-500" : ""}
+                />
+                {formData.densidad_baja_max >= formData.densidad_media_max && (
+                  <p className="text-xs text-red-500">
+                    Debe ser menor que la densidad media ({formData.densidad_media_max})
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Color: Verde (#10b981)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="densidad-media">
+                  Densidad Media - Máximo
+                  <span className="text-muted-foreground text-xs ml-2">
+                    ({formData.densidad_baja_max + 1} hasta este valor)
+                  </span>
+                </Label>
+                <Input
+                  id="densidad-media"
+                  type="number"
+                  min={formData.densidad_baja_max + 1}
+                  value={formData.densidad_media_max}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || formData.densidad_baja_max + 1
+                    const minValue = formData.densidad_baja_max + 1
+                    const actualValue = Math.max(minValue, value)
+                    setFormData({ 
+                      ...formData, 
+                      densidad_media_max: actualValue,
+                      // Ajustar densidad_alta_max si es necesario
+                      densidad_alta_max: Math.max(formData.densidad_alta_max, actualValue + 1)
+                    })
+                  }}
+                  className={
+                    formData.densidad_media_max <= formData.densidad_baja_max || 
+                    formData.densidad_media_max >= formData.densidad_alta_max 
+                      ? "border-red-500" 
+                      : ""
+                  }
+                />
+                {(formData.densidad_media_max <= formData.densidad_baja_max || 
+                  formData.densidad_media_max >= formData.densidad_alta_max) && (
+                  <p className="text-xs text-red-500">
+                    Debe ser mayor que {formData.densidad_baja_max} y menor que {formData.densidad_alta_max}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Color: Amarillo (#fbbf24)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="densidad-alta">
+                  Densidad Alta - Máximo
+                  <span className="text-muted-foreground text-xs ml-2">
+                    ({formData.densidad_media_max + 1} hasta este valor)
+                  </span>
+                </Label>
+                <Input
+                  id="densidad-alta"
+                  type="number"
+                  min={formData.densidad_media_max + 1}
+                  value={formData.densidad_alta_max}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || formData.densidad_media_max + 1
+                    const minValue = formData.densidad_media_max + 1
+                    const actualValue = Math.max(minValue, value)
+                    setFormData({ 
+                      ...formData, 
+                      densidad_alta_max: actualValue,
+                      // Ajustar densidad_muy_alta_min si es necesario
+                      densidad_muy_alta_min: Math.max(formData.densidad_muy_alta_min, actualValue + 1)
+                    })
+                  }}
+                  className={
+                    formData.densidad_alta_max <= formData.densidad_media_max ||
+                    formData.densidad_alta_max >= formData.densidad_muy_alta_min
+                      ? "border-red-500" 
+                      : ""
+                  }
+                />
+                {(formData.densidad_alta_max <= formData.densidad_media_max ||
+                  formData.densidad_alta_max >= formData.densidad_muy_alta_min) && (
+                  <p className="text-xs text-red-500">
+                    Debe ser mayor que {formData.densidad_media_max} y menor que {formData.densidad_muy_alta_min}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Color: Naranja (#f97316)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="densidad-muy-alta">
+                  Densidad Muy Alta - Mínimo
+                  <span className="text-muted-foreground text-xs ml-2">
+                    (desde {formData.densidad_alta_max + 1} en adelante)
+                  </span>
+                </Label>
+                <Input
+                  id="densidad-muy-alta"
+                  type="number"
+                  min={formData.densidad_alta_max + 1}
+                  value={formData.densidad_muy_alta_min}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || formData.densidad_alta_max + 1
+                    const minValue = formData.densidad_alta_max + 1
+                    setFormData({ 
+                      ...formData, 
+                      densidad_muy_alta_min: Math.max(minValue, value)
+                    })
+                  }}
+                  className={formData.densidad_muy_alta_min <= formData.densidad_alta_max ? "border-red-500" : ""}
+                />
+                {formData.densidad_muy_alta_min <= formData.densidad_alta_max && (
+                  <p className="text-xs text-red-500">
+                    Debe ser mayor que la densidad alta ({formData.densidad_alta_max})
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Color: Rojo (#ef4444)
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Desde este valor en adelante
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <h4 className="font-semibold text-sm mb-2">Resumen de Rangos:</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• <strong>Sin empresas:</strong> 0 empresas (Gris claro - No modificable)</li>
+                <li>• <strong>Baja:</strong> 1 - {formData.densidad_baja_max} empresas (Verde)</li>
+                <li>• <strong>Media:</strong> {formData.densidad_baja_max + 1} - {formData.densidad_media_max} empresas (Amarillo)</li>
+                <li>• <strong>Alta:</strong> {formData.densidad_media_max + 1} - {formData.densidad_alta_max} empresas (Naranja)</li>
+                <li>• <strong>Muy Alta:</strong> {formData.densidad_muy_alta_min}+ empresas (Rojo)</li>
+              </ul>
             </div>
           </CardContent>
         </Card>

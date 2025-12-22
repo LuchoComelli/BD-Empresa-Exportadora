@@ -318,33 +318,54 @@ useEffect(() => {
         // Obtener todos los rubros y luego dividir/usar según disponibilidad
         const data = await api.getRubros()
         const allRubros = Array.isArray(data) ? data : (data.results || data)
-        const productosList = (allRubros || []).filter((r: any) => r.tipo === 'producto' || r.tipo === 'mixto')
-        const serviciosList = (allRubros || []).filter((r: any) => r.tipo === 'servicio' || r.tipo === 'mixto')
+        
+        // Debug: verificar qué rubros se están recibiendo
+        console.log('[Registro] Respuesta API completa:', data)
+        console.log('[Registro] Tipo de respuesta:', Array.isArray(data) ? 'Array' : typeof data)
+        console.log('[Registro] Total rubros recibidos:', allRubros.length)
+        if (allRubros.length > 0) {
+          console.log('[Registro] Primer rubro (ejemplo):', allRubros[0])
+          console.log('[Registro] Campos del primer rubro:', Object.keys(allRubros[0]))
+          console.log('[Registro] Tipo del primer rubro:', allRubros[0].tipo)
+        }
+        const rubrosServicio = allRubros.filter((r: any) => r.tipo === 'servicio')
+        console.log('[Registro] Rubros con tipo servicio:', rubrosServicio.length, rubrosServicio)
+        console.log('[Registro] Rubros de servicio en BD:', rubrosServicio.map((r: any) => `${r.nombre} (tipo: ${r.tipo || 'SIN TIPO'})`))
+        
+        // Verificar si hay rubros sin tipo
+        const rubrosSinTipo = allRubros.filter((r: any) => !r.tipo || r.tipo === undefined)
+        if (rubrosSinTipo.length > 0) {
+          console.warn('[Registro] ⚠️ Rubros sin campo tipo:', rubrosSinTipo.length, rubrosSinTipo.map((r: any) => r.nombre))
+        }
+        
+        // Filtrar y ordenar alfabéticamente
+        const productosList = (allRubros || [])
+          .filter((r: any) => r.tipo === 'producto' || r.tipo === 'mixto')
+          .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre))
+        const serviciosList = (allRubros || [])
+          .filter((r: any) => r.tipo === 'servicio' || r.tipo === 'mixto')
+          .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre))
+        
+        console.log('[Registro] Tipo negocio:', tipoNegocio)
+        console.log('[Registro] Productos filtrados:', productosList.length, productosList.map((r: any) => r.nombre))
+        console.log('[Registro] Servicios filtrados:', serviciosList.length, serviciosList.map((r: any) => r.nombre))
 
         if (tipoNegocio === 'productos') {
           setRubrosProductos(productosList || [])
           setRubrosServicios([])
           setRubros(productosList || [])
+          console.log('[Registro] Estado actualizado - productos:', productosList.length)
         } else if (tipoNegocio === 'servicios') {
-          // Si no hay rubros específicamente de servicio, caemos a los de producto
-          if (serviciosList.length > 0) {
-            setRubrosServicios(serviciosList || [])
-            setRubros(productosList.length > 0 ? serviciosList : productosList || [])
-          } else {
-            setRubrosServicios(productosList || [])
-            setRubros(productosList || [])
-          }
+          // Mostrar solo rubros de servicios
+          setRubrosServicios(serviciosList || [])
+          setRubros(serviciosList || [])
           setRubrosProductos([])
+          console.log('[Registro] Estado actualizado - servicios:', serviciosList.length, serviciosList.map((r: any) => r.nombre))
         } else if (tipoNegocio === 'ambos') {
           setRubrosProductos(productosList || [])
-          // Si no hay rubros específicamente de servicio, usar los mismos que productos (incluyendo mixtos)
-          if (serviciosList.length > 0) {
-            setRubrosServicios(serviciosList || [])
-          } else {
-            // Si no hay rubros de servicio, mostrar los mismos que productos para que el usuario pueda seleccionar
-            setRubrosServicios(productosList || [])
-          }
+          setRubrosServicios(serviciosList || [])
           setRubros([])
+          console.log('[Registro] Estado actualizado - ambos')
         }
 
         // Limpiar selecciones
@@ -383,7 +404,11 @@ useEffect(() => {
         setLoadingRubros(true)
         const data = await api.getSubRubrosPorRubro(formData.rubro)
         const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
-        setSubrubros(subrubrosArray || [])
+        // Ordenar alfabéticamente
+        const subrubrosOrdenados = (subrubrosArray || []).sort((a: any, b: any) => 
+          a.nombre.localeCompare(b.nombre)
+        )
+        setSubrubros(subrubrosOrdenados)
         setFormData(prev => ({ ...prev, subRubro: "" }))
       } catch (error) {
         console.error('Error cargando subrubros:', error)
@@ -406,7 +431,11 @@ useEffect(() => {
         setLoadingRubros(true)
         const data = await api.getSubRubrosPorRubro(formData.rubroProducto)
         const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
-        setSubrubrosProductos(subrubrosArray || [])
+        // Ordenar alfabéticamente
+        const subrubrosOrdenados = (subrubrosArray || []).sort((a: any, b: any) => 
+          a.nombre.localeCompare(b.nombre)
+        )
+        setSubrubrosProductos(subrubrosOrdenados)
         setFormData(prev => ({ ...prev, subRubroProducto: "" }))
       } catch (error) {
         console.error('Error cargando subrubros de productos:', error)
@@ -429,7 +458,11 @@ useEffect(() => {
         setLoadingRubros(true)
         const data = await api.getSubRubrosPorRubro(formData.rubroServicio)
         const subrubrosArray = Array.isArray(data) ? data : (data.results || data)
-        setSubrubrosServicios(subrubrosArray || [])
+        // Ordenar alfabéticamente
+        const subrubrosOrdenados = (subrubrosArray || []).sort((a: any, b: any) => 
+          a.nombre.localeCompare(b.nombre)
+        )
+        setSubrubrosServicios(subrubrosOrdenados)
         setFormData(prev => ({ ...prev, subRubroServicio: "" }))
       } catch (error) {
         console.error('Error cargando subrubros de servicios:', error)
@@ -777,7 +810,7 @@ useEffect(() => {
       
       // Esperar un momento antes de redirigir para que el usuario vea el toast
       setTimeout(() => {
-        router.push("/login")
+    router.push("/login")
       }, 2000)
     } catch (error: any) {
       console.error("Error en registro:", error)
@@ -916,22 +949,22 @@ useEffect(() => {
             className="object-contain"
             priority
           />
-        </div>
-      </Link>
+            </div>
+          </Link>
     </div>
-    <Link href="/">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
-      >
-        <ArrowLeft className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-        <span className="hidden sm:inline">Volver al Inicio</span>
-        <span className="sm:hidden">Volver</span>
-      </Button>
-    </Link>
-  </div>
-</header>
+          <Link href="/">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white hover:text-white hover:bg-white/10 text-xs md:text-sm"
+            >
+              <ArrowLeft className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Volver al Inicio</span>
+              <span className="sm:hidden">Volver</span>
+            </Button>
+          </Link>
+        </div>
+      </header>
 
       <div className="container mx-auto px-4 py-6 md:py-12 max-w-4xl">
         <div className="mb-6 md:mb-8">
@@ -1085,46 +1118,50 @@ useEffect(() => {
                     </>
                   ) : (
                     // Caso productos o servicios únicos
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="rubro">Rubro *</Label>
-                        <Select
-                          value={formData.rubro}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="rubro">Rubro *</Label>
+                      <Select
+                        value={formData.rubro}
                           onValueChange={(value) => setFormData(prev => ({ ...prev, rubro: value, subRubro: "" }))}
                           disabled={loadingRubros}
-                        >
-                          <SelectTrigger>
+                      >
+                        <SelectTrigger>
                             <SelectValue placeholder={loadingRubros ? "Cargando..." : "Selecciona el rubro"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {rubros.map((rubro) => (
-                              <SelectItem key={rubro.id} value={String(rubro.id)}>
-                                {rubro.nombre}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="subRubro">Sub-Rubro *</Label>
-                        <Select
-                          value={formData.subRubro}
+                        </SelectTrigger>
+                        <SelectContent>
+                            {rubros.length === 0 ? (
+                              <div className="px-2 py-1.5 text-sm text-muted-foreground">No hay rubros disponibles</div>
+                            ) : (
+                              rubros.map((rubro) => (
+                                <SelectItem key={rubro.id} value={String(rubro.id)}>
+                                  {rubro.nombre}
+                            </SelectItem>
+                              ))
+                            )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="subRubro">Sub-Rubro *</Label>
+                      <Select
+                        value={formData.subRubro}
                           onValueChange={(value) => setFormData(prev => ({ ...prev, subRubro: value }))}
                           disabled={!formData.rubro || loadingRubros}
-                        >
-                          <SelectTrigger>
+                      >
+                        <SelectTrigger>
                             <SelectValue placeholder={loadingRubros ? "Cargando..." : formData.rubro ? "Selecciona el sub-rubro" : "Primero selecciona un rubro"} />
-                          </SelectTrigger>
-                          <SelectContent>
+                        </SelectTrigger>
+                        <SelectContent>
                             {subrubros.map((subrubro) => (
                               <SelectItem key={subrubro.id} value={String(subrubro.id)}>
                                 {subrubro.nombre}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+                  </div>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1180,12 +1217,12 @@ useEffect(() => {
                     </Select>
                   </div>
 
-                  <div>
-                    <Label htmlFor="cuit">CUIT *</Label>
-                    <Input
-                      id="cuit"
-                      required
-                      value={formData.cuit}
+                    <div>
+                      <Label htmlFor="cuit">CUIT *</Label>
+                      <Input
+                        id="cuit"
+                        required
+                        value={formData.cuit}
                       onChange={(e) => {
                         const normalized = handleNumericInputChange(e.target.value)
                         setFormData(prev => ({ ...prev, cuit: normalized }))
@@ -1273,13 +1310,13 @@ useEffect(() => {
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <Label>Capacidad Productiva</Label>
-                                <Input
+                            <div>
+                              <Label>Capacidad Productiva</Label>
+                              <Input
                                   type="number"
                                   step="0.01"
-                                  value={producto.capacidadProductiva}
-                                  onChange={(e) =>
+                                value={producto.capacidadProductiva}
+                                onChange={(e) =>
                                     actualizarProducto(producto.id, "capacidadProductiva", e.target.value)
                                   }
                                   placeholder="Ej: 10000"
@@ -1386,15 +1423,15 @@ useEffect(() => {
 
                           <div>
                             <Label>Descripción del Servicio {index === 0 && "*"}</Label>
-                            <Textarea
+                      <Textarea
                               required={index === 0}
                               value={servicio.descripcion}
                               onChange={(e) => actualizarServicio(servicio.id, "descripcion", toUpperCase(e.target.value))}
                               placeholder="DESCRIBE LOS SERVICIOS QUE OFRECE SU EMPRESA"
                               rows={3}
-                              className="uppercase"
-                            />
-                          </div>
+                        className="uppercase"
+                      />
+                    </div>
 
                           <div>
                             <Label>Sectores a los que Presta Servicios {index === 0 && "*"}</Label>
@@ -1521,20 +1558,6 @@ useEffect(() => {
                           </div>
 
                           <div>
-                            <Label>Certificaciones Técnicas</Label>
-                            <p className="text-xs text-[#6B7280] mb-3">
-                              ISO 9001, ISO 14001, SCRUM, AWS, u otras certificaciones específicas
-                            </p>
-                            <Textarea
-                              value={servicio.certificacionesTecnicas}
-                              onChange={(e) => actualizarServicio(servicio.id, "certificacionesTecnicas", toUpperCase(e.target.value))}
-                              placeholder="AGREGUE LAS CERTIFICACIONES TÉCNICAS"
-                              rows={3}
-                              className="uppercase"
-                            />
-                          </div>
-
-                          <div>
                             <Label>¿Tiene Equipo Técnico Especializado? {index === 0 && "*"}</Label>
                             <Select
                               value={servicio.equipoTecnico}
@@ -1593,19 +1616,19 @@ useEffect(() => {
                   <div className="space-y-4 p-4 border border-[#629BD2]/30 rounded-lg bg-[#629BD2]/5">
                     <h3 className="font-semibold text-[#222A59] flex items-center gap-2">Contacto Principal</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
+                    <div>
                         <Label htmlFor="nombreContacto">Nombre *</Label>
-                        <Input
+                      <Input
                           id="nombreContacto"
-                          required
-                          value={contactoPrincipal.nombre}
+                        required
+                        value={contactoPrincipal.nombre}
                           onChange={(e) => {
                             const normalized = handleTextInputChange(e.target.value, contactoPrincipal.nombre)
                             setContactoPrincipal({ ...contactoPrincipal, nombre: toUpperCase(normalized) })
                           }}
                           placeholder="NOMBRE"
-                          className="uppercase"
-                        />
+                        className="uppercase"
+                      />
                       </div>
                       <div>
                         <Label htmlFor="apellidoContacto">Apellido *</Label>
@@ -1688,17 +1711,17 @@ useEffect(() => {
                         </Button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
+                      <div>
                           <Label>Nombre</Label>
-                          <Input
-                            value={contacto.nombre}
+                        <Input
+                          value={contacto.nombre}
                             onChange={(e) => {
                               const normalized = handleTextInputChange(e.target.value, contacto.nombre)
                               actualizarContacto(contacto.id, "nombre", toUpperCase(normalized))
                             }}
                             placeholder="NOMBRE"
-                            className="uppercase"
-                          />
+                          className="uppercase"
+                        />
                         </div>
                         <div>
                           <Label>Apellido</Label>
@@ -1871,7 +1894,7 @@ useEffect(() => {
                               municipios.map((municipio) => (
                                 <SelectItem key={municipio.id} value={municipio.id}>
                                   {municipio.nombre}
-                                </SelectItem>
+                              </SelectItem>
                               ))
                             ) : (
                               <div className="px-2 py-1.5 text-sm text-muted-foreground">
@@ -1957,12 +1980,12 @@ useEffect(() => {
                         Haz clic en el mapa o arrastra el marcador para seleccionar la ubicación de tu empresa
                       </p>
                       <LocationPicker
-  value={formData.geolocalizacion}
+                        value={formData.geolocalizacion}
   onChange={(coords) => setFormData(prev => ({ ...prev, geolocalizacion: coords }))}
   centerLat={mapCenter.lat}
   centerLng={mapCenter.lng}
   zoomLevel={mapCenter.zoom}
-/>
+                      />
                     </div>
                   </div>
                 </div>
@@ -1998,35 +2021,35 @@ useEffect(() => {
 
                 <div className="space-y-4">
                   <div>
-  <Label htmlFor="exporta">¿Exporta actualmente? *</Label>
-  <Select
-    value={formData.exporta}
+                    <Label htmlFor="exporta">¿Exporta actualmente? *</Label>
+                    <Select
+                      value={formData.exporta}
     onValueChange={(value) => setFormData(prev => ({ ...prev, exporta: value }))}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Selecciona una opción" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="si">Sí</SelectItem>
-      <SelectItem value="no">No</SelectItem>
-      <SelectItem value="en-proceso">En proceso</SelectItem>
-    </SelectContent>
-  </Select>
-</div>
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una opción" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                        <SelectItem value="en-proceso">En proceso</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-{formData.exporta === "si" && (
-  <div>
-    <Label htmlFor="destinoExportacion">Destino de Exportación</Label>
-    <Textarea
-      id="destinoExportacion"
-      value={formData.destinoExportacion}
+                  {formData.exporta === "si" && (
+                    <div>
+                      <Label htmlFor="destinoExportacion">Destino de Exportación</Label>
+                      <Textarea
+                        id="destinoExportacion"
+                        value={formData.destinoExportacion}
       onChange={(e) => setFormData(prev => ({ ...prev, destinoExportacion: toUpperCase(e.target.value) }))}
-      placeholder="PAÍSES A LOS QUE EXPORTA (SEPARADOS POR COMAS)"
-      rows={3}
-      className="uppercase"
-    />
-  </div>
-)}
+                        placeholder="PAÍSES A LOS QUE EXPORTA (SEPARADOS POR COMAS)"
+                        rows={3}
+                        className="uppercase"
+                      />
+                    </div>
+                  )}
 
 {formData.exporta === "no" && (
   <div>

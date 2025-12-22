@@ -80,6 +80,24 @@ const getFieldValue = (empresa: Empresa, fieldId: string): string => {
   
   if (value === null || value === undefined) return ''
   
+  // Formatear fechas
+  if (fieldId === 'fecha_creacion' || fieldId === 'fecha_actualizacion') {
+    if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
+      try {
+        const date = new Date(value)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('es-AR', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit' 
+          })
+        }
+      } catch (e) {
+        // Si falla el parseo, continuar con el valor original
+      }
+    }
+  }
+  
   if (typeof value === 'boolean') {
     return value ? 'Sí' : 'No'
   }
@@ -192,25 +210,23 @@ export function ExportEmpresaDialog({ open, onClose, empresa }: ExportEmpresaDia
   }
 
   const handleSelectAll = () => {
-    if (selectedFields.length === availableFields.length) {
+    // Obtener solo los campos que tienen valor (no bloqueados)
+    const fieldsWithValue = availableFields.filter(f => {
+      const value = getFieldValue(empresa, f.id)
+      return value !== '' && value !== null && value !== undefined
+    })
+    
+    // Si todos los campos con valor están seleccionados, deseleccionar todos
+    const allWithValueSelected = fieldsWithValue.every(f => selectedFields.includes(f.id))
+    
+    if (allWithValueSelected) {
       setSelectedFields([])
     } else {
-      setSelectedFields(availableFields.map(f => f.id))
+      // Seleccionar solo los campos que tienen valor
+      setSelectedFields(fieldsWithValue.map(f => f.id))
     }
   }
 
-  const handleSelectCategory = (categoryId: string) => {
-    const categoryFields = availableFields.filter(f => f.category === categoryId).map(f => f.id)
-    const allSelected = categoryFields.every(f => selectedFields.includes(f))
-    
-    if (allSelected) {
-      // Deseleccionar todos los campos de esta categoría
-      setSelectedFields(selectedFields.filter(id => !categoryFields.includes(id)))
-    } else {
-      // Seleccionar todos los campos de esta categoría
-      setSelectedFields([...new Set([...selectedFields, ...categoryFields])])
-    }
-  }
 
   const exportToCSV = () => {
     if (selectedFields.length === 0) {
@@ -262,6 +278,12 @@ export function ExportEmpresaDialog({ open, onClose, empresa }: ExportEmpresaDia
     })
   }
 
+  const escapeHTML = (text: string): string => {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
+
   const exportToExcel = () => {
     if (selectedFields.length === 0) {
       toast({
@@ -272,27 +294,62 @@ export function ExportEmpresaDialog({ open, onClose, empresa }: ExportEmpresaDia
       return
     }
 
-    // Create CSV format (Excel can open CSV)
+    // Headers
     const headers = selectedFields.map(fieldId => {
       const field = availableFields.find(f => f.id === fieldId)
       return field?.label || fieldId
     })
 
+    // Data row
     const row = selectedFields.map(fieldId => {
-      const value = getFieldValue(empresa, fieldId)
-      if (typeof value === "string" && (value.includes(",") || value.includes('"') || value.includes("\n"))) {
-        return `"${value.replace(/"/g, '""')}"`
-      }
-      return value
+      return getFieldValue(empresa, fieldId)
     })
 
-    const csvContent = [
-      headers.join(","),
-      row.join(",")
-    ].join("\n")
-
-    // Create blob with Excel MIME type
-    const blob = new Blob(['\ufeff' + csvContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
+    // Crear contenido HTML para Excel (formato tabla con estilos)
+    let htmlContent = `
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            table {
+              border-collapse: collapse;
+              width: 100%;
+            }
+            th {
+              background-color: #3259B5;
+              color: white;
+              font-weight: bold;
+              padding: 8px;
+              text-align: left;
+              border: 1px solid #ddd;
+            }
+            td {
+              padding: 6px;
+              border: 1px solid #ddd;
+            }
+            tr:nth-child(even) {
+              background-color: #f2f2f2;
+            }
+          </style>
+        </head>
+        <body>
+          <table>
+            <thead>
+              <tr>
+                ${headers.map(h => `<th>${escapeHTML(h)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                ${row.map(v => `<td>${escapeHTML(String(v))}</td>`).join('')}
+              </tr>
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `
+    
+    const blob = new Blob(['\ufeff' + htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
     const link = document.createElement("a")
     const url = URL.createObjectURL(blob)
     link.setAttribute("href", url)
@@ -437,27 +494,26 @@ export function ExportEmpresaDialog({ open, onClose, empresa }: ExportEmpresaDia
             <div className="flex items-center justify-between">
               <Label>Campos a Exportar</Label>
               <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                {selectedFields.length === availableFields.length ? "Deseleccionar Todos" : "Seleccionar Todos"}
+                {(() => {
+                  // Contar campos con valor
+                  const fieldsWithValue = availableFields.filter(f => {
+                    const value = getFieldValue(empresa, f.id)
+                    return value !== '' && value !== null && value !== undefined
+                  })
+                  const allWithValueSelected = fieldsWithValue.every(f => selectedFields.includes(f.id))
+                  return allWithValueSelected ? "Deseleccionar Todos" : "Seleccionar Todos"
+                })()}
               </Button>
             </div>
             
             <div className="space-y-4 max-h-96 overflow-y-auto p-2 border rounded-lg">
               {categories.map(category => {
                 const categoryFields = availableFields.filter(f => f.category === category.id)
-                const selectedInCategory = categoryFields.filter(f => selectedFields.includes(f.id))
                 
                 return (
                   <div key={category.id} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="font-semibold text-sm">{category.label}</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => handleSelectCategory(category.id)}
-                        className="text-xs"
-                      >
-                        {selectedInCategory.length === categoryFields.length ? "Deseleccionar" : "Seleccionar Todos"}
-                      </Button>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pl-4">
                       {categoryFields.map(field => {

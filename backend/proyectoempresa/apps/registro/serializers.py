@@ -511,7 +511,7 @@ class SolicitudRegistroUpdateSerializer(serializers.ModelSerializer):
             return value_str
         # Si es None, permitir que pase (el campo no se actualizará, mantendrá el existente)
         return value
-    
+
     def update(self, instance, validated_data):
         """Actualizar solicitud con datos del formulario"""
         import logging

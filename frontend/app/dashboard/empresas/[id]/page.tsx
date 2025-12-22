@@ -20,6 +20,8 @@ import { CompanyMap } from "@/components/map/company-map"
 import { LocationPicker } from "@/components/map/location-picker"
 import { useToast } from "@/hooks/use-toast"
 import { ExportEmpresaDialog } from "@/components/empresas/export-empresa-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { useDashboardAuth } from "@/hooks/use-dashboard-auth"
 
 interface ActividadPromocion {
   id: string
@@ -93,12 +95,15 @@ interface Empresa {
   rubro_producto_nombre?: string 
   rubro_servicio_nombre?: string
   actividades_promocion_internacional?: any[]
+  id_usuario?: any
+  usuario_email?: string
 }
 
 function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { user } = useDashboardAuth()
   const resolvedParams = use(params)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
   const [loading, setLoading] = useState(true)
@@ -106,6 +111,12 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
   const [editedData, setEditedData] = useState<Empresa | null>(null)
   const [saving, setSaving] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // Estados para edición de geolocalización
+  const [geoEditMode, setGeoEditMode] = useState<'view' | 'editing'>('view')
+  const [tempGeoCoordinates, setTempGeoCoordinates] = useState<{ lat: number; lng: number } | null>(null)
+  const [showGeoConfirmDialog, setShowGeoConfirmDialog] = useState(false)
 
   // Estados para selectores dinámicos
   const [departamentos, setDepartamentos] = useState<any[]>([])
@@ -134,6 +145,18 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
   useEffect(() => {
     loadEmpresa()
   }, [resolvedParams.id])
+
+  // Actualizar el email cuando cambie el usuario (solo si el usuario actual es el dueño de la empresa)
+  useEffect(() => {
+    if (user?.email && empresa?.id_usuario) {
+      const userId = typeof empresa.id_usuario === 'object' ? empresa.id_usuario.id : empresa.id_usuario
+      const currentUserId = user.id
+      // Solo actualizar si el usuario actual es el dueño de la empresa
+      if (userId === currentUserId) {
+        setUserEmail(user.email)
+      }
+    }
+  }, [user?.email, user?.id, empresa?.id_usuario])
 
   useEffect(() => {
     const editParam = searchParams?.get('edit')
@@ -278,6 +301,35 @@ useEffect(() => {
       
       setEmpresa(data)
       setEditedData(data)
+      
+      // Obtener el email del usuario asociado a la empresa
+      // Primero intentar usar usuario_email si viene en los datos del serializer
+      if (data.usuario_email) {
+        setUserEmail(data.usuario_email)
+      } else if (data.id_usuario) {
+        // Si no viene usuario_email, intentar obtenerlo del id_usuario
+        try {
+          const userId = typeof data.id_usuario === 'object' ? data.id_usuario.id : data.id_usuario
+          if (userId) {
+            try {
+              const usuarioData = await api.getUsuarioById(userId)
+              setUserEmail(usuarioData?.email || null)
+            } catch (userError: any) {
+              // Si el usuario no existe, no mostrar nada
+              console.warn("Usuario no encontrado para la empresa:", userError)
+              setUserEmail(null)
+            }
+          } else {
+            setUserEmail(null)
+          }
+        } catch (error) {
+          console.error("Error obteniendo email del usuario:", error)
+          setUserEmail(null)
+        }
+      } else {
+        // Si no hay id_usuario, no mostrar email
+        setUserEmail(null)
+      }
       
       // Inicializar actividades de promoción internacional
       if (data.actividades_promocion_internacional && Array.isArray(data.actividades_promocion_internacional)) {
@@ -529,6 +581,50 @@ useEffect(() => {
     setRubroServicio(null)
     setSubRubrosProductos([])
     setSubRubrosServicios([])
+    
+    // Limpiar estados de edición de geolocalización
+    setGeoEditMode('view')
+    setTempGeoCoordinates(null)
+  }
+
+  // Función para guardar la nueva geolocalización
+  const handleSaveGeoLocation = async () => {
+    if (!tempGeoCoordinates || !empresa) return
+
+    try {
+      setSaving(true)
+      const geoString = `${tempGeoCoordinates.lat},${tempGeoCoordinates.lng}`
+      
+      const updatedEmpresa = await api.updateEmpresa(empresa.id, {
+        geolocalizacion: geoString
+      })
+
+      // Actualizar tanto empresa como editedData para que el cambio se refleje inmediatamente
+      setEmpresa(updatedEmpresa)
+      if (editedData) {
+        setEditedData({
+          ...editedData,
+          geolocalizacion: geoString
+        })
+      }
+      setGeoEditMode('view')
+      setTempGeoCoordinates(null)
+      setShowGeoConfirmDialog(false)
+      
+      toast({
+        title: "Ubicación actualizada",
+        description: "La geolocalización se ha actualizado correctamente.",
+      })
+    } catch (error: any) {
+      console.error("Error actualizando geolocalización:", error)
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo actualizar la geolocalización.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
 const handleSave = async () => {
@@ -701,7 +797,7 @@ const handleSave = async () => {
         for (const producto of productosData) {
           const productoData = {
             nombre_producto: producto.nombre_producto || producto.nombre || '',
-            descripcion: producto.descripcion || '',
+            descripcion: (producto.descripcion && producto.descripcion.trim() !== '') ? producto.descripcion.trim() : 'Sin descripción',
             capacidad_productiva: producto.capacidad_productiva || null,
             unidad_medida: producto.unidad_medida || 'kg',
             periodo_capacidad: producto.periodo_capacidad || 'mensual',
@@ -768,7 +864,7 @@ const handleSave = async () => {
         for (const servicio of serviciosData) {
           const servicioData = {
             nombre_servicio: servicio.nombre_servicio || servicio.nombre || servicio.descripcion || '',
-            descripcion: servicio.descripcion || '',
+            descripcion: (servicio.descripcion && servicio.descripcion.trim() !== '') ? servicio.descripcion.trim() : 'Sin descripción',
             tipo_servicio: servicio.tipo_servicio || '',
             sector_atendido: servicio.sector_atendido || '',
             alcance_servicio: servicio.alcance_servicio || servicio.alcance_geografico || 'local',
@@ -1411,17 +1507,18 @@ const handleSave = async () => {
         )}
       </div>
 
-      {/* Email */}
+      {/* Email (Email del usuario para iniciar sesión) */}
       <div>
         <Label>Email</Label>
         {isEditing ? (
           <Input
             type="email"
-            value={editedData?.correo || ''}
-            onChange={(e) => setEditedData(editedData ? { ...editedData, correo: e.target.value } : null)}
+            value={userEmail || user?.email || ''}
+            disabled
+            className="bg-muted"
           />
         ) : (
-          <p className="mt-1 font-semibold">{displayData?.correo || 'N/A'}</p>
+          <p className="mt-1 font-semibold">{userEmail || user?.email || 'N/A'}</p>
         )}
       </div>
 
@@ -1914,17 +2011,101 @@ const handleSave = async () => {
                 console.error('Error parsing geolocalizacion:', error)
               }
             }
-            return coordinates ? (
+            
+            if (!coordinates) return null
+
+            // Si estamos en modo edición general y no estamos editando el mapa específicamente
+            if (isEditing && geoEditMode !== 'editing') {
+              return (
+                <div className="md:col-span-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Ubicación en el Mapa</Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setGeoEditMode('editing')
+                        setTempGeoCoordinates(coordinates)
+                      }}
+                      className="gap-2"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Editar Mapa
+                    </Button>
+                  </div>
+                  <div className="mt-2 relative z-0">
+                    <CompanyMap
+                      coordinates={coordinates}
+                      address={displayData?.direccion || displayData?.razon_social}
+                    />
+                  </div>
+                </div>
+              )
+            }
+
+            // Modo edición activa del mapa
+            if (geoEditMode === 'editing') {
+              const currentCoords = tempGeoCoordinates || coordinates
+              const coordString = `${currentCoords.lat},${currentCoords.lng}`
+              
+              return (
+                <div className="md:col-span-2">
+                  <Label>Ubicación en el Mapa</Label>
+                  <div className="mt-2 relative z-0">
+                    <LocationPicker
+                      value={coordString}
+                      onChange={(coords) => {
+                        const [lat, lng] = coords.split(',').map((v: string) => parseFloat(v.trim()))
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                          setTempGeoCoordinates({ lat, lng })
+                        }
+                      }}
+                      centerLat={currentCoords.lat}
+                      centerLng={currentCoords.lng}
+                      zoomLevel={15}
+                    />
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setGeoEditMode('view')
+                        setTempGeoCoordinates(null)
+                      }}
+                      className="flex-1"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (tempGeoCoordinates) {
+                          setShowGeoConfirmDialog(true)
+                        }
+                      }}
+                      className="flex-1 bg-[#3259B5] hover:bg-[#3259B5]/90"
+                      disabled={!tempGeoCoordinates || saving}
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Confirmar
+                    </Button>
+                  </div>
+                </div>
+              )
+            }
+
+            // Modo visualización (no edición)
+            return (
               <div className="md:col-span-2">
-  <Label>Ubicación en el Mapa</Label>
-  <div className="mt-2 relative z-0">  {/* ← Agregar relative z-0 */}
-    <CompanyMap
-      coordinates={coordinates}
-      address={displayData?.direccion || displayData?.razon_social}
-    />
-  </div>
-</div>
-            ) : null
+                <Label>Ubicación en el Mapa</Label>
+                <div className="mt-2 relative z-0">
+                  <CompanyMap
+                    coordinates={coordinates}
+                    address={displayData?.direccion || displayData?.razon_social}
+                  />
+                </div>
+              </div>
+            )
           })()}
         </div>
       </div>
@@ -3306,6 +3487,37 @@ const handleSave = async () => {
           empresa={empresa}
         />
       )}
+
+        {/* Diálogo de confirmación para cambio de geolocalización */}
+        <AlertDialog open={showGeoConfirmDialog} onOpenChange={setShowGeoConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Está seguro de cambiar la ubicación del mapa?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción cambiará la geolocalización de la empresa. Una vez confirmado, la nueva ubicación se guardará permanentemente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowGeoConfirmDialog(false)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleSaveGeoLocation}
+                className="bg-[#3259B5] hover:bg-[#3259B5]/90"
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Confirmar Cambio"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </MainLayout>
   )
 }
