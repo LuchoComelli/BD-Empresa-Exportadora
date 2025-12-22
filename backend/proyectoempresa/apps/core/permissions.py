@@ -117,6 +117,61 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         return False
 
 
+class CanManageOwnEmpresaProducts(permissions.BasePermission):
+    """
+    Permiso para que usuarios puedan gestionar productos/servicios de su propia empresa.
+    Permite a administradores gestionar todos los productos/servicios.
+    Permite a usuarios regulares gestionar solo productos/servicios de su propia empresa.
+    """
+    
+    def has_permission(self, request, view):
+        # Debe estar autenticado
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Para métodos seguros (GET), permitir a todos los autenticados
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # Superusuarios y staff pueden todo
+        if request.user.is_superuser or request.user.is_staff:
+            return True
+        
+        # Verificar si es admin con CanManageEmpresas
+        if request.user.rol:
+            can_manage = CanManageEmpresas()
+            if can_manage.has_permission(request, view):
+                return True
+        
+        # Para métodos de escritura, la verificación se hace en has_object_permission
+        # o en perform_create para create
+        return True
+    
+    def has_object_permission(self, request, view, obj):
+        # Lectura permitida para todos los autenticados
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # Admin puede todo
+        if request.user.is_superuser or request.user.is_staff:
+            return True
+        
+        # Verificar si es admin con CanManageEmpresas
+        if request.user.rol:
+            can_manage = CanManageEmpresas()
+            if can_manage.has_permission(request, view):
+                return True
+        
+        # Verificar que el producto/servicio pertenece a una empresa del usuario
+        if hasattr(obj, 'empresa') and obj.empresa:
+            empresa = obj.empresa
+            # Si la empresa tiene id_usuario y coincide con el usuario actual
+            if hasattr(empresa, 'id_usuario') and empresa.id_usuario:
+                return empresa.id_usuario == request.user
+        
+        return False
+
+
 class IsPublicRegistration(permissions.BasePermission):
     """
     Permiso para registro público (POST sin autenticación)

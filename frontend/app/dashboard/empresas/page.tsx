@@ -345,9 +345,9 @@ const confirmarEliminacion = async () => {
   if (authLoading || !user) {
     return (
       <MainLayout>
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center px-4">
           <div className="text-center">
-            <p className="text-lg text-[#6B7280]">Cargando...</p>
+            <p className="text-sm sm:text-base md:text-lg text-[#6B7280]">Cargando...</p>
           </div>
         </div>
       </MainLayout>
@@ -371,51 +371,60 @@ const confirmarEliminacion = async () => {
 
   return (
     <MainLayout>
-      <div className="space-y-4 md:space-y-6">
+      <div className="space-y-4 md:space-y-6 px-2 sm:px-0">
         {/* Header */}
         <div className="flex flex-col gap-3 md:gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Empresas</h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#222A59]">Empresas</h1>
+            <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">
               Gestiona todas las empresas registradas en el sistema
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 relative">
+          <div className="flex flex-col gap-2 sm:gap-3">
+            {/* Barra de búsqueda - siempre ancho completo */}
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por razón social, CUIT, email, teléfono, dirección, departamento, rubro..."
+                placeholder="Buscar empresas..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-9"
+                className="pl-9 w-full text-sm sm:text-base"
               />
             </div>
-            <FiltersDropdown 
-              onFilterChange={handleFilterChange} 
-              onClearFilters={handleClearFilters}
-              filters={filters}
-            />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex items-center gap-2"
-              onClick={handleExport}
-              disabled={selectedEmpresas.length === 0}
-            >
-              <Download className="h-4 w-4" />
-              Exportar ({selectedEmpresas.length})
-            </Button>
-            <Link href="/dashboard/nueva-empresa">
-              <Button size="sm" className="flex items-center gap-2 bg-[#3259B5] hover:bg-[#3259B5]/90">
-                <Plus className="h-4 w-4" />
-                Nueva Empresa
+            {/* Botones de acción - en fila en móviles, con wrap */}
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              <FiltersDropdown 
+                onFilterChange={handleFilterChange} 
+                onClearFilters={handleClearFilters}
+                filters={filters}
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-2 flex-1 sm:flex-initial min-w-[120px]"
+                onClick={handleExport}
+                disabled={selectedEmpresas.length === 0}
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden xs:inline">Exportar</span>
+                <span className="xs:hidden">Exp.</span>
+                {selectedEmpresas.length > 0 && (
+                  <span className="ml-1">({selectedEmpresas.length})</span>
+                )}
               </Button>
-            </Link>
+              <Link href="/dashboard/nueva-empresa" className="flex-1 sm:flex-initial">
+                <Button size="sm" className="flex items-center gap-2 bg-[#3259B5] hover:bg-[#3259B5]/90 w-full sm:w-auto">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Nueva Empresa</span>
+                  <span className="sm:hidden">Nueva</span>
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1">
+        <div className="flex-1 w-full overflow-hidden">
           <CompaniesTable 
             empresas={empresas}
             loading={loading}
@@ -448,31 +457,35 @@ const confirmarEliminacion = async () => {
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogTitle className="text-lg sm:text-xl">¿Estás seguro?</AlertDialogTitle>
               <AlertDialogDescription asChild>
-  <div className="space-y-2">
-    <p>
-      Estás a punto de eliminar la empresa{" "}
-      <span className="font-semibold text-foreground">
-        {empresaAEliminar?.razon_social}
-      </span>
-      .
-    </p>
-    <p className="text-destructive">
-      Esta acción no se puede deshacer y eliminará permanentemente todos los datos asociados.
-    </p>
-  </div>
-</AlertDialogDescription>
+                <div className="space-y-2 text-sm sm:text-base">
+                  <p>
+                    Estás a punto de eliminar la empresa{" "}
+                    <span className="font-semibold text-foreground break-words">
+                      {empresaAEliminar?.razon_social}
+                    </span>
+                    .
+                  </p>
+                  <p className="text-muted-foreground">
+                    La empresa será marcada como eliminada y dejará de aparecer en las listas. 
+                    Los datos se conservan en el sistema y pueden ser restaurados si es necesario.
+                  </p>
+                </div>
+              </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setEmpresaAEliminar(null)}>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+              <AlertDialogCancel 
+                onClick={() => setEmpresaAEliminar(null)}
+                className="w-full sm:w-auto order-2 sm:order-1"
+              >
                 Cancelar
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={confirmarEliminacion}
-                className="bg-destructive hover:bg-destructive/90"
+                className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto order-1 sm:order-2"
               >
                 Eliminar empresa
               </AlertDialogAction>

@@ -88,9 +88,9 @@ export default function DashboardPage() {
   // Mostrar carga mientras se verifica el usuario
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-lg text-[#6B7280]">Cargando...</p>
+          <p className="text-sm sm:text-base md:text-lg text-[#6B7280]">Cargando...</p>
         </div>
       </div>
     )
@@ -114,18 +114,18 @@ export default function DashboardPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-4 md:space-y-6">
+      <div className="space-y-4 md:space-y-6 px-2 sm:px-0">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#222A59]">Dashboard</h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#222A59]">Dashboard</h1>
+          <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">
             Bienvenido al Sistema de Gestión de Empresas Exportadoras
             {user.rol?.nombre && (
-              <span className="ml-2 text-[#3259B5] font-medium">
+              <span className="ml-1 sm:ml-2 text-[#3259B5] font-medium">
                 - {user.rol.nombre}
               </span>
             )}
             {user.is_superuser && (
-              <span className="ml-2 text-[#C3C840] font-medium">
+              <span className="ml-1 sm:ml-2 text-[#C3C840] font-medium">
                 (Superusuario)
               </span>
             )}
@@ -134,13 +134,13 @@ export default function DashboardPage() {
 
         {/* Stats Cards */}
         {loadingStats ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 bg-white rounded-lg animate-pulse" />
+              <div key={i} className="h-28 sm:h-32 bg-white rounded-lg animate-pulse" />
             ))}
           </div>
         ) : stats ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             <StatsCard
               title="Total Empresas"
               value={stats.total_empresas}
@@ -169,7 +169,7 @@ export default function DashboardPage() {
         ) : null}
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
           <CategoryChart stats={stats} />
           <SectorDistribution stats={stats} />
         </div>

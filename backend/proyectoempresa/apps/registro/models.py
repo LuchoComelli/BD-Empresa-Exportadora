@@ -219,7 +219,8 @@ class SolicitudRegistro(TimestampedModel):
     )
     
     # Información del contacto
-    nombre_contacto = models.CharField(max_length=100, verbose_name="Nombre del Contacto")
+    nombre_contacto = models.CharField(max_length=50, verbose_name="Nombre del Contacto")
+    apellido_contacto = models.CharField(max_length=50, blank=True, default='', verbose_name="Apellido del Contacto")
     cargo_contacto = models.CharField(max_length=100, verbose_name="Cargo del Contacto")
     telefono_contacto = models.CharField(
         max_length=20, 

@@ -59,6 +59,15 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         elif self.action == 'destroy':
             # Solo admins pueden eliminar usuarios
             return [permissions.IsAuthenticated(), CanManageUsers()]
+        elif self.action == 'update_password':
+            # Cualquier usuario autenticado puede cambiar su propia contraseña
+            return [permissions.IsAuthenticated()]
+        elif self.action == 'update_me':
+            # Cualquier usuario autenticado puede actualizar su propio perfil
+            return [permissions.IsAuthenticated()]
+        elif self.action == 'me':
+            # Cualquier usuario autenticado puede ver su propio perfil
+            return [permissions.IsAuthenticated()]
         # Para otras acciones (como toggle_active), usar permisos de gestión
         return [permissions.IsAuthenticated(), CanManageUsers()]
     
@@ -137,6 +146,32 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         # Serializar el usuario actualizado
         serializer = UsuarioSerializer(user)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['patch', 'put'], permission_classes=[permissions.IsAuthenticated])
+    def update_me(self, request):
+        """Permitir que cualquier usuario autenticado actualice su propio perfil (email, etc.)"""
+        user = request.user
+        serializer = UsuarioSerializer(user, data=request.data, partial=True, context={'request': request})
+        
+        if serializer.is_valid():
+            # Si se está actualizando la contraseña, usar set_password
+            if 'password' in serializer.validated_data:
+                password = serializer.validated_data.pop('password')
+                user.set_password(password)
+                # Si el usuario es empresa y debe cambiar la contraseña, marcar como ya cambiada
+                if user.rol and user.rol.nombre == 'Empresa' and user.debe_cambiar_password:
+                    user.debe_cambiar_password = False
+            
+            # Actualizar otros campos
+            serializer.save()
+            
+            # Recargar el usuario con el rol para la respuesta
+            user.refresh_from_db()
+            user = User.objects.select_related('rol').get(pk=user.pk)
+            response_serializer = UsuarioSerializer(user, context={'request': request})
+            return Response(response_serializer.data)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageUsers])
     def toggle_active(self, request, pk=None):

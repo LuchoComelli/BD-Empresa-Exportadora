@@ -423,6 +423,8 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """Actualizar empresa incluyendo productos, servicios, subrubro y redes sociales"""
         import json
+        import logging
+        logger = logging.getLogger(__name__)
     
         # 1. EXTRAER PRODUCTOS Y SERVICIOS **ANTES** de procesarlos
         # IMPORTANTE: No están en validated_data, vienen en self.initial_data
@@ -430,23 +432,98 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         servicios_data = self.initial_data.get('servicios', None)
     
         # 2. MANEJAR REDES SOCIALES
-        redes_updated = {}
+        # Cargar redes sociales existentes
+        existing = {}
+        raw = getattr(instance, 'redes_sociales', None)
+        logger.info(f"🔍 [EmpresaproductoSerializer.update] Redes sociales existentes (raw): {raw}")
+        if raw:
+            try:
+                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                logger.info(f"🔍 [EmpresaproductoSerializer.update] Redes sociales parseadas: {existing}")
+            except Exception as e:
+                logger.error(f"❌ [EmpresaproductoSerializer.update] Error parseando redes sociales: {e}")
+                existing = {}
+        
+        # Debug: Ver qué hay en validated_data e initial_data
+        logger.info(f"🔍 [EmpresaproductoSerializer.update] validated_data keys: {list(validated_data.keys())}")
+        if hasattr(self, 'initial_data') and self.initial_data is not None:
+            logger.info(f"🔍 [EmpresaproductoSerializer.update] initial_data type: {type(self.initial_data)}")
+            if hasattr(self.initial_data, 'keys'):
+                logger.info(f"🔍 [EmpresaproductoSerializer.update] initial_data keys: {list(self.initial_data.keys())}")
+            # Buscar específicamente las redes sociales en initial_data
+            for key in ('instagram', 'facebook', 'linkedin'):
+                if hasattr(self.initial_data, 'get'):
+                    val_check = self.initial_data.get(key)
+                    logger.info(f"🔍 [EmpresaproductoSerializer.update] initial_data.get('{key}'): {repr(val_check)} (type: {type(val_check)})")
+        
+        redes_modified = False
         for key in ('instagram', 'facebook', 'linkedin'):
-            if key in validated_data:
-                val = validated_data.pop(key)
-                if val:
-                    redes_updated[key] = val
-    
-        if redes_updated:
-            existing = {}
-            raw = getattr(instance, 'redes_sociales', None)
-            if raw:
+            logger.info(f"🔍 [EmpresaproductoSerializer.update] Procesando {key}...")
+            
+            # Buscar primero en validated_data
+            val = validated_data.pop(key, None)
+            logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} desde validated_data: {repr(val)}")
+            
+            # Si no está, buscar en initial_data (para FormData/QueryDict)
+            if val is None and hasattr(self, 'initial_data') and self.initial_data is not None:
                 try:
-                    existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-                except Exception:
-                    existing = {}
-            existing.update(redes_updated)
-            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+                    logger.info(f"🔍 [EmpresaproductoSerializer.update] Buscando {key} en initial_data...")
+                    if hasattr(self.initial_data, 'get'):
+                        if key in self.initial_data:
+                            val = self.initial_data.get(key)
+                            logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} encontrado en initial_data: {repr(val)}")
+                    elif isinstance(self.initial_data, dict):
+                        if key in self.initial_data:
+                            val = self.initial_data.get(key)
+                    
+                    # Si es un QueryDict o lista, puede tener múltiples valores, tomar el primero
+                    if isinstance(val, list) and len(val) > 0:
+                        logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} es lista, tomando primer valor: {repr(val[0])}")
+                        val = val[0]
+                except Exception as e:
+                    logger.error(f"❌ [EmpresaproductoSerializer.update] Error accediendo initial_data para {key}: {e}")
+                    val = None
+            
+            logger.info(f"🔍 [EmpresaproductoSerializer.update] Valor final para {key}: {repr(val)} (type: {type(val)})")
+            
+            # Procesar el valor
+            if val is not None:
+                # Normalizar: convertir string vacío a None para procesamiento consistente
+                if val == '':
+                    logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} es string vacío, convirtiendo a None")
+                    val = None
+                    
+                if val is None:
+                    # Si existía, eliminarla
+                    if key in existing:
+                        logger.info(f"🔍 [EmpresaproductoSerializer.update] Eliminando {key} (existía: {existing[key]})")
+                        del existing[key]
+                        redes_modified = True
+                    else:
+                        logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} es None pero no existía, no hay cambios")
+                elif val:
+                    # Si tiene valor, actualizarla
+                    val_str = str(val).strip()
+                    if val_str and existing.get(key) != val_str:
+                        logger.info(f"🔍 [EmpresaproductoSerializer.update] Actualizando {key}: '{existing.get(key)}' -> '{val_str}'")
+                        existing[key] = val_str
+                        redes_modified = True
+                    else:
+                        logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} no cambió (era: '{existing.get(key)}', nuevo: '{val_str}')")
+            else:
+                logger.info(f"🔍 [EmpresaproductoSerializer.update] {key} es None, no se procesa")
+        
+        # Si se modificaron las redes sociales, actualizar el campo
+        if redes_modified:
+            logger.info(f"✅ [EmpresaproductoSerializer.update] Redes sociales modificadas. Nuevo estado: {existing}")
+            if existing:
+                instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+                logger.info(f"✅ [EmpresaproductoSerializer.update] Redes sociales guardadas como JSON: {instance.redes_sociales}")
+            else:
+                instance.redes_sociales = None
+                logger.info(f"✅ [EmpresaproductoSerializer.update] Todas las redes sociales eliminadas, campo asignado a None")
+        else:
+            logger.info(f"ℹ️ [EmpresaproductoSerializer.update] No hubo cambios en las redes sociales")
     
         # 3. MANEJAR SUBRUBRO
         id_subrubro = validated_data.pop('id_subrubro', None)
@@ -475,12 +552,36 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
             else:
                 # Si es un archivo válido, asignarlo directamente
                 instance.brochure = brochure_value
+        
+        # 3.6. MANEJAR CAMPOS BOOLEANOS QUE VIENEN COMO 'si'/'no'
+        # Convertir certificado_pyme (del frontend) a certificadopyme (del modelo)
+        if 'certificado_pyme' in validated_data:
+            cert_value = validated_data.pop('certificado_pyme')
+            # Convertir 'si'/'no' a booleano
+            if isinstance(cert_value, str):
+                instance.certificadopyme = cert_value.lower() == 'si'
+            else:
+                instance.certificadopyme = bool(cert_value)
+        
+        # Convertir material_promocional_idiomas (del frontend) a promo2idiomas (del modelo)
+        if 'material_promocional_idiomas' in validated_data:
+            promo_value = validated_data.pop('material_promocional_idiomas')
+            # Convertir 'si'/'no' a booleano
+            if isinstance(promo_value, str):
+                instance.promo2idiomas = promo_value.lower() == 'si'
+            else:
+                instance.promo2idiomas = bool(promo_value)
     
         # 4. ACTUALIZAR OTROS CAMPOS DE LA EMPRESA
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
     
         instance.save()
+        
+        # Refrescar la instancia desde la BD para asegurar que los cambios se reflejen en la serialización
+        instance.refresh_from_db()
+        if redes_modified:
+            logger.info(f"✅ [EmpresaproductoSerializer.update] Instancia refrescada. redes_sociales en BD: {instance.redes_sociales}")
     
         # 5. ACTUALIZAR PRODUCTOS Y SERVICIOS
         self._actualizar_productos(instance, productos_data)
@@ -647,6 +748,25 @@ class EmpresaproductoSerializer(serializers.ModelSerializer):
         
         if redes_updated:
             validated_data['redes_sociales'] = json.dumps(redes_updated, ensure_ascii=False)
+        
+        # 2.5. MANEJAR CAMPOS BOOLEANOS QUE VIENEN COMO 'si'/'no'
+        # Convertir certificado_pyme (del frontend) a certificadopyme (del modelo)
+        if 'certificado_pyme' in validated_data:
+            cert_value = validated_data.pop('certificado_pyme')
+            # Convertir 'si'/'no' a booleano
+            if isinstance(cert_value, str):
+                validated_data['certificadopyme'] = cert_value.lower() == 'si'
+            else:
+                validated_data['certificadopyme'] = bool(cert_value)
+        
+        # Convertir material_promocional_idiomas (del frontend) a promo2idiomas (del modelo)
+        if 'material_promocional_idiomas' in validated_data:
+            promo_value = validated_data.pop('material_promocional_idiomas')
+            # Convertir 'si'/'no' a booleano
+            if isinstance(promo_value, str):
+                validated_data['promo2idiomas'] = promo_value.lower() == 'si'
+            else:
+                validated_data['promo2idiomas'] = bool(promo_value)
         
         # 3. CREAR USUARIO AUTOMÁTICAMENTE SI ES NECESARIO
         id_usuario = validated_data.get('id_usuario')
@@ -1965,8 +2085,11 @@ class EmpresaSerializer(serializers.ModelSerializer):
     municipio_nombre = serializers.SerializerMethodField()
     localidad_nombre = serializers.SerializerMethodField()
     instagram = serializers.SerializerMethodField()
+    instagram_write = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     facebook = serializers.SerializerMethodField()
+    facebook_write = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     linkedin = serializers.SerializerMethodField()
+    linkedin_write = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     categoria_matriz = serializers.SerializerMethodField()
     tipo_empresa_valor = serializers.CharField(read_only=True)
     
@@ -2079,39 +2202,150 @@ class EmpresaSerializer(serializers.ModelSerializer):
         """Manejar el campo brochure cuando viene como string (URL) en lugar de archivo"""
         # Si 'brochure' está presente y es un string (no un archivo), eliminarlo de los datos
         # porque no debe enviarse la URL del archivo existente, solo archivos nuevos o strings vacíos para eliminar
-        if 'brochure' in data and isinstance(data.get('brochure'), str):
-            brochure_value = data.get('brochure')
+        data_dict = dict(data.items()) if hasattr(data, 'items') else data
+        if 'brochure' in data_dict and isinstance(data_dict.get('brochure'), str):
+            brochure_value = data_dict.get('brochure')
             # Si es una URL (empieza con http:// o https://), eliminarlo porque es el archivo existente
             # Solo mantenerlo si es un string vacío (para eliminar el archivo)
             if brochure_value and (brochure_value.startswith('http://') or brochure_value.startswith('https://')):
                 # Es una URL del archivo existente, no debe enviarse
-                data = data.copy()
-                data.pop('brochure', None)
+                data_dict = dict(data_dict) if not isinstance(data_dict, dict) else data_dict.copy()
+                data_dict.pop('brochure', None)
+                data = data_dict
+        
         return super().to_internal_value(data)
     
     def update(self, instance, validated_data):
         """Actualizar empresa con validación de subrubro y redes sociales"""
         import json
+        import logging
         from django.db import models as django_models
         
-        # 1. MANEJAR REDES SOCIALES
-        redes_updated = {}
-        for key in ('instagram', 'facebook', 'linkedin'):
-            if key in validated_data:
-                val = validated_data.pop(key)
-                if val:
-                    redes_updated[key] = val
+        logger = logging.getLogger(__name__)
         
-        if redes_updated:
-            existing = {}
-            raw = getattr(instance, 'redes_sociales', None)
-            if raw:
+        # 1. MANEJAR REDES SOCIALES
+        # Cargar redes sociales existentes
+        existing = {}
+        raw = getattr(instance, 'redes_sociales', None)
+        logger.info(f"🔍 [EmpresaSerializer.update] Redes sociales existentes (raw): {raw}")
+        if raw:
+            try:
+                existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                logger.info(f"🔍 [EmpresaSerializer.update] Redes sociales parseadas: {existing}")
+            except Exception as e:
+                logger.error(f"❌ [EmpresaSerializer.update] Error parseando redes sociales: {e}")
+                existing = {}
+        
+        # Debug: Ver qué hay en validated_data e initial_data
+        logger.info(f"🔍 [EmpresaSerializer.update] validated_data keys: {list(validated_data.keys())}")
+        if hasattr(self, 'initial_data') and self.initial_data is not None:
+            logger.info(f"🔍 [EmpresaSerializer.update] initial_data type: {type(self.initial_data)}")
+            if hasattr(self.initial_data, 'keys'):
+                logger.info(f"🔍 [EmpresaSerializer.update] initial_data keys: {list(self.initial_data.keys())}")
+            # Buscar específicamente las redes sociales en initial_data
+            for key in ('instagram', 'facebook', 'linkedin'):
+                if hasattr(self.initial_data, 'get'):
+                    val_check = self.initial_data.get(key)
+                    logger.info(f"🔍 [EmpresaSerializer.update] initial_data.get('{key}'): {repr(val_check)} (type: {type(val_check)})")
+                if hasattr(self.initial_data, '__contains__'):
+                    logger.info(f"🔍 [EmpresaSerializer.update] '{key}' in initial_data: {key in self.initial_data}")
+        
+        # Procesar cada red social
+        redes_modified = False
+        # Mapeo de campos write_only a nombres de campo
+        redes_map = {
+            'instagram_write': 'instagram',
+            'facebook_write': 'facebook',
+            'linkedin_write': 'linkedin',
+        }
+        
+        for write_key, json_key in redes_map.items():
+            logger.info(f"🔍 [EmpresaSerializer.update] Procesando {json_key}...")
+            
+            # Buscar primero con el nombre original (más común cuando viene FormData desde frontend)
+            val = validated_data.pop(json_key, None)
+            logger.info(f"🔍 [EmpresaSerializer.update] {json_key} desde validated_data: {repr(val)}")
+            
+            # Si no está, intentar desde validated_data (campos write_only)
+            if val is None:
+                val = validated_data.pop(write_key, None)
+                logger.info(f"🔍 [EmpresaSerializer.update] {write_key} desde validated_data: {repr(val)}")
+            
+            # Si aún no está, intentar desde initial_data (para FormData/QueryDict)
+            if val is None and hasattr(self, 'initial_data') and self.initial_data is not None:
                 try:
-                    existing = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-                except Exception:
-                    existing = {}
-            existing.update(redes_updated)
-            instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+                    logger.info(f"🔍 [EmpresaSerializer.update] Buscando {json_key} en initial_data...")
+                    # Intentar obtener desde initial_data (puede ser QueryDict, dict, etc.)
+                    # Primero intentar con el nombre original (más común cuando viene FormData desde frontend)
+                    if hasattr(self.initial_data, 'get'):
+                        # Para QueryDict y dict - usar 'in' para verificar existencia, no 'or' (porque string vacío es falsy)
+                        if json_key in self.initial_data:
+                            val = self.initial_data.get(json_key)
+                            logger.info(f"🔍 [EmpresaSerializer.update] {json_key} encontrado en initial_data: {repr(val)}")
+                        elif write_key in self.initial_data:
+                            val = self.initial_data.get(write_key)
+                            logger.info(f"🔍 [EmpresaSerializer.update] {write_key} encontrado en initial_data: {repr(val)}")
+                        else:
+                            logger.info(f"🔍 [EmpresaSerializer.update] {json_key} y {write_key} NO encontrados en initial_data")
+                    elif hasattr(self.initial_data, '__contains__'):
+                        # Para objetos que soportan 'in'
+                        if json_key in self.initial_data:
+                            val = self.initial_data[json_key]
+                            logger.info(f"🔍 [EmpresaSerializer.update] {json_key} encontrado (__getitem__): {repr(val)}")
+                        elif write_key in self.initial_data:
+                            val = self.initial_data[write_key]
+                            logger.info(f"🔍 [EmpresaSerializer.update] {write_key} encontrado (__getitem__): {repr(val)}")
+                    
+                    # Si es un QueryDict o lista, puede tener múltiples valores, tomar el primero
+                    if isinstance(val, list) and len(val) > 0:
+                        logger.info(f"🔍 [EmpresaSerializer.update] {json_key} es lista, tomando primer valor: {repr(val[0])}")
+                        val = val[0]
+                except Exception as e:
+                    # Si hay algún error al acceder a initial_data, ignorar y continuar
+                    logger.error(f"❌ [EmpresaSerializer.update] Error accediendo initial_data para {json_key}: {e}")
+                    val = None
+            
+            logger.info(f"🔍 [EmpresaSerializer.update] Valor final para {json_key}: {repr(val)} (type: {type(val)})")
+            
+            # Procesar el valor
+            if val is not None:
+                # Normalizar: convertir string vacío a None para procesamiento consistente
+                if val == '':
+                    logger.info(f"🔍 [EmpresaSerializer.update] {json_key} es string vacío, convirtiendo a None")
+                    val = None
+                    
+                if val is None:
+                    # Si existía, eliminarla
+                    if json_key in existing:
+                        logger.info(f"🔍 [EmpresaSerializer.update] Eliminando {json_key} (existía: {existing[json_key]})")
+                        del existing[json_key]
+                        redes_modified = True
+                    else:
+                        logger.info(f"🔍 [EmpresaSerializer.update] {json_key} es None pero no existía, no hay cambios")
+                elif val:
+                    # Si tiene valor, actualizarla
+                    val_str = str(val).strip()
+                    if val_str and existing.get(json_key) != val_str:
+                        logger.info(f"🔍 [EmpresaSerializer.update] Actualizando {json_key}: '{existing.get(json_key)}' -> '{val_str}'")
+                        existing[json_key] = val_str
+                        redes_modified = True
+                    else:
+                        logger.info(f"🔍 [EmpresaSerializer.update] {json_key} no cambió (era: '{existing.get(json_key)}', nuevo: '{val_str}')")
+            else:
+                logger.info(f"🔍 [EmpresaSerializer.update] {json_key} es None, no se procesa")
+        
+        # Si se modificaron las redes sociales, actualizar el campo
+        if redes_modified:
+            logger.info(f"✅ [EmpresaSerializer.update] Redes sociales modificadas. Nuevo estado: {existing}")
+            if existing:
+                instance.redes_sociales = json.dumps(existing, ensure_ascii=False)
+                logger.info(f"✅ [EmpresaSerializer.update] Redes sociales guardadas como JSON: {instance.redes_sociales}")
+            else:
+                # Si no quedan redes sociales, asignar None
+                instance.redes_sociales = None
+                logger.info(f"✅ [EmpresaSerializer.update] Todas las redes sociales eliminadas, campo asignado a None")
+        else:
+            logger.info(f"ℹ️ [EmpresaSerializer.update] No hubo cambios en las redes sociales")
         
         # 2. MANEJAR SUBRUBROS
         id_subrubro = validated_data.pop('id_subrubro', None)
@@ -2238,15 +2472,81 @@ class EmpresaSerializer(serializers.ModelSerializer):
             })
         
         # 2. MANEJAR REDES SOCIALES
+        import logging
+        logger = logging.getLogger(__name__)
+        
         redes_updated = {}
-        for key in ('instagram', 'facebook', 'linkedin'):
-            if key in validated_data:
-                val = validated_data.pop(key)
-                if val:
-                    redes_updated[key] = val
+        # Mapeo de campos write_only a nombres de campo
+        redes_map = {
+            'instagram_write': 'instagram',
+            'facebook_write': 'facebook',
+            'linkedin_write': 'linkedin',
+        }
+        
+        # Debug: Ver qué hay en validated_data e initial_data
+        logger.info(f"🔍 [EmpresaSerializer.create] validated_data keys: {list(validated_data.keys())}")
+        if hasattr(self, 'initial_data') and self.initial_data is not None:
+            logger.info(f"🔍 [EmpresaSerializer.create] initial_data type: {type(self.initial_data)}")
+            if hasattr(self.initial_data, 'keys'):
+                logger.info(f"🔍 [EmpresaSerializer.create] initial_data keys: {list(self.initial_data.keys())}")
+            # Buscar específicamente las redes sociales en initial_data
+            for key in ('instagram', 'facebook', 'linkedin'):
+                if hasattr(self.initial_data, 'get'):
+                    val_check = self.initial_data.get(key)
+                    logger.info(f"🔍 [EmpresaSerializer.create] initial_data.get('{key}'): {repr(val_check)} (type: {type(val_check)})")
+                if hasattr(self.initial_data, '__contains__'):
+                    logger.info(f"🔍 [EmpresaSerializer.create] '{key}' in initial_data: {key in self.initial_data}")
+        
+        for write_key, json_key in redes_map.items():
+            logger.info(f"🔍 [EmpresaSerializer.create] Procesando {json_key}...")
+            
+            # Intentar obtener desde validated_data (campos write_only)
+            val = validated_data.pop(write_key, None)
+            logger.info(f"🔍 [EmpresaSerializer.create] {write_key} desde validated_data: {repr(val)}")
+            
+            # Si no está, intentar desde el nombre original (para compatibilidad)
+            if val is None:
+                val = validated_data.pop(json_key, None)
+                logger.info(f"🔍 [EmpresaSerializer.create] {json_key} desde validated_data: {repr(val)}")
+            
+            # Si aún no está, intentar desde initial_data
+            if val is None and hasattr(self, 'initial_data') and self.initial_data is not None:
+                try:
+                    logger.info(f"🔍 [EmpresaSerializer.create] Buscando {json_key} en initial_data...")
+                    if hasattr(self.initial_data, 'get'):
+                        # Para QueryDict y dict - verificar existencia primero
+                        if json_key in self.initial_data:
+                            val = self.initial_data.get(json_key)
+                            logger.info(f"🔍 [EmpresaSerializer.create] {json_key} encontrado en initial_data: {repr(val)}")
+                        elif write_key in self.initial_data:
+                            val = self.initial_data.get(write_key)
+                            logger.info(f"🔍 [EmpresaSerializer.create] {write_key} encontrado en initial_data: {repr(val)}")
+                    elif isinstance(self.initial_data, dict):
+                        if json_key in self.initial_data:
+                            val = self.initial_data.get(json_key)
+                        elif write_key in self.initial_data:
+                            val = self.initial_data.get(write_key)
+                    # Si es un QueryDict, puede tener múltiples valores, tomar el primero
+                    if isinstance(val, list) and len(val) > 0:
+                        logger.info(f"🔍 [EmpresaSerializer.create] {json_key} es lista, tomando primer valor: {repr(val[0])}")
+                        val = val[0]
+                except Exception as e:
+                    logger.error(f"❌ [EmpresaSerializer.create] Error accediendo initial_data para {json_key}: {e}")
+            
+            logger.info(f"🔍 [EmpresaSerializer.create] Valor final para {json_key}: {repr(val)} (type: {type(val)})")
+            
+            # Procesar el valor (solo agregar si tiene valor)
+            if val and val != '':
+                redes_updated[json_key] = val
+                logger.info(f"✅ [EmpresaSerializer.create] {json_key} agregado a redes_updated: {val}")
+            else:
+                logger.info(f"ℹ️ [EmpresaSerializer.create] {json_key} no tiene valor o está vacío, no se agrega")
         
         if redes_updated:
             validated_data['redes_sociales'] = json.dumps(redes_updated, ensure_ascii=False)
+            logger.info(f"✅ [EmpresaSerializer.create] Redes sociales guardadas: {validated_data['redes_sociales']}")
+        else:
+            logger.info(f"ℹ️ [EmpresaSerializer.create] No hay redes sociales para guardar")
         
         # 3. CREAR USUARIO AUTOMÁTICAMENTE SI ES NECESARIO
         id_usuario = validated_data.get('id_usuario')
@@ -2279,6 +2579,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
                         usuario_empresa.rol = rol_empresa
                         usuario_empresa.set_password(cuit_cuil)
                         usuario_empresa.is_active = True
+                        # Marcar que debe cambiar la contraseña (es empresa con CUIT como password)
+                        usuario_empresa.debe_cambiar_password = True
                         usuario_empresa.save()
                     except Usuario.DoesNotExist:
                         usuario_empresa = Usuario.objects.create_user(
@@ -2288,7 +2590,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
                             apellido=validated_data.get('contacto_principal_cargo', ''),
                             rol=rol_empresa,
                             telefono=validated_data.get('contacto_principal_telefono', ''),
-                            is_active=True
+                            is_active=True,
+                            debe_cambiar_password=True  # Marcar que debe cambiar la contraseña
                         )
                     
                     validated_data['id_usuario'] = usuario_empresa
@@ -2333,7 +2636,7 @@ class EmpresaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Empresa
         fields = '__all__'
-        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
+        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion', 'eliminado', 'fecha_eliminacion', 'eliminado_por']
 
 
 class MatrizClasificacionExportadorSerializer(serializers.ModelSerializer):

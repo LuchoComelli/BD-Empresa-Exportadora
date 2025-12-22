@@ -45,7 +45,7 @@ from .serializers import (
     PosicionArancelariaMixtaSerializer,
     MatrizClasificacionExportadorSerializer,
 )
-from apps.core.permissions import CanManageEmpresas, IsOwnerOrAdmin
+from apps.core.permissions import CanManageEmpresas, IsOwnerOrAdmin, CanManageOwnEmpresaProducts
 
 
 class TipoEmpresaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -430,45 +430,139 @@ class EmpresaMixtaViewSet(viewsets.ModelViewSet):
 class ProductoEmpresaViewSet(viewsets.ModelViewSet):
     """ViewSet para productos de empresa"""
 
-    queryset = ProductoEmpresa.objects.select_related("empresa").all()
+    queryset = ProductoEmpresa.objects.select_related("empresa", "empresa__id_usuario").all()
     serializer_class = ProductoEmpresaSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["empresa", "es_principal"]
     search_fields = ["nombre_producto", "descripcion"]
     ordering = ["-es_principal", "nombre_producto"]
+    
+    def get_permissions(self):
+        """Permisos personalizados: permitir a usuarios gestionar productos de su propia empresa"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), CanManageOwnEmpresaProducts()]
+        elif self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticatedOrReadOnly()]
+        return [permissions.IsAuthenticated()]
+    
+    def perform_create(self, serializer):
+        """Verificar que el usuario puede crear productos para la empresa especificada"""
+        empresa = serializer.validated_data.get('empresa')
+        if empresa:
+            # Verificar permisos usando el permiso personalizado
+            # Si el usuario es admin, ya fue verificado en has_permission
+            # Si no es admin, verificar que la empresa pertenece al usuario
+            user = self.request.user
+            if not (user.is_superuser or user.is_staff):
+                can_manage = CanManageEmpresas()
+                if not can_manage.has_permission(self.request, self):
+                    # No es admin, verificar propiedad
+                    if empresa.id_usuario != user:
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied("No tiene permiso para crear productos para esta empresa.")
+        serializer.save()
 
 
 class ServicioEmpresaViewSet(viewsets.ModelViewSet):
     """ViewSet para servicios de empresa"""
 
-    queryset = ServicioEmpresa.objects.select_related("empresa").all()
+    queryset = ServicioEmpresa.objects.select_related("empresa", "empresa__id_usuario").all()
     serializer_class = ServicioEmpresaSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["empresa", "es_principal", "tipo_servicio", "alcance_servicio"]
     search_fields = ["nombre_servicio", "descripcion"]
     ordering = ["-es_principal", "nombre_servicio"]
+    
+    def get_permissions(self):
+        """Permisos personalizados: permitir a usuarios gestionar servicios de su propia empresa"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), CanManageOwnEmpresaProducts()]
+        elif self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticatedOrReadOnly()]
+        return [permissions.IsAuthenticated()]
+    
+    def perform_create(self, serializer):
+        """Verificar que el usuario puede crear servicios para la empresa especificada"""
+        empresa = serializer.validated_data.get('empresa')
+        if empresa:
+            # Verificar permisos usando el permiso personalizado
+            user = self.request.user
+            if not (user.is_superuser or user.is_staff):
+                can_manage = CanManageEmpresas()
+                if not can_manage.has_permission(self.request, self):
+                    # No es admin, verificar propiedad
+                    if empresa.id_usuario != user:
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied("No tiene permiso para crear servicios para esta empresa.")
+        serializer.save()
 
 
 class ProductoEmpresaMixtaViewSet(viewsets.ModelViewSet):
     """ViewSet para productos de empresa mixta"""
 
-    queryset = ProductoEmpresaMixta.objects.select_related("empresa").all()
+    queryset = ProductoEmpresaMixta.objects.select_related("empresa", "empresa__id_usuario").all()
     serializer_class = ProductoEmpresaMixtaSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["empresa", "es_principal"]
     search_fields = ["nombre_producto", "descripcion"]
     ordering = ["-es_principal", "nombre_producto"]
+    
+    def get_permissions(self):
+        """Permisos personalizados: permitir a usuarios gestionar productos mixta de su propia empresa"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), CanManageOwnEmpresaProducts()]
+        elif self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticatedOrReadOnly()]
+        return [permissions.IsAuthenticated()]
+    
+    def perform_create(self, serializer):
+        """Verificar que el usuario puede crear productos mixta para la empresa especificada"""
+        empresa = serializer.validated_data.get('empresa')
+        if empresa:
+            # Verificar permisos usando el permiso personalizado
+            user = self.request.user
+            if not (user.is_superuser or user.is_staff):
+                can_manage = CanManageEmpresas()
+                if not can_manage.has_permission(self.request, self):
+                    # No es admin, verificar propiedad
+                    if empresa.id_usuario != user:
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied("No tiene permiso para crear productos para esta empresa.")
+        serializer.save()
 
 
 class ServicioEmpresaMixtaViewSet(viewsets.ModelViewSet):
     """ViewSet para servicios de empresa mixta"""
 
-    queryset = ServicioEmpresaMixta.objects.select_related("empresa").all()
+    queryset = ServicioEmpresaMixta.objects.select_related("empresa", "empresa__id_usuario").all()
     serializer_class = ServicioEmpresaMixtaSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanManageEmpresas]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["empresa", "es_principal", "tipo_servicio", "alcance_servicio"]
     search_fields = ["nombre_servicio", "descripcion"]
     ordering = ["-es_principal", "nombre_servicio"]
+    
+    def get_permissions(self):
+        """Permisos personalizados: permitir a usuarios gestionar servicios mixta de su propia empresa"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), CanManageOwnEmpresaProducts()]
+        elif self.action in ['list', 'retrieve']:
+            return [permissions.IsAuthenticatedOrReadOnly()]
+        return [permissions.IsAuthenticated()]
+    
+    def perform_create(self, serializer):
+        """Verificar que el usuario puede crear servicios mixta para la empresa especificada"""
+        empresa = serializer.validated_data.get('empresa')
+        if empresa:
+            # Verificar permisos usando el permiso personalizado
+            user = self.request.user
+            if not (user.is_superuser or user.is_staff):
+                can_manage = CanManageEmpresas()
+                if not can_manage.has_permission(self.request, self):
+                    # No es admin, verificar propiedad
+                    if empresa.id_usuario != user:
+                        from rest_framework.exceptions import PermissionDenied
+                        raise PermissionDenied("No tiene permiso para crear servicios para esta empresa.")
+        serializer.save()
 
 
 class PosicionArancelariaViewSet(viewsets.ModelViewSet):
@@ -889,6 +983,17 @@ class EmpresaViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(actualizado_por=self.request.user)
+
+    def perform_destroy(self, instance):
+        """
+        Realizar soft delete en lugar de eliminación permanente.
+        Marca la empresa como eliminada y guarda quién la eliminó.
+        """
+        from django.utils import timezone
+        instance.eliminado = True
+        instance.fecha_eliminacion = timezone.now()
+        instance.eliminado_por = self.request.user
+        instance.save()
 
     @action(detail=False, methods=["get"])
     def exportadoras(self, request):

@@ -38,6 +38,7 @@ import {
   AlertCircle,
   Instagram,
   Linkedin,
+  ArrowLeft,
 } from "lucide-react"
 import {
   Dialog,
@@ -76,8 +77,40 @@ export default function PerfilEmpresaPage() {
   const [localidades, setLocalidades] = useState<any[]>([])
   const [rubros, setRubros] = useState<any[]>([])
   const [subRubros, setSubRubros] = useState<any[]>([])
+  // Estados separados para empresas mixtas
+  const [rubroProducto, setRubroProducto] = useState<number | null>(null)
+  const [rubroServicio, setRubroServicio] = useState<number | null>(null)
+  const [subRubrosProductos, setSubRubrosProductos] = useState<any[]>([])
+  const [subRubrosServicios, setSubRubrosServicios] = useState<any[]>([])
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [loadingRubros, setLoadingRubros] = useState(false)
+  
+  // Estado para manejo de archivos
+  const [brochure_file, setBrochure_file] = useState<File | null>(null)
+
+  // Estado para actividades de promoción internacional
+  const [actividadesPromocion, setActividadesPromocion] = useState<any[]>([])
+
+  // Funciones para manejar actividades de promoción internacional
+  const agregarActividad = (tipo: "feria" | "mision" | "ronda") => {
+    setActividadesPromocion([...actividadesPromocion, { 
+      id: Date.now().toString(), 
+      tipo, 
+      lugar: "", 
+      anio: "",
+      observaciones: ""
+    }])
+  }
+
+  const eliminarActividad = (id: string) => {
+    setActividadesPromocion(actividadesPromocion.filter((a) => a.id !== id))
+  }
+
+  const actualizarActividad = (id: string, field: string, value: string) => {
+    setActividadesPromocion(actividadesPromocion.map((a) => (a.id === id ? { ...a, [field]: value } : a)))
+  }
+
+  const toUpperCase = (value: string) => value.toUpperCase()
 
   // Estado para configuración del footer
   const [configuracion, setConfiguracion] = useState({
@@ -116,10 +149,18 @@ export default function PerfilEmpresaPage() {
       
       if (user.type === "empresa" && user.debe_cambiar_password) {
         console.log("[Perfil] Usuario debe cambiar contraseña, mostrando modal")
+        // Mostrar el modal inmediatamente y también con un pequeño delay como respaldo
         setShowPasswordChangeModal(true)
+        // También usar setTimeout como respaldo para asegurar que el componente esté completamente montado
+        const timer = setTimeout(() => {
+          setShowPasswordChangeModal(true)
+        }, 200)
+        return () => clearTimeout(timer)
       } else {
         console.log("[Perfil] No se debe mostrar el modal:", {
-          reason: user.type !== "empresa" ? "No es empresa" : "No debe cambiar contraseña"
+          reason: user.type !== "empresa" ? "No es empresa" : "No debe cambiar contraseña",
+          userType: user.type,
+          debeCambiarPassword: user.debe_cambiar_password
         })
       }
     }
@@ -220,8 +261,7 @@ export default function PerfilEmpresaPage() {
             interes_exportar: empresa.interes_exportar || empresa.interesExportar,
             
             // Certificaciones
-            certificadopyme: empresa.certificadopyme || empresa.certificadoMiPyme,
-            certificadoMiPyme: empresa.certificadopyme || empresa.certificadoMiPyme,
+            certificadopyme: empresa.certificadopyme === true || empresa.certificadopyme === 'true' || empresa.certificadopyme === 'si',
             certificaciones: empresa.certificaciones
               ? (Array.isArray(empresa.certificaciones)
                   ? empresa.certificaciones
@@ -229,8 +269,7 @@ export default function PerfilEmpresaPage() {
                   ? empresa.certificaciones.split(',').map((c: string) => c.trim()).filter((c: string) => c)
                   : [])
               : [],
-            promo2idiomas: empresa.promo2idiomas || empresa.materialPromocion2Idiomas,
-            materialPromocion2Idiomas: empresa.promo2idiomas || empresa.materialPromocion2Idiomas,
+            promo2idiomas: empresa.promo2idiomas === true || empresa.promo2idiomas === 'true' || empresa.promo2idiomas === 'si',
             idiomas_trabaja: empresa.idiomas_trabaja || empresa.idiomasTrabajo,
             idiomasTrabajo: empresa.idiomas_trabaja || empresa.idiomasTrabajo,
             
@@ -273,21 +312,74 @@ export default function PerfilEmpresaPage() {
             })(),
             servicios_ofrecidos: empresa.servicios_ofrecidos || empresa.servicios || [],
             
-            // Contactos
+            // Contactos - Construir array asegurando que siempre incluya el contacto principal
             contacto_principal_nombre: empresa.contacto_principal_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.nombre : null),
+            contacto_principal_apellido: empresa.contacto_principal_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.apellido : null),
             contacto_principal_cargo: empresa.contacto_principal_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.cargo : null),
-            contacto_principal_telefono: empresa.contacto_principal_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.telefono : null),
-            contacto_principal_email: empresa.contacto_principal_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.email : null),
-            contactos: Array.isArray(empresa.contactos) ? empresa.contactos : (empresa.contactos || []),
+            contacto_principal_telefono: empresa.contacto_principal_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.telefono : null) || empresa.telefono || null,
+            contacto_principal_email: empresa.contacto_principal_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.email : null) || empresa.correo || empresa.email || null,
+            // Contactos secundarios y terciarios - campos individuales
+            contacto_secundario_nombre: empresa.contacto_secundario_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.nombre : null),
+            contacto_secundario_apellido: empresa.contacto_secundario_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.apellido : null),
+            contacto_secundario_cargo: empresa.contacto_secundario_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.cargo : null),
+            contacto_secundario_telefono: empresa.contacto_secundario_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.telefono : null),
+            contacto_secundario_email: empresa.contacto_secundario_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.email : null),
+            contacto_terciario_nombre: empresa.contacto_terciario_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.nombre : null),
+            contacto_terciario_apellido: empresa.contacto_terciario_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.apellido : null),
+            contacto_terciario_cargo: empresa.contacto_terciario_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.cargo : null),
+            contacto_terciario_telefono: empresa.contacto_terciario_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.telefono : null),
+            contacto_terciario_email: empresa.contacto_terciario_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.email : null),
+            contactos: (() => {
+              // Si existe un array de contactos válido
+              if (Array.isArray(empresa.contactos) && empresa.contactos.length > 0) {
+                // Verificar si ya incluye el contacto principal
+                const tienePrincipal = empresa.contactos.some((c: any) => c.tipo === 'Principal')
+                if (tienePrincipal) {
+                  return empresa.contactos
+                }
+              }
+              
+              // Construir array de contactos con el contacto principal
+              const contactosArray: any[] = []
+              
+              // Agregar contacto principal desde campos individuales o desde el array
+              const contactoPrincipalDesdeArray = Array.isArray(empresa.contactos) 
+                ? empresa.contactos.find((c: any) => c.tipo === 'Principal')
+                : null
+              
+              const contactoPrincipal = {
+                tipo: 'Principal',
+                nombre: empresa.contacto_principal_nombre || contactoPrincipalDesdeArray?.nombre || '',
+                apellido: empresa.contacto_principal_apellido || contactoPrincipalDesdeArray?.apellido || '',
+                cargo: empresa.contacto_principal_cargo || contactoPrincipalDesdeArray?.cargo || '',
+                telefono: empresa.contacto_principal_telefono || contactoPrincipalDesdeArray?.telefono || empresa.telefono || '',
+                email: empresa.contacto_principal_email || contactoPrincipalDesdeArray?.email || empresa.correo || empresa.email || '',
+              }
+              contactosArray.push(contactoPrincipal)
+              
+              // Agregar contactos secundarios si existen
+              if (Array.isArray(empresa.contactos)) {
+                const secundarios = empresa.contactos.filter((c: any) => c.tipo === 'Secundario')
+                contactosArray.push(...secundarios)
+              }
+              
+              // Agregar contactos terciarios si existen
+              if (Array.isArray(empresa.contactos)) {
+                const terciarios = empresa.contactos.filter((c: any) => c.tipo === 'Terciario')
+                contactosArray.push(...terciarios)
+              }
+              
+              return contactosArray
+            })(),
             
             // Actividades de promoción
             actividades_promocion_internacional: empresa.actividades_promocion_internacional || empresa.feriasAsistidas || [],
             feriasAsistidas: empresa.actividades_promocion_internacional || empresa.feriasAsistidas || [],
             
-            // Redes sociales
-            instagram: empresa.instagram,
-            facebook: empresa.facebook,
-            linkedin: empresa.linkedin,
+            // Redes sociales - preservar valores (incluyendo null y undefined)
+            instagram: empresa.instagram !== null && empresa.instagram !== undefined ? empresa.instagram : '',
+            facebook: empresa.facebook !== null && empresa.facebook !== undefined ? empresa.facebook : '',
+            linkedin: empresa.linkedin !== null && empresa.linkedin !== undefined ? empresa.linkedin : '',
             
             // Otros
             observaciones: empresa.observaciones,
@@ -297,6 +389,21 @@ export default function PerfilEmpresaPage() {
           }
           
           setEmpresaData(normalizedEmpresa)
+          
+          // Inicializar actividades de promoción internacional
+          const actividades = normalizedEmpresa.actividades_promocion_internacional || normalizedEmpresa.feriasAsistidas || []
+          if (Array.isArray(actividades) && actividades.length > 0) {
+            const actividadesFormateadas = actividades.map((act: any, index: number) => ({
+              id: act.id?.toString() || `act-${index}-${Date.now()}`,
+              tipo: act.tipo || 'feria',
+              lugar: act.lugar || '',
+              anio: act.anio?.toString() || '',
+              observaciones: act.observaciones || ''
+            }))
+            setActividadesPromocion(actividadesFormateadas)
+          } else {
+            setActividadesPromocion([])
+          }
           
           // Obtener el ID de la empresa para poder actualizarla
           if (userData.empresa.id) {
@@ -433,12 +540,52 @@ export default function PerfilEmpresaPage() {
     }
   }
 
+  // Cargar subrubros de productos por rubro
+  const loadSubRubrosProductos = async (rubroId: any) => {
+    try {
+      setLoadingRubros(true)
+      console.log('🔍 [loadSubRubrosProductos] Cargando subrubros para rubro productos:', rubroId)
+      const data = await api.getSubRubrosPorRubro(rubroId)
+      console.log('✅ [loadSubRubrosProductos] SubRubros cargados (raw):', data)
+      
+      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
+      console.log('✅ [loadSubRubrosProductos] SubRubros array:', subRubrosArray.length, subRubrosArray)
+      
+      setSubRubrosProductos(subRubrosArray)
+    } catch (error) {
+      console.error('❌ [loadSubRubrosProductos] Error loading subrubros:', error)
+      setSubRubrosProductos([])
+    } finally {
+      setLoadingRubros(false)
+    }
+  }
+
+  // Cargar subrubros de servicios por rubro
+  const loadSubRubrosServicios = async (rubroId: any) => {
+    try {
+      setLoadingRubros(true)
+      console.log('🔍 [loadSubRubrosServicios] Cargando subrubros para rubro servicios:', rubroId)
+      const data = await api.getSubRubrosPorRubro(rubroId)
+      console.log('✅ [loadSubRubrosServicios] SubRubros cargados (raw):', data)
+      
+      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
+      console.log('✅ [loadSubRubrosServicios] SubRubros array:', subRubrosArray.length, subRubrosArray)
+      
+      setSubRubrosServicios(subRubrosArray)
+    } catch (error) {
+      console.error('❌ [loadSubRubrosServicios] Error loading subrubros:', error)
+      setSubRubrosServicios([])
+    } finally {
+      setLoadingRubros(false)
+    }
+  }
+
   // Mostrar carga mientras se verifica el usuario
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
+      <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] w-full max-w-full overflow-x-hidden">
         <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
-          <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+          <div className="w-full px-2 sm:px-4 py-2 md:py-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 md:gap-3 min-w-0">
               <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
                 <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
@@ -454,15 +601,15 @@ export default function PerfilEmpresaPage() {
             </div>
           </div>
         </header>
-        <main className="container mx-auto px-4 py-6 md:py-8">
-          <Card className="p-6 md:p-8 text-center">
-            <p className="text-lg text-[#6B7280]">Cargando...</p>
+        <main className="w-full px-2 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
+          <Card className="p-4 sm:p-6 md:p-8 text-center w-full max-w-full overflow-hidden">
+            <p className="text-sm sm:text-base md:text-lg text-[#6B7280]">Cargando...</p>
           </Card>
         </main>
         {/* Footer */}
-        <footer className="bg-[#222A59] text-white py-8 md:py-12">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
+        <footer className="bg-[#222A59] text-white py-6 sm:py-8 md:py-12">
+          <div className="w-full px-2 sm:px-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8 md:mb-12">
               <div>
                 <h4 className="font-semibold text-base md:text-lg mb-3 md:mb-4">Contacto</h4>
                 <p className="text-white/80 text-sm mb-2">{configuracion.direccion}</p>
@@ -531,9 +678,9 @@ export default function PerfilEmpresaPage() {
   // Si está cargando, mostrar mensaje
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
+      <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] w-full max-w-full overflow-x-hidden">
         <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
-          <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+          <div className="w-full px-2 sm:px-4 py-2 md:py-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 md:gap-3 min-w-0">
               <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
                 <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
@@ -549,8 +696,8 @@ export default function PerfilEmpresaPage() {
             </div>
           </div>
         </header>
-        <main className="container mx-auto px-4 py-6 md:py-8">
-          <Card className="p-6 md:p-8 text-center">
+        <main className="w-full px-2 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
+          <Card className="p-4 sm:p-6 md:p-8 text-center w-full max-w-full overflow-hidden">
             <p className="text-lg text-[#6B7280]">Cargando datos de la empresa...</p>
           </Card>
         </main>
@@ -561,34 +708,35 @@ export default function PerfilEmpresaPage() {
   // Si no hay datos de empresa, mostrar mensaje
   if (!empresaData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
+      <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] w-full max-w-full overflow-x-hidden">
         <header className="bg-[#222A59] text-white shadow-lg">
-          <div className="container mx-auto px-4 py-4 md:py-6">
+          <div className="w-full px-4 py-4 md:py-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-xl flex items-center justify-center">
                   <Building2 className="w-6 h-6 md:w-8 md:h-8 text-[#222A59]" />
                 </div>
                 <div>
-                  <h1 className="text-xl md:text-2xl font-bold">Perfil de Empresa</h1>
-                  <p className="text-xs md:text-sm text-white/80">Dirección de Intercambio Comercial Internacional y Regional</p>
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Perfil de Empresa</h1>
+                  <p className="text-xs sm:text-sm md:text-base text-white/80">Dirección de Intercambio Comercial Internacional y Regional</p>
                 </div>
               </div>
               <Button
                 onClick={logout}
                 variant="outline"
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-sm md:text-base"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 px-2 sm:px-3 md:px-4"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Cerrar Sesión
+                <LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden xs:inline">Cerrar Sesión</span>
+                <span className="xs:hidden">Salir</span>
               </Button>
             </div>
           </div>
         </header>
-        <main className="container mx-auto px-4 py-6 md:py-8">
-          <Card className="p-6 md:p-8 text-center">
-            <p className="text-lg text-[#6B7280]">No se encontraron datos de empresa asociados a tu cuenta.</p>
-            <p className="text-sm text-[#6B7280] mt-2">Por favor, contacta al administrador del sistema.</p>
+        <main className="w-full px-2 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
+          <Card className="p-4 sm:p-6 md:p-8 text-center w-full max-w-full overflow-hidden">
+            <p className="text-sm sm:text-base md:text-lg text-[#6B7280]">No se encontraron datos de empresa asociados a tu cuenta.</p>
+            <p className="text-xs sm:text-sm text-[#6B7280] mt-2">Por favor, contacta al administrador del sistema.</p>
           </Card>
         </main>
       </div>
@@ -597,13 +745,21 @@ export default function PerfilEmpresaPage() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB]">
+    <div className="min-h-screen bg-gradient-to-br from-[#F3F4F6] to-[#E5E7EB] overflow-x-hidden">
       {/* Header */}
       <header className="border-b bg-[#222A59] sticky top-0 z-50 shadow-md">
-        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        <div className="w-full px-2 sm:px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 overflow-hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/')}
+              className="flex-shrink-0 text-white hover:bg-white/10"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-opacity">
-              <div className="relative w-32 h-10 md:w-40 md:h-12 max-h-[40px] md:max-h-[48px]">
+              <div className="relative w-28 h-8 sm:w-32 sm:h-10 md:w-40 md:h-12 max-h-[32px] sm:max-h-[40px] md:max-h-[48px]">
                 <Image
                   src="/logo.png"
                   alt="Logo Catamarca"
@@ -614,25 +770,14 @@ export default function PerfilEmpresaPage() {
               </div>
             </Link>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex gap-1 sm:gap-2 flex-shrink-0 ml-auto">
               {!isEditing ? (
                 <Button
                   onClick={() => {
-                    console.log('[Perfil] ===== DATOS COMPLETOS DE EMPRESA =====')
-                    console.log('[Perfil] Renderizando con datos de empresa:', empresaData)
-                    console.log('[Perfil] Razón Social:', empresaData?.razonSocial)
-                    console.log('[Perfil] CUIT:', empresaData?.cuit)
-                    console.log('[Perfil] Productos:', empresaData?.productos)
-                    console.log('[Perfil] ===== GEOLOCALIZACIÓN =====')
-                    console.log('[Perfil] Geolocalización completa:', empresaData?.geolocalizacion)
-                    console.log('[Perfil] Tipo:', typeof empresaData?.geolocalizacion)
-                    console.log('[Perfil] ¿Es null?', empresaData?.geolocalizacion === null)
-                    console.log('[Perfil] ¿Es undefined?', empresaData?.geolocalizacion === undefined)
-                    if (empresaData?.geolocalizacion && typeof empresaData.geolocalizacion === 'object') {
-                      console.log('[Perfil] Geolocalización lat:', empresaData.geolocalizacion.lat, 'tipo:', typeof empresaData.geolocalizacion.lat)
-                      console.log('[Perfil] Geolocalización lng:', empresaData.geolocalizacion.lng, 'tipo:', typeof empresaData.geolocalizacion.lng)
-                    }
-                    // Preparar datos para edición, asegurando que todos los campos estén presentes
+                    console.log('🔵 [handleEdit] INICIANDO EDICIÓN')
+                    console.log('🔵 [handleEdit] empresaData:', empresaData)
+                    
+                    // Preparar datos para edición, usando campos individuales
                     const dataToEdit = {
                       ...empresaData,
                       nombreFantasia: empresaData?.nombreFantasia || '',
@@ -649,53 +794,178 @@ export default function PerfilEmpresaPage() {
                       subRubro: empresaData?.subRubro || '',
                       descripcionActividad: empresaData?.descripcionActividad || '',
                       productos: empresaData?.productos || [],
-                      contactos: empresaData?.contactos || [],
+                      productos_mixta: empresaData?.productos_mixta || empresaData?.productos || [],
+                      servicios: empresaData?.servicios || [],
+                      servicios_mixta: empresaData?.servicios_mixta || empresaData?.servicios || [],
                       certificaciones: empresaData?.certificaciones || [],
+                      // Redes sociales - campos individuales
                       instagram: empresaData?.instagram || '',
                       facebook: empresaData?.facebook || '',
                       linkedin: empresaData?.linkedin || '',
+                      // Contacto principal - campos individuales
+                      contacto_principal_nombre: empresaData?.contacto_principal_nombre || '',
+                      contacto_principal_apellido: empresaData?.contacto_principal_apellido || '',
+                      contacto_principal_cargo: empresaData?.contacto_principal_cargo || '',
+                      contacto_principal_telefono: empresaData?.contacto_principal_telefono || empresaData?.telefono || '',
+                      contacto_principal_email: empresaData?.contacto_principal_email || empresaData?.correo || empresaData?.email || '',
+                      // Contacto secundario - campos individuales
+                      contacto_secundario_nombre: empresaData?.contacto_secundario_nombre || '',
+                      contacto_secundario_apellido: empresaData?.contacto_secundario_apellido || '',
+                      contacto_secundario_cargo: empresaData?.contacto_secundario_cargo || '',
+                      contacto_secundario_telefono: empresaData?.contacto_secundario_telefono || '',
+                      contacto_secundario_email: empresaData?.contacto_secundario_email || '',
+                      // Contacto terciario - campos individuales
+                      contacto_terciario_nombre: empresaData?.contacto_terciario_nombre || '',
+                      contacto_terciario_apellido: empresaData?.contacto_terciario_apellido || '',
+                      contacto_terciario_cargo: empresaData?.contacto_terciario_cargo || '',
+                      contacto_terciario_telefono: empresaData?.contacto_terciario_telefono || '',
+                      contacto_terciario_email: empresaData?.contacto_terciario_email || '',
                       exporta: empresaData?.exporta || false,
                       destinosExportacion: empresaData?.destinosExportacion || [],
                       importa: empresaData?.importa || false,
                       tipoImportacion: empresaData?.tipoImportacion || '',
-                      certificadoMiPyme: empresaData?.certificadoMiPyme || false,
-                      materialPromocion2Idiomas: empresaData?.materialPromocion2Idiomas || false,
+                      certificadopyme: empresaData?.certificadopyme === true || empresaData?.certificadopyme === 'true' || empresaData?.certificadopyme === 'si',
+                      promo2idiomas: empresaData?.promo2idiomas === true || empresaData?.promo2idiomas === 'true' || empresaData?.promo2idiomas === 'si',
                       idiomasTrabajo: empresaData?.idiomasTrabajo || '',
                       observaciones: empresaData?.observaciones || '',
                       feriasAsistidas: empresaData?.feriasAsistidas || [],
-                      geolocalizacion: empresaData?.geolocalizacion ? {
-                        lat: empresaData.geolocalizacion.lat || null,
-                        lng: empresaData.geolocalizacion.lng || null
-                      } : null,
+                      // Inicializar actividades de promoción cuando se entra en modo edición
+                      ...(() => {
+                        const actividades = empresaData?.actividades_promocion_internacional || empresaData?.feriasAsistidas || []
+                        if (Array.isArray(actividades) && actividades.length > 0) {
+                          const actividadesFormateadas = actividades.map((act: any, index: number) => ({
+                            id: act.id?.toString() || `act-${index}-${Date.now()}`,
+                            tipo: act.tipo || 'feria',
+                            lugar: act.lugar || '',
+                            anio: act.anio?.toString() || '',
+                            observaciones: act.observaciones || ''
+                          }))
+                          setActividadesPromocion(actividadesFormateadas)
+                        } else {
+                          setActividadesPromocion([])
+                        }
+                        return {}
+                      })(),
+                      geolocalizacion: (() => {
+                        const geo = empresaData?.geolocalizacion
+                        if (!geo) return null
+                        // Si es objeto con lat y lng
+                        if (typeof geo === 'object' && geo.lat != null && geo.lng != null) {
+                          return { lat: geo.lat, lng: geo.lng }
+                        }
+                        // Si es string, parsearlo
+                        if (typeof geo === 'string' && geo.trim()) {
+                          try {
+                            const parts = geo.split(',').map(v => parseFloat(v.trim()))
+                            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                              return { lat: parts[0], lng: parts[1] }
+                            }
+                          } catch (error) {
+                            console.error('Error parsing geolocalizacion:', error)
+                          }
+                        }
+                        return null
+                      })(),
+                      brochure: empresaData?.brochure || null,
+                      brochure_file: null,
                     }
+                    
                     setIsEditing(true)
                     setEditedData(dataToEdit)
+                    
+                    // Cargar municipios si hay departamento
+                    if (empresaData?.departamento) {
+                      const deptoId = typeof empresaData.departamento === 'object' 
+                        ? empresaData.departamento.id 
+                        : empresaData.departamento
+                      if (deptoId) {
+                        console.log('🔵 [handleEdit] Cargando municipios para depto:', deptoId)
+                        loadMunicipiosData(deptoId)
+                      }
+                    }
+                    
+                    // Cargar localidades si hay municipio
+                    if (empresaData?.municipio) {
+                      const munId = typeof empresaData.municipio === 'object'
+                        ? empresaData.municipio.id
+                        : empresaData.municipio
+                      if (munId) {
+                        console.log('🔵 [handleEdit] Cargando localidades para municipio:', munId)
+                        loadLocalidadesData(munId)
+                      }
+                    }
+                    
+                    // ⭐ CRÍTICO: Cargar subrubros si hay rubro
+                    if (empresaData?.id_rubro) {
+                      const rubroId = typeof empresaData.id_rubro === 'object'
+                        ? empresaData.id_rubro.id
+                        : empresaData.id_rubro
+                      if (rubroId) {
+                        console.log('🔵 [handleEdit] Cargando subrubros para rubro:', rubroId)
+                        loadSubRubrosData(rubroId)
+                      }
+                    }
+                    
+                    // Para empresas mixtas: cargar subrubros separados
+                    const tipoEmpresa = empresaData?.tipo_empresa_valor || empresaData?.tipo_empresa
+                    if (tipoEmpresa === 'mixta') {
+                      // Cargar subrubros de productos si existe rubro de productos
+                      if (empresaData?.id_rubro_producto) {
+                        const rubroProdId = typeof empresaData.id_rubro_producto === 'object'
+                          ? empresaData.id_rubro_producto.id
+                          : empresaData.id_rubro_producto
+                        if (rubroProdId) {
+                          console.log('🔵 [handleEdit] Cargando subrubros productos para rubro:', rubroProdId)
+                          loadSubRubrosProductos(rubroProdId)
+                        }
+                      }
+                      
+                      // Cargar subrubros de servicios si existe rubro de servicios
+                      if (empresaData?.id_rubro_servicio) {
+                        const rubroServId = typeof empresaData.id_rubro_servicio === 'object'
+                          ? empresaData.id_rubro_servicio.id
+                          : empresaData.id_rubro_servicio
+                        if (rubroServId) {
+                          console.log('🔵 [handleEdit] Cargando subrubros servicios para rubro:', rubroServId)
+                          loadSubRubrosServicios(rubroServId)
+                        }
+                      }
+                    }
+                    
+                    console.log('🔵 [handleEdit] EDICIÓN INICIADA')
                   }}
                   variant="outline"
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-sm md:text-base"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 px-2 sm:px-3 md:px-4"
                 >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Editar Perfil
+                  <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden xs:inline">Editar Perfil</span>
+                  <span className="xs:hidden">Editar</span>
                 </Button>
               ) : (
                 <>
                   <Button
                     onClick={() => {
                       setIsEditing(false)
-                      setEditedData(null)
+                      setEditedData(empresaData ? { ...empresaData } : null)
+                      // Limpiar estados de rubros y subrubros para empresas mixtas
+                      setRubroProducto(null)
+                      setRubroServicio(null)
+                      setSubRubrosProductos([])
+                      setSubRubrosServicios([])
+                      setBrochure_file(null)
                     }}
                     variant="outline"
-                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-sm md:text-base"
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 px-2 sm:px-3 md:px-4"
                   >
-                    <X className="w-4 h-4 mr-2" />
+                    <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                     Cancelar
                   </Button>
                   <Button
                     onClick={async () => {
-                      if (!solicitudId) {
+                      if (!editedData || !empresaData || !solicitudId) {
                         toast({
                           title: "Error",
-                          description: "No se pudo obtener el ID de la solicitud. Por favor, recarga la página.",
+                          description: "No se pudo obtener el ID de la empresa. Por favor, recarga la página.",
                           variant: "destructive",
                         })
                         return
@@ -704,19 +974,65 @@ export default function PerfilEmpresaPage() {
                       try {
                         setIsSaving(true)
                         
-                        // Preparar datos para enviar al backend
-                        const updateData: any = {
+                        console.log('📤 [handleSave] Iniciando guardado')
+                        
+                        // 0. DETERMINAR TIPO DE EMPRESA PRIMERO
+                        const tipoEmpresa = empresaData.tipo_empresa_valor || empresaData.tipo_empresa || 'producto'
+                        const esProducto = tipoEmpresa === 'producto'
+                        const esServicio = tipoEmpresa === 'servicio'
+                        const esMixta = tipoEmpresa === 'mixta'
+                        
+                        console.log('📦 [handleSave] Tipo de empresa:', tipoEmpresa)
+                        
+                        // 1. GUARDAR DATOS BÁSICOS DE LA EMPRESA (sin productos/servicios)
+                        // ✅ IMPORTANTE: Excluir 'brochure' del destructuring porque es la URL del archivo existente,
+                        // no el archivo en sí. El manejo del archivo se hace por separado más abajo.
+                        // ✅ IMPORTANTE: Excluir campos duplicados del frontend para evitar conflictos con los campos del backend
+                        const { productos, servicios, productos_mixta, servicios_mixta, brochure_file, brochure_filename, brochure, ...empresaDataToSend } = editedData
+                        
+                        // ✅ CREAR FormData para enviar archivos
+                        const formData = new FormData()
+                        
+                        // ✅ MANEJAR ARCHIVO PDF
+                        if (brochure_file) {
+                          // Subir nuevo archivo
+                          console.log('📎 [handleSave] Agregando archivo brochure:', brochure_file.name)
+                          formData.append('brochure', brochure_file)
+                        } else if (editedData.brochure === null && empresaData.brochure) {
+                          // El usuario eliminó el archivo (brochure es null pero antes existía)
+                          console.log('🗑️ [handleSave] Eliminando archivo brochure existente')
+                          formData.append('brochure', '') // Enviar string vacío para eliminar
+                        }
+                        
+                        // Preparar contacto principal - usar campos individuales
+                        const nombreContacto = editedData?.contacto_principal_nombre || empresaData?.contacto_principal_nombre || ''
+                        const apellidoContacto = editedData?.contacto_principal_apellido || empresaData?.contacto_principal_apellido || ''
+                        const cargoContacto = editedData?.contacto_principal_cargo || empresaData?.contacto_principal_cargo || ''
+                        const telefonoContacto = editedData?.contacto_principal_telefono || empresaData?.contacto_principal_telefono || empresaData?.telefono || ''
+                        const emailContacto = editedData?.contacto_principal_email || empresaData?.contacto_principal_email || empresaData?.correo || empresaData?.email || ''
+                        
+                        // Validar campos requeridos
+                        if (!nombreContacto || nombreContacto.trim() === '') {
+                          throw new Error('El nombre del contacto principal es obligatorio. Por favor, completa este campo.')
+                        }
+                        if (!telefonoContacto || telefonoContacto.trim() === '') {
+                          throw new Error('El teléfono del contacto principal es obligatorio. Por favor, completa este campo.')
+                        }
+                        
+                        // Normalizar relaciones a IDs
+                        const dataToSend: any = {
+                          ...empresaDataToSend,
                           razon_social: editedData.razon_social || editedData.razonSocial || empresaData?.razon_social || empresaData?.razonSocial,
                           nombre_fantasia: editedData.nombre_fantasia || editedData.nombreFantasia || null,
                           tipo_sociedad: editedData.tipo_sociedad || editedData.tipoSociedad || null,
+                          cuit_cuil: editedData.cuit_cuil || editedData.cuit || empresaData?.cuit_cuil || empresaData?.cuit,
                           direccion: editedData.direccion || '',
                           codigo_postal: editedData.codigo_postal || editedData.codigoPostal || null,
                           direccion_comercial: editedData.direccion_comercial || editedData.direccionComercial || null,
                           codigo_postal_comercial: editedData.codigo_postal_comercial || editedData.codigoPostalComercial || null,
-                          // Normalizar relaciones a IDs
                           departamento: typeof editedData.departamento === 'object' 
                             ? editedData.departamento.id 
-                            : editedData.departamento || null,
+                            : editedData.departamento,
                           municipio: editedData.municipio 
                             ? (typeof editedData.municipio === 'object' 
                                 ? editedData.municipio.id 
@@ -727,34 +1043,44 @@ export default function PerfilEmpresaPage() {
                                 ? editedData.localidad.id 
                                 : editedData.localidad)
                             : null,
-                          geolocalizacion: editedData.geolocalizacion && 
-                            editedData.geolocalizacion.lat !== null && 
-                            editedData.geolocalizacion.lat !== undefined &&
-                            editedData.geolocalizacion.lng !== null && 
-                            editedData.geolocalizacion.lng !== undefined ? 
-                            `${editedData.geolocalizacion.lat},${editedData.geolocalizacion.lng}` : 
-                            (empresaData?.geolocalizacion && 
-                              empresaData.geolocalizacion.lat !== null && 
-                              empresaData.geolocalizacion.lng !== null ?
-                              `${empresaData.geolocalizacion.lat},${empresaData.geolocalizacion.lng}` : 
-                              null),
+                          geolocalizacion: (() => {
+                            // Primero intentar con editedData
+                            if (editedData.geolocalizacion) {
+                              const geo = editedData.geolocalizacion
+                              // Si es objeto con lat y lng válidos
+                              if (typeof geo === 'object' && geo.lat != null && geo.lng != null && !isNaN(geo.lat) && !isNaN(geo.lng)) {
+                                return `${geo.lat},${geo.lng}`
+                              }
+                              // Si es string, usarlo directamente
+                              if (typeof geo === 'string' && geo.trim()) {
+                                return geo
+                              }
+                            }
+                            // Fallback: usar empresaData
+                            if (empresaData?.geolocalizacion) {
+                              const geo = empresaData.geolocalizacion
+                              // Si es objeto con lat y lng válidos
+                              if (typeof geo === 'object' && geo.lat != null && geo.lng != null && !isNaN(geo.lat) && !isNaN(geo.lng)) {
+                                return `${geo.lat},${geo.lng}`
+                              }
+                              // Si es string, usarlo directamente
+                              if (typeof geo === 'string' && geo.trim()) {
+                                return geo
+                              }
+                            }
+                            return null
+                          })(),
                           telefono: (editedData.telefono && editedData.telefono.trim() !== '') ? editedData.telefono.trim() : (empresaData?.telefono || ''),
                           correo: editedData.correo || editedData.email || empresaData?.correo || empresaData?.email,
                           sitioweb: editedData.sitioweb || editedData.paginaWeb || null,
-                          // Normalizar rubro y subrubro a IDs
                           id_rubro: typeof editedData.id_rubro === 'object' 
                             ? editedData.id_rubro.id 
                             : editedData.id_rubro || editedData.rubro || null,
-                          id_subrubro: editedData.id_subrubro 
-                            ? (typeof editedData.id_subrubro === 'object' 
-                                ? editedData.id_subrubro.id 
-                                : editedData.id_subrubro)
-                            : editedData.subRubro || null,
                           descripcion_actividad: editedData.descripcionActividad || null,
-                          // Redes sociales - pueden venir como objeto o campos individuales
-                          instagram: editedData.instagram || (editedData.redes_sociales?.instagram) || null,
-                          facebook: editedData.facebook || (editedData.redes_sociales?.facebook) || null,
-                          linkedin: editedData.linkedin || (editedData.redes_sociales?.linkedin) || null,
+                          // Redes sociales - enviar solo si tienen valor, null si están vacías
+                          instagram: (editedData.instagram && editedData.instagram.trim() !== '') ? editedData.instagram.trim() : null,
+                          facebook: (editedData.facebook && editedData.facebook.trim() !== '') ? editedData.facebook.trim() : null,
+                          linkedin: (editedData.linkedin && editedData.linkedin.trim() !== '') ? editedData.linkedin.trim() : null,
                           exporta: editedData.exporta ? (typeof editedData.exporta === 'string' ? editedData.exporta : 'Sí') : 'No, solo ventas nacionales',
                           destinoexporta: editedData.destinosExportacion || editedData.destinoexporta ? 
                             (Array.isArray(editedData.destinosExportacion) ? 
@@ -764,191 +1090,634 @@ export default function PerfilEmpresaPage() {
                           importa: editedData.importa === true || editedData.importa === 'si' || editedData.importa === 'Sí',
                           interes_exportar: editedData.interes_exportar === true || editedData.interes_exportar === 'si',
                           tipo_importacion: editedData.tipoImportacion || null,
-                          certificado_pyme: editedData.certificadoMiPyme ? (typeof editedData.certificadoMiPyme === 'string' ? editedData.certificadoMiPyme : 'si') : 'no',
+                          certificado_pyme: (editedData.certificadopyme === true || editedData.certificadopyme === 'true' || editedData.certificadopyme === 'si') ? 'si' : 'no',
                           certificaciones: editedData.certificaciones ? 
                             Array.isArray(editedData.certificaciones) ? 
                               editedData.certificaciones.join(', ') : 
                               editedData.certificaciones : null,
-                          material_promocional_idiomas: editedData.materialPromocion2Idiomas ? (typeof editedData.materialPromocion2Idiomas === 'string' ? editedData.materialPromocion2Idiomas : 'si') : 'no',
+                          material_promocional_idiomas: (editedData.promo2idiomas === true || editedData.promo2idiomas === 'true' || editedData.promo2idiomas === 'si') ? 'si' : 'no',
                           idiomas_trabajo: editedData.idiomasTrabajo || null,
                           observaciones: editedData.observaciones || null,
+                          // Contacto principal
+                          contacto_principal: {
+                            nombre: nombreContacto.trim(),
+                            apellido: apellidoContacto.trim(),
+                            cargo: cargoContacto.trim(),
+                            telefono: telefonoContacto.trim(),
+                            email: emailContacto.trim(),
+                          },
+                          nombre_contacto: nombreContacto.trim(),
+                          apellido_contacto: apellidoContacto.trim(),
+                          cargo_contacto: cargoContacto.trim(),
+                          telefono_contacto: telefonoContacto.trim(),
+                          // Contactos secundarios y terciarios
+                          contacto_secundario_nombre: editedData?.contacto_secundario_nombre || empresaData?.contacto_secundario_nombre || null,
+                          contacto_secundario_apellido: editedData?.contacto_secundario_apellido || empresaData?.contacto_secundario_apellido || null,
+                          contacto_secundario_cargo: editedData?.contacto_secundario_cargo || empresaData?.contacto_secundario_cargo || null,
+                          contacto_secundario_telefono: editedData?.contacto_secundario_telefono || empresaData?.contacto_secundario_telefono || null,
+                          contacto_secundario_email: editedData?.contacto_secundario_email || empresaData?.contacto_secundario_email || null,
+                          contacto_terciario_nombre: editedData?.contacto_terciario_nombre || empresaData?.contacto_terciario_nombre || null,
+                          contacto_terciario_apellido: editedData?.contacto_terciario_apellido || empresaData?.contacto_terciario_apellido || null,
+                          contacto_terciario_cargo: editedData?.contacto_terciario_cargo || empresaData?.contacto_terciario_cargo || null,
+                          contacto_terciario_telefono: editedData?.contacto_terciario_telefono || empresaData?.contacto_terciario_telefono || null,
+                          contacto_terciario_email: editedData?.contacto_terciario_email || empresaData?.contacto_terciario_email || null,
+                          actividades_promocion_internacional: actividadesPromocion.length > 0 
+                            ? actividadesPromocion.map(a => ({
+                                tipo: a.tipo,
+                                lugar: a.lugar.trim(),
+                                anio: a.anio.trim(),
+                                observaciones: a.observaciones?.trim() || ''
+                              }))
+                            : [],
                         }
                         
-                        // Preparar contacto principal - SIEMPRE debe existir y tener teléfono
-                        let contactoPrincipal = null
-                        
-                        // Primero buscar en editedData
-                        if (editedData.contactos && editedData.contactos.length > 0) {
-                          contactoPrincipal = editedData.contactos.find((c: any) => c.tipo === 'Principal')
-                        }
-                        
-                        // Si no está en editedData, usar el original
-                        if (!contactoPrincipal) {
-                          contactoPrincipal = empresaData.contactos?.find((c: any) => c.tipo === 'Principal')
-                        }
-                        
-                        // Validar que existe y tiene datos requeridos
-                        if (!contactoPrincipal) {
-                          throw new Error('No se encontró el contacto principal. Por favor, recarga la página.')
-                        }
-                        
-                        // Validar y preparar teléfono - debe ser un string no vacío
-                        let telefonoValue = contactoPrincipal.telefono
-                        
-                        // Si el teléfono está vacío, null o undefined, usar el original de empresaData
-                        if (!telefonoValue || telefonoValue === '' || telefonoValue === null || telefonoValue === undefined) {
-                          const contactoOriginal = empresaData.contactos?.find((c: any) => c.tipo === 'Principal')
-                          telefonoValue = contactoOriginal?.telefono || ''
-                        }
-                        
-                        // Convertir a string y limpiar
-                        telefonoValue = String(telefonoValue || '').trim()
-                        
-                        // Validar que después de limpiar no esté vacío
-                        if (!telefonoValue || telefonoValue === '') {
-                          console.error('[Perfil] Teléfono del contacto principal vacío después de limpiar:', {
-                            'contactoPrincipal.telefono': contactoPrincipal.telefono,
-                            'contactoPrincipal': contactoPrincipal,
-                            'empresaData.contactos': empresaData.contactos,
-                            'contactoOriginal': empresaData.contactos?.find((c: any) => c.tipo === 'Principal')
-                          })
-                          throw new Error('El teléfono del contacto principal es obligatorio y no puede estar vacío. Por favor, ingresa un teléfono válido.')
-                        }
-                        
-                        // Validar y preparar nombre
-                        let nombreValue = contactoPrincipal.nombre
-                        if (nombreValue === null || nombreValue === undefined) {
-                          const contactoOriginal = empresaData.contactos?.find((c: any) => c.tipo === 'Principal')
-                          nombreValue = contactoOriginal?.nombre || ''
-                        }
-                        nombreValue = String(nombreValue || '').trim()
-                        
-                        if (!nombreValue || nombreValue === '') {
-                          throw new Error('El nombre del contacto principal es obligatorio y no puede estar vacío')
-                        }
-                        
-                        // Preparar datos del contacto principal - SIEMPRE enviar ambos formatos
-                        const emailContacto = contactoPrincipal.email || empresaData.contactos?.find((c: any) => c.tipo === 'Principal')?.email || ''
-                        
-                        // Formato anidado (para el serializer)
-                        updateData.contacto_principal = {
-                          nombre: nombreValue,
-                          cargo: contactoPrincipal.cargo ? String(contactoPrincipal.cargo).trim() : '',
-                          telefono: telefonoValue,
-                          email: emailContacto, // Read-only pero necesario para estructura
-                        }
-                        
-                        // Formato plano (para el serializer también)
-                        updateData.nombre_contacto = nombreValue
-                        updateData.cargo_contacto = contactoPrincipal.cargo ? String(contactoPrincipal.cargo).trim() : ''
-                        updateData.telefono_contacto = telefonoValue
-                        
-                        // Asegurarse de que el teléfono no esté vacío
-                        if (!updateData.telefono_contacto || updateData.telefono_contacto.trim() === '') {
-                          console.error('[Perfil] ERROR: Teléfono vacío antes de enviar:', {
-                            telefonoValue,
-                            contactoPrincipal,
-                            empresaDataContacto: empresaData.contactos?.find((c: any) => c.tipo === 'Principal')
-                          })
-                          throw new Error('El teléfono del contacto principal no puede estar vacío. Por favor, verifica los datos.')
-                        }
-                        
-                        console.log('[Perfil] Guardando cambios:', editedData)
-                        console.log('[Perfil] Contacto principal preparado:', {
-                          nombre: updateData.nombre_contacto,
-                          cargo: updateData.cargo_contacto,
-                          telefono: updateData.telefono_contacto,
-                          email: emailContacto,
-                          'contacto_principal': updateData.contacto_principal
-                        })
-                        
-                        // Preparar contactos secundarios
-                        const contactosSecundarios = editedData.contactos ? 
-                          editedData.contactos
-                            .filter((c: any) => c.tipo === 'Secundario')
-                            .map((c: any) => ({
-                              nombre: c.nombre || '',
-                              cargo: c.cargo || '',
-                              telefono: c.telefono || '',
-                              email: c.email || '',
-                            })) : []
-                        updateData.contactos_secundarios = contactosSecundarios
-                        
-                        // Preparar productos - mapear de camelCase a snake_case
-                        updateData.productos = (editedData.productos || []).map((producto: any) => {
-                          const productData: any = {
-                            nombre_producto: producto.nombre_producto || producto.nombre || '',
-                            descripcion: producto.descripcion || '',
-                            capacidad_productiva: producto.capacidad_productiva || producto.capacidadProductiva || null,
-                            unidad_medida: producto.unidad_medida || producto.unidadMedida || 'kg',
-                            periodo_capacidad: producto.periodo_capacidad || producto.periodoCapacidad || 'mensual',
+                        // ✅ CRÍTICO: Manejar subrubros según tipo de empresa
+                        if (esMixta) {
+                          // Para empresas mixtas: dos subrubros separados
+                          if (editedData.id_subrubro_producto) {
+                            dataToSend.id_subrubro_producto = typeof editedData.id_subrubro_producto === 'object'
+                              ? editedData.id_subrubro_producto.id
+                              : editedData.id_subrubro_producto
                           }
-                          // Posición arancelaria puede ser objeto o string
-                          if (producto.posicion_arancelaria) {
-                            if (typeof producto.posicion_arancelaria === 'object') {
-                              productData.posicion_arancelaria_codigo = producto.posicion_arancelaria.codigo_arancelario || ''
+                          if (editedData.id_subrubro_servicio) {
+                            dataToSend.id_subrubro_servicio = typeof editedData.id_subrubro_servicio === 'object'
+                              ? editedData.id_subrubro_servicio.id
+                              : editedData.id_subrubro_servicio
+                          }
+                          // NO enviar id_subrubro para empresas mixtas
+                          delete dataToSend.id_subrubro
+                        } else {
+                          // Para empresas de producto o servicio único
+                          dataToSend.id_subrubro = editedData.id_subrubro 
+                            ? (typeof editedData.id_subrubro === 'object' 
+                                ? editedData.id_subrubro.id 
+                                : editedData.id_subrubro)
+                            : editedData.subRubro || null
+                          // NO enviar subrubros separados para empresas no mixtas
+                          delete dataToSend.id_subrubro_producto
+                          delete dataToSend.id_subrubro_servicio
+                        }
+                        
+                        // ✅ AGREGAR TODOS LOS CAMPOS AL FormData
+                        for (const [key, value] of Object.entries(dataToSend)) {
+                          // Para redes sociales, enviar null como cadena vacía para limpiar el campo
+                          if ((key === 'instagram' || key === 'facebook' || key === 'linkedin') && value === null) {
+                            console.log(`  ✏️ ${key}: null (limpiando campo)`)
+                            formData.append(key, '')
+                            continue
+                          }
+                          // Para geolocalizacion, siempre enviarla si tiene valor (incluso si es del original)
+                          if (key === 'geolocalizacion') {
+                            if (value !== null && value !== undefined && value !== '') {
+                              console.log(`  ✏️ ${key}: ${value}`)
+                              formData.append(key, String(value))
                             } else {
-                              productData.posicion_arancelaria_codigo = producto.posicion_arancelaria || producto.posicionArancelaria || ''
+                              console.log(`  ⏭️ Saltando ${key}: ${value} (no hay geolocalización)`)
+                            }
+                            continue
+                          }
+                          // Saltar otros valores null o undefined
+                          if (value === null || value === undefined) {
+                            console.log(`  ⏭️ Saltando ${key}: ${value}`)
+                            continue
+                          }
+                          
+                          if (typeof value === 'object' && !(value instanceof File) && !Array.isArray(value)) {
+                            console.log(`  📄 ${key}: ${JSON.stringify(value)} (JSON)`)
+                            formData.append(key, JSON.stringify(value))
+                          } else if (Array.isArray(value)) {
+                            console.log(`  📋 ${key}: ${JSON.stringify(value)} (Array)`)
+                            formData.append(key, JSON.stringify(value))
+                          } else {
+                            console.log(`  ✏️ ${key}: ${value}`)
+                            formData.append(key, String(value))
+                          }
+                        }
+                        
+                        console.log('📤 [handleSave] Guardando empresa (datos básicos + archivo)')
+                        console.log('📤 [handleSave] Tipo empresa para backend:', tipoEmpresa)
+                        
+                        // ✅ USAR FormData en lugar de JSON
+                        try {
+                          await api.updateEmpresa(solicitudId, formData)
+                        } catch (error) {
+                          // Fallback: usar el endpoint de solicitud si falla
+                          console.warn('[Perfil] Error actualizando empresa, intentando con solicitud:', error)
+                          // Convertir FormData a JSON para el fallback
+                          const jsonData: any = {}
+                          for (const [key, value] of Object.entries(dataToSend)) {
+                            if (value !== null && value !== undefined) {
+                              jsonData[key] = value
                             }
                           }
-                          return productData
-                        })
-                        
-                        // Preparar servicios
-                        if (editedData.servicios || editedData.servicios_ofrecidos) {
-                          const servicios = editedData.servicios || editedData.servicios_ofrecidos || []
-                          updateData.servicios = Array.isArray(servicios) ? servicios.map((servicio: any) => ({
-                            nombre_servicio: servicio.nombre_servicio || servicio.nombre || '',
-                            descripcion: servicio.descripcion || '',
-                            tipo_servicio: Array.isArray(servicio.tipo_servicio) ? servicio.tipo_servicio.join(', ') : (servicio.tipo_servicio || ''),
-                            sector_atendido: servicio.sector_atendido || (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores || ''),
-                            alcance_geografico: servicio.alcance_geografico || servicio.alcance_servicio || 'local',
-                            forma_contratacion: Array.isArray(servicio.forma_contratacion) ? servicio.forma_contratacion.join(', ') : (servicio.forma_contratacion || 'hora'),
-                          })) : []
+                          await api.updatePerfil(solicitudId, jsonData)
                         }
                         
-                        // Preparar actividades de promoción internacional
-                        updateData.actividades_promocion_internacional = editedData.actividades_promocion_internacional || editedData.feriasAsistidas || []
-                        
-                        console.log('[Perfil] Datos a enviar:', JSON.stringify(updateData, null, 2))
-                        console.log('[Perfil] Verificando teléfono antes de enviar:', {
-                          'telefono_contacto': updateData.telefono_contacto,
-                          'tipo': typeof updateData.telefono_contacto,
-                          'longitud': updateData.telefono_contacto?.length,
-                          'contacto_principal.telefono': updateData.contacto_principal?.telefono,
-                          'contacto_principal': updateData.contacto_principal
-                        })
-                        
-                        // Enviar actualización - usar el endpoint de empresa si tenemos el ID
-                        let updated
-                        if (solicitudId) {
-                          // Intentar actualizar usando el endpoint de empresa
-                          try {
-                            updated = await api.updateEmpresa(solicitudId, updateData)
-                          } catch (error) {
-                            // Fallback: usar el endpoint de solicitud si falla
-                            console.warn('[Perfil] Error actualizando empresa, intentando con solicitud:', error)
-                            updated = await api.updatePerfil(solicitudId, updateData)
-                          }
-                        } else {
-                          // Si no hay ID, usar el endpoint de solicitud
-                          const perfilCompleto = await api.getMiPerfil()
-                          if (perfilCompleto && perfilCompleto.id) {
-                            updated = await api.updatePerfil(perfilCompleto.id, updateData)
-                          } else {
-                            throw new Error('No se pudo obtener el ID de la empresa o solicitud')
+                        // 3. GUARDAR PRODUCTOS (para empresas de producto o mixta)
+                        if (esProducto || esMixta) {
+                          const productosData = esMixta ? (editedData?.productos_mixta || []) : (editedData?.productos || [])
+                          
+                          if (productosData && Array.isArray(productosData)) {
+                            console.log('📦 [handleSave] Procesando productos:', productosData.length)
+                            
+                            // Obtener IDs de productos actuales
+                            const productosActualesIds = productosData
+                              .filter((p: any) => p.id && !String(p.id).startsWith('temp-'))
+                              .map((p: any) => p.id)
+                            
+                            // Obtener IDs de productos originales
+                            const productosOriginales = esMixta 
+                              ? (empresaData?.productos_mixta || [])
+                              : (empresaData?.productos || [])
+                            const productosOriginalesIds = productosOriginales.map((p: any) => p.id).filter((id: any) => id)
+                            
+                            // Eliminar productos que ya no están
+                            const productosAEliminar = productosOriginalesIds.filter(
+                              (id: number) => !productosActualesIds.includes(id)
+                            )
+                            
+                            for (const id of productosAEliminar) {
+                              console.log('🗑️ [handleSave] Eliminando producto:', id)
+                              if (esMixta) {
+                                await api.deleteProductoMixta(id)
+                              } else {
+                                await api.deleteProducto(id)
+                              }
+                            }
+                            
+                            // Crear o actualizar productos
+                            for (const producto of productosData) {
+                              const productoData: any = {
+                                nombre_producto: producto.nombre_producto || producto.nombre || '',
+                                descripcion: producto.descripcion || '',
+                                capacidad_productiva: producto.capacidad_productiva || producto.capacidadProductiva || null,
+                                unidad_medida: producto.unidad_medida || producto.unidadMedida || 'kg',
+                                periodo_capacidad: producto.periodo_capacidad || producto.periodoCapacidad || 'mensual',
+                                es_principal: producto.es_principal || false,
+                                precio_estimado: producto.precio_estimado || null,
+                                moneda_precio: producto.moneda_precio || 'ARS',
+                                empresa: solicitudId,
+                              }
+                              
+                              // Agregar código arancelario si existe
+                              if (producto.posicion_arancelaria) {
+                                const codigo = typeof producto.posicion_arancelaria === 'object'
+                                  ? producto.posicion_arancelaria.codigo_arancelario
+                                  : producto.posicion_arancelaria
+                                if (codigo) {
+                                  productoData.codigo_arancelario_input = codigo
+                                }
+                              }
+                              
+                              if (producto.id && !String(producto.id).startsWith('temp-')) {
+                                console.log('✏️ [handleSave] Actualizando producto:', producto.id)
+                                if (esMixta) {
+                                  await api.updateProductoMixta(producto.id, productoData)
+                                } else {
+                                  await api.updateProducto(producto.id, productoData)
+                                }
+                              } else {
+                                console.log('➕ [handleSave] Creando producto nuevo')
+                                if (esMixta) {
+                                  await api.createProductoMixta(productoData)
+                                } else {
+                                  await api.createProducto(productoData)
+                                }
+                              }
+                            }
                           }
                         }
-                        console.log('[Perfil] Actualización exitosa:', updated)
                         
-                        // Recargar datos
-                        const userData = await api.getCurrentUser()
-                        if (userData.empresa) {
-                          setEmpresaData(userData.empresa)
+                        // 4. GUARDAR SERVICIOS (para empresas de servicio o mixta)
+                        if (esServicio || esMixta) {
+                          const serviciosData = esMixta ? (editedData?.servicios_mixta || []) : (editedData?.servicios || [])
+                          
+                          if (serviciosData && Array.isArray(serviciosData)) {
+                            console.log('🔧 [handleSave] Procesando servicios:', serviciosData.length)
+                            
+                            const serviciosActualesIds = serviciosData
+                              .filter((s: any) => s.id && !String(s.id).startsWith('temp-'))
+                              .map((s: any) => s.id)
+                            
+                            const serviciosOriginales = esMixta
+                              ? (empresaData?.servicios_mixta || [])
+                              : (empresaData?.servicios || [])
+                            const serviciosOriginalesIds = serviciosOriginales.map((s: any) => s.id).filter((id: any) => id)
+                            
+                            const serviciosAEliminar = serviciosOriginalesIds.filter(
+                              (id: number) => !serviciosActualesIds.includes(id)
+                            )
+                            
+                            for (const id of serviciosAEliminar) {
+                              console.log('🗑️ [handleSave] Eliminando servicio:', id)
+                              if (esMixta) {
+                                await api.deleteServicioMixta(id)
+                              } else {
+                                await api.deleteServicio(id)
+                              }
+                            }
+                            
+                            for (const servicio of serviciosData) {
+                              const servicioData = {
+                                nombre_servicio: servicio.nombre_servicio || servicio.nombre || servicio.descripcion || '',
+                                descripcion: servicio.descripcion || '',
+                                tipo_servicio: servicio.tipo_servicio || servicio.tipoServicio || '',
+                                sector_atendido: servicio.sector_atendido || (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores) || '',
+                                alcance_servicio: servicio.alcance_servicio || servicio.alcanceGeografico || servicio.alcance_geografico || 'local',
+                                paises_trabaja: servicio.paises_trabaja || servicio.paises_destino || '',
+                                exporta_servicios: servicio.exporta_servicios || servicio.exporta_servicios_alias || false,
+                                interes_exportar_servicios: servicio.interes_exportar_servicios || servicio.interes_exportar || false,
+                                idiomas_trabajo: Array.isArray(servicio.idiomas_trabajo) 
+                                  ? servicio.idiomas_trabajo.join(', ') 
+                                  : (servicio.idiomas_trabajo || ''),
+                                forma_contratacion: Array.isArray(servicio.forma_contratacion)
+                                  ? servicio.forma_contratacion[0]
+                                  : (servicio.forma_contratacion || 'hora'),
+                                certificaciones_tecnicas: servicio.certificaciones_tecnicas || '',
+                                tiene_equipo_tecnico: servicio.tiene_equipo_tecnico || false,
+                                equipo_tecnico_formacion: servicio.equipo_tecnico_formacion || false,
+                                es_principal: servicio.es_principal || false,
+                                empresa: solicitudId,
+                              }
+                              
+                              if (servicio.id && !String(servicio.id).startsWith('temp-')) {
+                                console.log('✏️ [handleSave] Actualizando servicio:', servicio.id)
+                                if (esMixta) {
+                                  await api.updateServicioMixta(servicio.id, servicioData)
+                                } else {
+                                  await api.updateServicio(servicio.id, servicioData)
+                                }
+                              } else {
+                                console.log('➕ [handleSave] Creando servicio nuevo')
+                                if (esMixta) {
+                                  await api.createServicioMixta(servicioData)
+                                } else {
+                                  await api.createServicio(servicioData)
+                                }
+                              }
+                            }
+                          }
+                        }
+                        
+                        // 5. RECARGAR LA EMPRESA ACTUALIZADA
+                        console.log('🔄 [handleSave] Recargando empresa actualizada')
+                        try {
+                          const updatedEmpresa = await api.getEmpresaById(solicitudId)
+                          // Normalizar datos de la empresa actualizada
+                          const empresa = updatedEmpresa
+                          const normalizedEmpresa: any = {
+                            // Campos básicos - mantener ambos formatos para compatibilidad
+                            id: empresa.id,
+                            razon_social: empresa.razon_social || empresa.razonSocial,
+                            razonSocial: empresa.razon_social || empresa.razonSocial,
+                            nombre_fantasia: empresa.nombre_fantasia || empresa.nombreFantasia,
+                            nombreFantasia: empresa.nombre_fantasia || empresa.nombreFantasia,
+                            cuit_cuil: empresa.cuit_cuil || empresa.cuit,
+                            cuit: empresa.cuit_cuil || empresa.cuit,
+                            tipo_sociedad: empresa.tipo_sociedad || empresa.tipoSociedad,
+                            tipoSociedad: empresa.tipo_sociedad || empresa.tipoSociedad,
+                            tipo_empresa: empresa.tipo_empresa || empresa.tipoEmpresa,
+                            tipo_empresa_valor: empresa.tipo_empresa_valor || empresa.tipoEmpresaValor,
+                            tipo_empresa_detalle: empresa.tipo_empresa_detalle || empresa.tipoEmpresaDetalle,
+                            estado: empresa.estado,
+                            
+                            // Ubicación
+                            direccion: empresa.direccion,
+                            codigo_postal: empresa.codigo_postal || empresa.codigoPostal,
+                            codigoPostal: empresa.codigo_postal || empresa.codigoPostal,
+                            direccion_comercial: empresa.direccion_comercial || empresa.direccionComercial,
+                            codigo_postal_comercial: empresa.codigo_postal_comercial || empresa.codigoPostalComercial,
+                            departamento: empresa.departamento,
+                            departamento_nombre: empresa.departamento_nombre || (typeof empresa.departamento === 'object' ? empresa.departamento.nombre : null),
+                            municipio: empresa.municipio,
+                            municipio_nombre: empresa.municipio_nombre || (typeof empresa.municipio === 'object' ? empresa.municipio.nombre : null),
+                            localidad: empresa.localidad,
+                            localidad_nombre: empresa.localidad_nombre || (typeof empresa.localidad === 'object' ? empresa.localidad.nombre : null),
+                            geolocalizacion: empresa.geolocalizacion,
+                            
+                            // Contacto
+                            telefono: empresa.telefono,
+                            correo: empresa.correo || empresa.email,
+                            email: empresa.correo || empresa.email,
+                            sitioweb: empresa.sitioweb || empresa.paginaWeb,
+                            paginaWeb: empresa.sitioweb || empresa.paginaWeb,
+                            
+                            // Rubro
+                            id_rubro: empresa.id_rubro || empresa.rubro,
+                            rubro: empresa.id_rubro || empresa.rubro,
+                            rubro_nombre: empresa.rubro_nombre || (typeof empresa.id_rubro === 'object' ? empresa.id_rubro.nombre : null) || empresa.rubro,
+                            id_subrubro: empresa.id_subrubro || empresa.subRubro,
+                            sub_rubro_nombre: empresa.sub_rubro_nombre || empresa.subRubroNombre,
+                            
+                            // Exportación/Importación
+                            exporta: empresa.exporta,
+                            destinoexporta: empresa.destinoexporta || empresa.destino_exportacion || empresa.destinosExportacion,
+                            destinosExportacion: Array.isArray(empresa.destinosExportacion) 
+                              ? empresa.destinosExportacion 
+                              : (typeof empresa.destinoexporta === 'string'
+                                  ? empresa.destinoexporta.split(',').map((d: string) => d.trim()).filter((d: string) => d)
+                                  : []),
+                            importa: empresa.importa,
+                            interes_exportar: empresa.interes_exportar || empresa.interesExportar,
+                            
+                            // Certificaciones
+                            certificadopyme: empresa.certificadopyme === true || empresa.certificadopyme === 'true' || empresa.certificadopyme === 'si',
+                            certificaciones: empresa.certificaciones
+                              ? (Array.isArray(empresa.certificaciones)
+                                  ? empresa.certificaciones
+                                  : typeof empresa.certificaciones === 'string'
+                                  ? empresa.certificaciones.split(',').map((c: string) => c.trim()).filter((c: string) => c)
+                                  : [])
+                              : [],
+                            promo2idiomas: empresa.promo2idiomas === true || empresa.promo2idiomas === 'true' || empresa.promo2idiomas === 'si',
+                            idiomas_trabaja: empresa.idiomas_trabaja || empresa.idiomasTrabajo,
+                            idiomasTrabajo: empresa.idiomas_trabaja || empresa.idiomasTrabajo,
+                            
+                            // Productos - normalizar formato
+                            productos: (() => {
+                              const productos = empresa.productos || empresa.productos_empresa || empresa.productos_mixta || []
+                              if (Array.isArray(productos)) {
+                                return productos.map((p: any) => ({
+                                  id: p.id,
+                                  nombre_producto: p.nombre_producto || p.nombre || '',
+                                  nombre: p.nombre_producto || p.nombre || '',
+                                  descripcion: p.descripcion || '',
+                                  capacidad_productiva: p.capacidad_productiva || p.capacidadProductiva || '',
+                                  unidad_medida: p.unidad_medida || p.unidadMedida || '',
+                                  periodo_capacidad: p.periodo_capacidad || p.periodoCapacidad || '',
+                                  posicion_arancelaria: p.posicion_arancelaria || null,
+                                  es_principal: p.es_principal || p.esPrincipal || false,
+                                }))
+                              }
+                              return []
+                            })(),
+                            productos_mixta: empresa.productos_mixta || empresa.productos || [],
+                            
+                            // Servicios - normalizar formato
+                            servicios: (() => {
+                              const servicios = empresa.servicios || empresa.servicios_empresa || empresa.servicios_mixta || []
+                              if (Array.isArray(servicios)) {
+                                return servicios.map((s: any) => ({
+                                  id: s.id,
+                                  nombre_servicio: s.nombre_servicio || s.nombre || '',
+                                  nombre: s.nombre_servicio || s.nombre || '',
+                                  descripcion: s.descripcion || '',
+                                  tipo_servicio: s.tipo_servicio || s.tipoServicio || '',
+                                  sector_atendido: s.sector_atendido || (Array.isArray(s.sectores) ? s.sectores.join(', ') : s.sectores) || '',
+                                  alcance_servicio: s.alcance_servicio || s.alcanceGeografico || s.alcance_geografico || '',
+                                  forma_contratacion: s.forma_contratacion || s.formaContratacion || '',
+                                  es_principal: s.es_principal || s.esPrincipal || false,
+                                }))
+                              }
+                              return []
+                            })(),
+                            servicios_mixta: empresa.servicios_mixta || empresa.servicios || [],
+                            servicios_ofrecidos: empresa.servicios_ofrecidos || empresa.servicios || [],
+                            
+                            // Contactos - Construir array asegurando que siempre incluya el contacto principal
+                            contacto_principal_nombre: empresa.contacto_principal_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.nombre : null),
+                            contacto_principal_apellido: empresa.contacto_principal_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.apellido : null),
+                            contacto_principal_cargo: empresa.contacto_principal_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.cargo : null),
+                            contacto_principal_telefono: empresa.contacto_principal_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.telefono : null) || empresa.telefono || null,
+                            contacto_principal_email: empresa.contacto_principal_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.email : null) || empresa.correo || empresa.email || null,
+                            // Contactos secundarios y terciarios - campos individuales
+                            contacto_secundario_nombre: empresa.contacto_secundario_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.nombre : null),
+                            contacto_secundario_apellido: empresa.contacto_secundario_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.apellido : null),
+                            contacto_secundario_cargo: empresa.contacto_secundario_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.cargo : null),
+                            contacto_secundario_telefono: empresa.contacto_secundario_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.telefono : null),
+                            contacto_secundario_email: empresa.contacto_secundario_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.email : null),
+                            contacto_terciario_nombre: empresa.contacto_terciario_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.nombre : null),
+                            contacto_terciario_apellido: empresa.contacto_terciario_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.apellido : null),
+                            contacto_terciario_cargo: empresa.contacto_terciario_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.cargo : null),
+                            contacto_terciario_telefono: empresa.contacto_terciario_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.telefono : null),
+                            contacto_terciario_email: empresa.contacto_terciario_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.email : null),
+                            contactos: (() => {
+                              // Si existe un array de contactos válido
+                              if (Array.isArray(empresa.contactos) && empresa.contactos.length > 0) {
+                                // Verificar si ya incluye el contacto principal
+                                const tienePrincipal = empresa.contactos.some((c: any) => c.tipo === 'Principal')
+                                if (tienePrincipal) {
+                                  return empresa.contactos
+                                }
+                              }
+                              
+                              // Construir array de contactos con el contacto principal
+                              const contactosArray: any[] = []
+                              
+                              // Agregar contacto principal desde campos individuales o desde el array
+                              const contactoPrincipalDesdeArray = Array.isArray(empresa.contactos) 
+                                ? empresa.contactos.find((c: any) => c.tipo === 'Principal')
+                                : null
+                              
+                              const contactoPrincipal = {
+                                tipo: 'Principal',
+                                nombre: empresa.contacto_principal_nombre || contactoPrincipalDesdeArray?.nombre || '',
+                                apellido: empresa.contacto_principal_apellido || contactoPrincipalDesdeArray?.apellido || '',
+                                cargo: empresa.contacto_principal_cargo || contactoPrincipalDesdeArray?.cargo || '',
+                                telefono: empresa.contacto_principal_telefono || contactoPrincipalDesdeArray?.telefono || empresa.telefono || '',
+                                email: empresa.contacto_principal_email || contactoPrincipalDesdeArray?.email || empresa.correo || empresa.email || '',
+                              }
+                              contactosArray.push(contactoPrincipal)
+                              
+                              // Agregar contactos secundarios si existen
+                              if (Array.isArray(empresa.contactos)) {
+                                const secundarios = empresa.contactos.filter((c: any) => c.tipo === 'Secundario')
+                                contactosArray.push(...secundarios)
+                              }
+                              
+                              // Agregar contactos terciarios si existen
+                              if (Array.isArray(empresa.contactos)) {
+                                const terciarios = empresa.contactos.filter((c: any) => c.tipo === 'Terciario')
+                                contactosArray.push(...terciarios)
+                              }
+                              
+                              return contactosArray
+                            })(),
+                            
+                            // Actividades de promoción
+                            actividades_promocion_internacional: empresa.actividades_promocion_internacional || empresa.feriasAsistidas || [],
+                            feriasAsistidas: empresa.actividades_promocion_internacional || empresa.feriasAsistidas || [],
+                            
+                            // Redes sociales - preservar valores (incluyendo null y undefined)
+                            instagram: empresa.instagram !== null && empresa.instagram !== undefined ? empresa.instagram : '',
+                            facebook: empresa.facebook !== null && empresa.facebook !== undefined ? empresa.facebook : '',
+                            linkedin: empresa.linkedin !== null && empresa.linkedin !== undefined ? empresa.linkedin : '',
+                            
+                            // Otros
+                            observaciones: empresa.observaciones,
+                            categoria_matriz: empresa.categoria_matriz,
+                            fecha_creacion: empresa.fecha_creacion,
+                            fecha_actualizacion: empresa.fecha_actualizacion,
+                            brochure: empresa.brochure || null,
+                          }
+                          
+                          setEmpresaData(normalizedEmpresa)
+                          setEditedData(normalizedEmpresa)
+                        } catch (error) {
+                          // Fallback: usar getCurrentUser si getEmpresaById falla
+                          console.warn('[Perfil] Error obteniendo empresa por ID, usando getCurrentUser:', error)
+                          const userData = await api.getCurrentUser()
+                          if (userData.empresa) {
+                            // Usar la misma lógica de normalización que en la carga inicial
+                            const empresa = userData.empresa
+                            const normalizedEmpresa: any = {
+                              // ... (misma normalización que arriba)
+                              id: empresa.id,
+                              razon_social: empresa.razon_social || empresa.razonSocial,
+                              razonSocial: empresa.razon_social || empresa.razonSocial,
+                              nombre_fantasia: empresa.nombre_fantasia || empresa.nombreFantasia,
+                              nombreFantasia: empresa.nombre_fantasia || empresa.nombreFantasia,
+                              cuit_cuil: empresa.cuit_cuil || empresa.cuit,
+                              cuit: empresa.cuit_cuil || empresa.cuit,
+                              tipo_sociedad: empresa.tipo_sociedad || empresa.tipoSociedad,
+                              tipoSociedad: empresa.tipo_sociedad || empresa.tipoSociedad,
+                              tipo_empresa: empresa.tipo_empresa || empresa.tipoEmpresa,
+                              tipo_empresa_valor: empresa.tipo_empresa_valor || empresa.tipoEmpresaValor,
+                              tipo_empresa_detalle: empresa.tipo_empresa_detalle || empresa.tipoEmpresaDetalle,
+                              estado: empresa.estado,
+                              direccion: empresa.direccion,
+                              codigo_postal: empresa.codigo_postal || empresa.codigoPostal,
+                              codigoPostal: empresa.codigo_postal || empresa.codigoPostal,
+                              direccion_comercial: empresa.direccion_comercial || empresa.direccionComercial,
+                              codigo_postal_comercial: empresa.codigo_postal_comercial || empresa.codigoPostalComercial,
+                              departamento: empresa.departamento,
+                              departamento_nombre: empresa.departamento_nombre || (typeof empresa.departamento === 'object' ? empresa.departamento.nombre : null),
+                              municipio: empresa.municipio,
+                              municipio_nombre: empresa.municipio_nombre || (typeof empresa.municipio === 'object' ? empresa.municipio.nombre : null),
+                              localidad: empresa.localidad,
+                              localidad_nombre: empresa.localidad_nombre || (typeof empresa.localidad === 'object' ? empresa.localidad.nombre : null),
+                              geolocalizacion: empresa.geolocalizacion,
+                              telefono: empresa.telefono,
+                              correo: empresa.correo || empresa.email,
+                              email: empresa.correo || empresa.email,
+                              sitioweb: empresa.sitioweb || empresa.paginaWeb,
+                              paginaWeb: empresa.sitioweb || empresa.paginaWeb,
+                              id_rubro: empresa.id_rubro || empresa.rubro,
+                              rubro: empresa.id_rubro || empresa.rubro,
+                              rubro_nombre: empresa.rubro_nombre || (typeof empresa.id_rubro === 'object' ? empresa.id_rubro.nombre : null) || empresa.rubro,
+                              id_subrubro: empresa.id_subrubro || empresa.subRubro,
+                              sub_rubro_nombre: empresa.sub_rubro_nombre || empresa.subRubroNombre,
+                              exporta: empresa.exporta,
+                              destinoexporta: empresa.destinoexporta || empresa.destino_exportacion || empresa.destinosExportacion,
+                              destinosExportacion: Array.isArray(empresa.destinosExportacion) 
+                                ? empresa.destinosExportacion 
+                                : (typeof empresa.destinoexporta === 'string'
+                                    ? empresa.destinoexporta.split(',').map((d: string) => d.trim()).filter((d: string) => d)
+                                    : []),
+                              importa: empresa.importa,
+                              interes_exportar: empresa.interes_exportar || empresa.interesExportar,
+                              certificadopyme: empresa.certificadopyme === true || empresa.certificadopyme === 'true' || empresa.certificadopyme === 'si',
+                              certificaciones: empresa.certificaciones
+                                ? (Array.isArray(empresa.certificaciones)
+                                    ? empresa.certificaciones
+                                    : typeof empresa.certificaciones === 'string'
+                                    ? empresa.certificaciones.split(',').map((c: string) => c.trim()).filter((c: string) => c)
+                                    : [])
+                                : [],
+                              promo2idiomas: empresa.promo2idiomas === true || empresa.promo2idiomas === 'true' || empresa.promo2idiomas === 'si',
+                              idiomas_trabaja: empresa.idiomas_trabaja || empresa.idiomasTrabajo,
+                              idiomasTrabajo: empresa.idiomas_trabaja || empresa.idiomasTrabajo,
+                              productos: (() => {
+                                const productos = empresa.productos || empresa.productos_empresa || empresa.productos_mixta || []
+                                if (Array.isArray(productos)) {
+                                  return productos.map((p: any) => ({
+                                    id: p.id,
+                                    nombre_producto: p.nombre_producto || p.nombre || '',
+                                    nombre: p.nombre_producto || p.nombre || '',
+                                    descripcion: p.descripcion || '',
+                                    capacidad_productiva: p.capacidad_productiva || p.capacidadProductiva || '',
+                                    unidad_medida: p.unidad_medida || p.unidadMedida || '',
+                                    periodo_capacidad: p.periodo_capacidad || p.periodoCapacidad || '',
+                                    posicion_arancelaria: p.posicion_arancelaria || null,
+                                    es_principal: p.es_principal || p.esPrincipal || false,
+                                  }))
+                                }
+                                return []
+                              })(),
+                              productos_mixta: empresa.productos_mixta || empresa.productos || [],
+                              servicios: (() => {
+                                const servicios = empresa.servicios || empresa.servicios_empresa || empresa.servicios_mixta || []
+                                if (Array.isArray(servicios)) {
+                                  return servicios.map((s: any) => ({
+                                    id: s.id,
+                                    nombre_servicio: s.nombre_servicio || s.nombre || '',
+                                    nombre: s.nombre_servicio || s.nombre || '',
+                                    descripcion: s.descripcion || '',
+                                    tipo_servicio: s.tipo_servicio || s.tipoServicio || '',
+                                    sector_atendido: s.sector_atendido || (Array.isArray(s.sectores) ? s.sectores.join(', ') : s.sectores) || '',
+                                    alcance_servicio: s.alcance_servicio || s.alcanceGeografico || s.alcance_geografico || '',
+                                    forma_contratacion: s.forma_contratacion || s.formaContratacion || '',
+                                    es_principal: s.es_principal || s.esPrincipal || false,
+                                  }))
+                                }
+                                return []
+                              })(),
+                              servicios_mixta: empresa.servicios_mixta || empresa.servicios || [],
+                              servicios_ofrecidos: empresa.servicios_ofrecidos || empresa.servicios || [],
+                              contacto_principal_nombre: empresa.contacto_principal_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.nombre : null),
+                              contacto_principal_apellido: empresa.contacto_principal_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.apellido : null),
+                              contacto_principal_cargo: empresa.contacto_principal_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.cargo : null),
+                              contacto_principal_telefono: empresa.contacto_principal_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.telefono : null) || empresa.telefono || null,
+                              contacto_principal_email: empresa.contacto_principal_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.email : null) || empresa.correo || empresa.email || null,
+                              // Contactos secundarios y terciarios - campos individuales
+                              contacto_secundario_nombre: empresa.contacto_secundario_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.nombre : null),
+                              contacto_secundario_apellido: empresa.contacto_secundario_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.apellido : null),
+                              contacto_secundario_cargo: empresa.contacto_secundario_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.cargo : null),
+                              contacto_secundario_telefono: empresa.contacto_secundario_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.telefono : null),
+                              contacto_secundario_email: empresa.contacto_secundario_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.email : null),
+                              contacto_terciario_nombre: empresa.contacto_terciario_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.nombre : null),
+                              contacto_terciario_apellido: empresa.contacto_terciario_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.apellido : null),
+                              contacto_terciario_cargo: empresa.contacto_terciario_cargo || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.cargo : null),
+                              contacto_terciario_telefono: empresa.contacto_terciario_telefono || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.telefono : null),
+                              contacto_terciario_email: empresa.contacto_terciario_email || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Terciario')?.email : null),
+                              contactos: (() => {
+                                if (Array.isArray(empresa.contactos) && empresa.contactos.length > 0) {
+                                  const tienePrincipal = empresa.contactos.some((c: any) => c.tipo === 'Principal')
+                                  if (tienePrincipal) {
+                                    return empresa.contactos
+                                  }
+                                }
+                                const contactosArray: any[] = []
+                                const contactoPrincipalDesdeArray = Array.isArray(empresa.contactos) 
+                                  ? empresa.contactos.find((c: any) => c.tipo === 'Principal')
+                                  : null
+                                const contactoPrincipal = {
+                                  tipo: 'Principal',
+                                  nombre: empresa.contacto_principal_nombre || contactoPrincipalDesdeArray?.nombre || '',
+                                  apellido: empresa.contacto_principal_apellido || contactoPrincipalDesdeArray?.apellido || '',
+                                  cargo: empresa.contacto_principal_cargo || contactoPrincipalDesdeArray?.cargo || '',
+                                  telefono: empresa.contacto_principal_telefono || contactoPrincipalDesdeArray?.telefono || empresa.telefono || '',
+                                  email: empresa.contacto_principal_email || contactoPrincipalDesdeArray?.email || empresa.correo || empresa.email || '',
+                                }
+                                contactosArray.push(contactoPrincipal)
+                                if (Array.isArray(empresa.contactos)) {
+                                  const secundarios = empresa.contactos.filter((c: any) => c.tipo === 'Secundario')
+                                  contactosArray.push(...secundarios)
+                                }
+                                if (Array.isArray(empresa.contactos)) {
+                                  const terciarios = empresa.contactos.filter((c: any) => c.tipo === 'Terciario')
+                                  contactosArray.push(...terciarios)
+                                }
+                                return contactosArray
+                              })(),
+                              actividades_promocion_internacional: empresa.actividades_promocion_internacional || empresa.feriasAsistidas || [],
+                              feriasAsistidas: empresa.actividades_promocion_internacional || empresa.feriasAsistidas || [],
+                              // Redes sociales - preservar valores (incluyendo null y undefined)
+                              instagram: empresa.instagram !== null && empresa.instagram !== undefined ? empresa.instagram : '',
+                              facebook: empresa.facebook !== null && empresa.facebook !== undefined ? empresa.facebook : '',
+                              linkedin: empresa.linkedin !== null && empresa.linkedin !== undefined ? empresa.linkedin : '',
+                              observaciones: empresa.observaciones,
+                              categoria_matriz: empresa.categoria_matriz,
+                              fecha_creacion: empresa.fecha_creacion,
+                              fecha_actualizacion: empresa.fecha_actualizacion,
+                              brochure: empresa.brochure || null,
+                            }
+                            setEmpresaData(normalizedEmpresa)
+                            setEditedData(normalizedEmpresa)
+                          }
                         }
                         
                         setIsEditing(false)
-                        setEditedData(null)
                         toast({
                           title: "Éxito",
                           description: "Perfil actualizado exitosamente",
@@ -975,103 +1744,109 @@ export default function PerfilEmpresaPage() {
                     }}
                     variant="outline"
                     disabled={isSaving}
-                    className="bg-green-500/20 border-green-500/50 text-white hover:bg-green-500/30 text-sm md:text-base disabled:opacity-50"
+                    className="bg-green-500/20 border-green-500/50 text-white hover:bg-green-500/30 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 px-2 sm:px-3 md:px-4 disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4 mr-2" />
-                    {isSaving ? 'Guardando...' : 'Guardar'}
+                    <Save className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    {isSaving ? <span className="hidden xs:inline">Guardando...</span> : <span>Guardar</span>}
                   </Button>
                 </>
               )}
               <Button
                 onClick={logout}
                 variant="outline"
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-sm md:text-base"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 px-2 sm:px-3 md:px-4"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Cerrar Sesión
+                <LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden xs:inline">Cerrar Sesión</span>
+                <span className="xs:hidden">Salir</span>
               </Button>
             </div>
           </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 md:py-8">
+      <main className="w-full max-w-full px-2 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8 overflow-x-hidden">
         {/* Company Header */}
-        <Card className="p-6 md:p-8 mb-6 bg-gradient-to-r from-[#3259B5] to-[#629BD2] text-white">
+        <Card className="p-4 sm:p-6 md:p-8 mb-4 sm:mb-6 bg-gradient-to-r from-[#3259B5] to-[#629BD2] text-white w-full max-w-full overflow-hidden">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold mb-2">{empresaData?.razonSocial || 'Empresa'}</h2>
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2 break-words">{empresaData?.razonSocial || 'Empresa'}</h2>
               {empresaData.nombreFantasia && (
-                <p className="text-sm md:text-base text-white/80 mb-2">Nombre de Fantasía: {empresaData.nombreFantasia}</p>
+                <p className="text-xs sm:text-sm md:text-base text-white/80 mb-2 break-words">Nombre de Fantasía: {empresaData.nombreFantasia}</p>
               )}
-              <p className="text-sm md:text-base text-white/90 mb-4">CUIT: {empresaData.cuit || 'N/A'}</p>
+              <p className="text-xs sm:text-sm md:text-base text-white/90 mb-4 break-words">CUIT: {empresaData.cuit || 'N/A'}</p>
             </div>
           </div>
         </Card>
 
-        <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="inline-flex w-full sm:w-auto overflow-x-auto gap-2 flex-nowrap">
-            <TabsTrigger value="general" className="flex-shrink-0">Información General</TabsTrigger>
-            <TabsTrigger value="ubicacion" className="flex-shrink-0">Ubicación</TabsTrigger>
-            <TabsTrigger value="comercial" className="flex-shrink-0">Actividad Comercial</TabsTrigger>
-            <TabsTrigger value="productos-servicios" className="flex-shrink-0">Productos/Servicios</TabsTrigger>
-            <TabsTrigger value="certificaciones" className="flex-shrink-0">Certificaciones</TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="general" className="w-full max-w-full">
+          <div className="mb-4 sm:mb-6 w-full max-w-full">
+            <TabsList className="flex flex-col sm:flex-row w-full max-w-full h-auto sm:h-10 gap-2 sm:gap-1 p-2 sm:p-1 bg-muted/50 rounded-lg">
+              <TabsTrigger value="general" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">General</TabsTrigger>
+              <TabsTrigger value="ubicacion" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Ubicación</TabsTrigger>
+              <TabsTrigger value="comercial" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Comercial</TabsTrigger>
+              <TabsTrigger value="productos-servicios" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Productos/Servicios</TabsTrigger>
+              <TabsTrigger value="certificaciones" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Certificaciones</TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value="general" className="space-y-6">
-            <Card>
+          <TabsContent value="general" className="space-y-4 sm:space-y-6 w-full max-w-full mt-0">
+            <Card className="w-full max-w-full overflow-hidden">
               <CardHeader>
-                <CardTitle className="text-[#222A59]">Datos de la Empresa</CardTitle>
+                <CardTitle className="text-[#222A59] text-base sm:text-lg md:text-xl">Datos de la Empresa</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 w-full max-w-full overflow-hidden">
                 {/* Razón Social */}
-                <div>
+                <div className="min-w-0">
                   <Label>Razón Social</Label>
                   {isEditing ? (
                     <Input
                       value={editedData?.razon_social || editedData?.razonSocial || ''}
                       onChange={(e) => setEditedData(editedData ? { ...editedData, razon_social: e.target.value, razonSocial: e.target.value } : null)}
+                      className="w-full max-w-full"
                     />
                   ) : (
-                    <p className="mt-1 font-semibold">{empresaData?.razon_social || empresaData?.razonSocial}</p>
+                    <p className="mt-1 font-semibold break-words overflow-wrap-anywhere">{empresaData?.razon_social || empresaData?.razonSocial}</p>
                   )}
                 </div>
 
                 {/* Nombre de Fantasía */}
-                <div>
+                <div className="min-w-0">
                   <Label>Nombre de Fantasía</Label>
                   {isEditing ? (
                     <Input
                       value={editedData?.nombre_fantasia || editedData?.nombreFantasia || ''}
                       onChange={(e) => setEditedData(editedData ? { ...editedData, nombre_fantasia: e.target.value, nombreFantasia: e.target.value } : null)}
+                      className="w-full max-w-full"
                     />
                   ) : (
-                    <p className="mt-1 font-semibold">{empresaData?.nombre_fantasia || empresaData?.nombreFantasia || 'N/A'}</p>
+                    <p className="mt-1 font-semibold break-words overflow-wrap-anywhere">{empresaData?.nombre_fantasia || empresaData?.nombreFantasia || 'N/A'}</p>
                   )}
                 </div>
 
                 {/* CUIT */}
-                <div>
+                <div className="min-w-0">
                   <Label>CUIT</Label>
                   {isEditing ? (
                     <Input
                       value={editedData?.cuit_cuil || editedData?.cuit || ''}
                       onChange={(e) => setEditedData(editedData ? { ...editedData, cuit_cuil: e.target.value, cuit: e.target.value } : null)}
+                      className="w-full max-w-full"
                     />
                   ) : (
-                    <p className="mt-1 font-semibold">{empresaData?.cuit_cuil || empresaData?.cuit}</p>
+                    <p className="mt-1 font-semibold break-words overflow-wrap-anywhere">{empresaData?.cuit_cuil || empresaData?.cuit}</p>
                   )}
                 </div>
 
                 {/* Tipo de Sociedad */}
-                <div>
+                <div className="min-w-0">
                   <Label>Tipo de Sociedad</Label>
                   {isEditing ? (
                     <Select
                       value={editedData?.tipo_sociedad || editedData?.tipoSociedad || ''}
                       onValueChange={(value) => setEditedData(editedData ? { ...editedData, tipo_sociedad: value, tipoSociedad: value } : null)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full max-w-full">
                         <SelectValue placeholder="Selecciona" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1091,7 +1866,7 @@ export default function PerfilEmpresaPage() {
                 </div>
 
                 {/* Rubro */}
-                <div>
+                <div className="min-w-0 w-full">
                   <Label>Rubro</Label>
                   {isEditing ? (
                     <Select
@@ -1127,7 +1902,7 @@ export default function PerfilEmpresaPage() {
                 </div>
 
                 {/* SubRubro */}
-                <div>
+                <div className="min-w-0 w-full">
                   <Label>SubRubro</Label>
                   {isEditing ? (
                     <Select
@@ -1180,7 +1955,7 @@ export default function PerfilEmpresaPage() {
                 </div>
 
                 {/* Teléfono */}
-                <div>
+                <div className="min-w-0 w-full">
                   <Label>Teléfono</Label>
                   {isEditing ? (
                     <Input
@@ -1193,7 +1968,7 @@ export default function PerfilEmpresaPage() {
                 </div>
 
                 {/* Email */}
-                <div>
+                <div className="min-w-0 w-full">
                   <Label>Email</Label>
                   {isEditing ? (
                     <Input
@@ -1207,7 +1982,7 @@ export default function PerfilEmpresaPage() {
                 </div>
 
                 {/* Sitio Web */}
-                <div>
+                <div className="min-w-0 w-full">
                   <Label>Sitio Web</Label>
                   {isEditing ? (
                     <Input
@@ -1229,10 +2004,13 @@ export default function PerfilEmpresaPage() {
                 </div>
 
                 {/* Redes Sociales */}
-                {(empresaData?.instagram || empresaData?.facebook || empresaData?.linkedin || isEditing) && (
+                {((empresaData?.instagram && empresaData.instagram.trim() !== '') || 
+                  (empresaData?.facebook && empresaData.facebook.trim() !== '') || 
+                  (empresaData?.linkedin && empresaData.linkedin.trim() !== '') || 
+                  isEditing) && (
                   <div className="md:col-span-2">
                     <Label>Redes Sociales</Label>
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-full">
                       <div>
                         <span className="text-sm text-muted-foreground">Instagram</span>
                         {isEditing ? (
@@ -1298,81 +2076,122 @@ export default function PerfilEmpresaPage() {
                 )}
 
                 {/* Contacto Principal */}
-                {(empresaData?.contacto_principal_nombre || empresaData?.contacto_principal_cargo || empresaData?.contacto_principal_telefono || empresaData?.contacto_principal_email || 
-                  (empresaData?.contactos && empresaData.contactos.length > 0) || isEditing) && (
+                {(empresaData?.contacto_principal_nombre || empresaData?.contacto_principal_apellido || empresaData?.contacto_principal_cargo || empresaData?.contacto_principal_telefono || empresaData?.contacto_principal_email || isEditing) && (
                   <div className="md:col-span-2">
                     <Label>Contacto Principal</Label>
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
-                      {(() => {
-                        const contactoPrincipal = empresaData?.contactos?.find((c: any) => c.tipo === 'Principal') || {
-                          nombre: empresaData?.contacto_principal_nombre || '',
-                          cargo: empresaData?.contacto_principal_cargo || '',
-                          telefono: empresaData?.contacto_principal_telefono || '',
-                          email: empresaData?.contacto_principal_email || empresaData?.correo || empresaData?.email || ''
-                        }
-                        return (
-                          <>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg w-full max-w-full">
+                      <div>
+                        <span className="text-sm text-muted-foreground">Nombre</span>
+                        {isEditing ? (
+                          <Input
+                            value={editedData?.contacto_principal_nombre || ''}
+                            onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_nombre: e.target.value } : null)}
+                          />
+                        ) : (
+                          <p className="mt-1 font-semibold">{empresaData?.contacto_principal_nombre || 'N/A'}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Apellido</span>
+                        {isEditing ? (
+                          <Input
+                            value={editedData?.contacto_principal_apellido || ''}
+                            onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_apellido: e.target.value } : null)}
+                          />
+                        ) : (
+                          <p className="mt-1 font-semibold">{empresaData?.contacto_principal_apellido || 'N/A'}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Cargo</span>
+                        {isEditing ? (
+                          <Input
+                            value={editedData?.contacto_principal_cargo || ''}
+                            onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_cargo: e.target.value } : null)}
+                          />
+                        ) : (
+                          <p className="mt-1 font-semibold">{empresaData?.contacto_principal_cargo || 'N/A'}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Teléfono</span>
+                        {isEditing ? (
+                          <Input
+                            value={editedData?.contacto_principal_telefono || ''}
+                            onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_telefono: e.target.value } : null)}
+                          />
+                        ) : (
+                          <p className="mt-1 font-semibold">{empresaData?.contacto_principal_telefono || 'N/A'}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Email</span>
+                        {isEditing ? (
+                          <Input
+                            type="email"
+                            value={editedData?.contacto_principal_email || ''}
+                            onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_email: e.target.value } : null)}
+                          />
+                        ) : (
+                          <p className="mt-1 font-semibold">{empresaData?.contacto_principal_email || 'N/A'}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Contactos Secundarios y Terciarios */}
+                {(empresaData?.contacto_secundario_nombre || empresaData?.contacto_terciario_nombre || isEditing) && (
+                  <div className="md:col-span-2">
+                    <Label>Contactos Adicionales</Label>
+                    <div className="mt-2 space-y-4">
+                      {/* Contacto Secundario */}
+                      {(empresaData?.contacto_secundario_nombre || isEditing) && (
+                        <div className="p-4 bg-muted/30 rounded-lg">
+                          <h4 className="font-semibold text-sm mb-3">Contacto Secundario</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <span className="text-sm text-muted-foreground">Nombre</span>
                               {isEditing ? (
                                 <Input
-                                  value={editedData?.contactos?.find((c: any) => c.tipo === 'Principal')?.nombre || contactoPrincipal.nombre || ''}
-                                  onChange={(e) => {
-                                    const contactos = editedData?.contactos || []
-                                    const principalIndex = contactos.findIndex((c: any) => c.tipo === 'Principal')
-                                    if (principalIndex >= 0) {
-                                      const newContactos = [...contactos]
-                                      newContactos[principalIndex] = { ...newContactos[principalIndex], nombre: e.target.value }
-                                      setEditedData({ ...editedData, contactos: newContactos })
-                                    } else {
-                                      setEditedData({ ...editedData, contactos: [...contactos, { tipo: 'Principal', nombre: e.target.value, cargo: '', telefono: '', email: '' }] })
-                                    }
-                                  }}
+                                  value={editedData?.contacto_secundario_nombre || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_nombre: e.target.value } : null)}
                                 />
                               ) : (
-                                <p className="mt-1 font-semibold">{contactoPrincipal.nombre || 'N/A'}</p>
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_secundario_nombre || 'N/A'}</p>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm text-muted-foreground">Apellido</span>
+                              {isEditing ? (
+                                <Input
+                                  value={editedData?.contacto_secundario_apellido || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_apellido: e.target.value } : null)}
+                                />
+                              ) : (
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_secundario_apellido || 'N/A'}</p>
                               )}
                             </div>
                             <div>
                               <span className="text-sm text-muted-foreground">Cargo</span>
                               {isEditing ? (
                                 <Input
-                                  value={editedData?.contactos?.find((c: any) => c.tipo === 'Principal')?.cargo || contactoPrincipal.cargo || ''}
-                                  onChange={(e) => {
-                                    const contactos = editedData?.contactos || []
-                                    const principalIndex = contactos.findIndex((c: any) => c.tipo === 'Principal')
-                                    if (principalIndex >= 0) {
-                                      const newContactos = [...contactos]
-                                      newContactos[principalIndex] = { ...newContactos[principalIndex], cargo: e.target.value }
-                                      setEditedData({ ...editedData, contactos: newContactos })
-                                    } else {
-                                      setEditedData({ ...editedData, contactos: [...contactos, { tipo: 'Principal', nombre: '', cargo: e.target.value, telefono: '', email: '' }] })
-                                    }
-                                  }}
+                                  value={editedData?.contacto_secundario_cargo || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_cargo: e.target.value } : null)}
                                 />
                               ) : (
-                                <p className="mt-1 font-semibold">{contactoPrincipal.cargo || 'N/A'}</p>
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_secundario_cargo || 'N/A'}</p>
                               )}
                             </div>
                             <div>
                               <span className="text-sm text-muted-foreground">Teléfono</span>
                               {isEditing ? (
                                 <Input
-                                  value={editedData?.contactos?.find((c: any) => c.tipo === 'Principal')?.telefono || contactoPrincipal.telefono || ''}
-                                  onChange={(e) => {
-                                    const contactos = editedData?.contactos || []
-                                    const principalIndex = contactos.findIndex((c: any) => c.tipo === 'Principal')
-                                    if (principalIndex >= 0) {
-                                      const newContactos = [...contactos]
-                                      newContactos[principalIndex] = { ...newContactos[principalIndex], telefono: e.target.value }
-                                      setEditedData({ ...editedData, contactos: newContactos })
-                                    } else {
-                                      setEditedData({ ...editedData, contactos: [...contactos, { tipo: 'Principal', nombre: '', cargo: '', telefono: e.target.value, email: '' }] })
-                                    }
-                                  }}
+                                  value={editedData?.contacto_secundario_telefono || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_telefono: e.target.value } : null)}
                                 />
                               ) : (
-                                <p className="mt-1 font-semibold">{contactoPrincipal.telefono || 'N/A'}</p>
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_secundario_telefono || 'N/A'}</p>
                               )}
                             </div>
                             <div>
@@ -1380,27 +2199,81 @@ export default function PerfilEmpresaPage() {
                               {isEditing ? (
                                 <Input
                                   type="email"
-                                  value={editedData?.contactos?.find((c: any) => c.tipo === 'Principal')?.email || contactoPrincipal.email || ''}
-                                  onChange={(e) => {
-                                    const contactos = editedData?.contactos || []
-                                    const principalIndex = contactos.findIndex((c: any) => c.tipo === 'Principal')
-                                    if (principalIndex >= 0) {
-                                      const newContactos = [...contactos]
-                                      newContactos[principalIndex] = { ...newContactos[principalIndex], email: e.target.value }
-                                      setEditedData({ ...editedData, contactos: newContactos })
-                                    } else {
-                                      setEditedData({ ...editedData, contactos: [...contactos, { tipo: 'Principal', nombre: '', cargo: '', telefono: '', email: e.target.value }] })
-                                    }
-                                  }}
-                                  disabled
+                                  value={editedData?.contacto_secundario_email || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_email: e.target.value } : null)}
                                 />
                               ) : (
-                                <p className="mt-1 font-semibold">{contactoPrincipal.email || 'N/A'}</p>
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_secundario_email || 'N/A'}</p>
                               )}
                             </div>
-                          </>
-                        )
-                      })()}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Contacto Terciario */}
+                      {(empresaData?.contacto_terciario_nombre || isEditing) && (
+                        <div className="p-4 bg-muted/30 rounded-lg">
+                          <h4 className="font-semibold text-sm mb-3">Contacto Terciario</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <span className="text-sm text-muted-foreground">Nombre</span>
+                              {isEditing ? (
+                                <Input
+                                  value={editedData?.contacto_terciario_nombre || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_nombre: e.target.value } : null)}
+                                />
+                              ) : (
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_terciario_nombre || 'N/A'}</p>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm text-muted-foreground">Apellido</span>
+                              {isEditing ? (
+                                <Input
+                                  value={editedData?.contacto_terciario_apellido || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_apellido: e.target.value } : null)}
+                                />
+                              ) : (
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_terciario_apellido || 'N/A'}</p>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm text-muted-foreground">Cargo</span>
+                              {isEditing ? (
+                                <Input
+                                  value={editedData?.contacto_terciario_cargo || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_cargo: e.target.value } : null)}
+                                />
+                              ) : (
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_terciario_cargo || 'N/A'}</p>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm text-muted-foreground">Teléfono</span>
+                              {isEditing ? (
+                                <Input
+                                  value={editedData?.contacto_terciario_telefono || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_telefono: e.target.value } : null)}
+                                />
+                              ) : (
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_terciario_telefono || 'N/A'}</p>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm text-muted-foreground">Email</span>
+                              {isEditing ? (
+                                <Input
+                                  type="email"
+                                  value={editedData?.contacto_terciario_email || ''}
+                                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_email: e.target.value } : null)}
+                                />
+                              ) : (
+                                <p className="mt-1 font-semibold">{empresaData?.contacto_terciario_email || 'N/A'}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1408,13 +2281,13 @@ export default function PerfilEmpresaPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="ubicacion" className="space-y-6">
+          <TabsContent value="ubicacion" className="space-y-6 w-full max-w-full mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="text-[#222A59]">Ubicación</CardTitle>
                 <CardDescription>Dirección, código postal, departamento, municipio, localidad y geolocalización</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 w-full max-w-full overflow-hidden p-4 sm:p-6">
                 {/* Domicilio del Establecimiento Productivo */}
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Domicilio del Establecimiento Productivo</h3>
@@ -1425,7 +2298,11 @@ export default function PerfilEmpresaPage() {
                       {isEditing ? (
                         <Input
                           value={editedData?.direccion || ''}
-                          onChange={(e) => setEditedData(editedData ? { ...editedData, direccion: e.target.value } : null)}
+                          onChange={(e) => setEditedData(editedData ? { 
+                            ...editedData, 
+                            direccion: e.target.value,
+                            geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
+                          } : null)}
                           placeholder="Calle y número"
                         />
                       ) : (
@@ -1439,7 +2316,12 @@ export default function PerfilEmpresaPage() {
                       {isEditing ? (
                         <Input
                           value={editedData?.codigo_postal || editedData?.codigoPostal || ''}
-                          onChange={(e) => setEditedData(editedData ? { ...editedData, codigo_postal: e.target.value, codigoPostal: e.target.value } : null)}
+                          onChange={(e) => setEditedData(editedData ? { 
+                            ...editedData, 
+                            codigo_postal: e.target.value, 
+                            codigoPostal: e.target.value,
+                            geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
+                          } : null)}
                           placeholder="Ej: 4700"
                         />
                       ) : (
@@ -1458,7 +2340,8 @@ export default function PerfilEmpresaPage() {
                               ...editedData, 
                               departamento: parseInt(value),
                               municipio: null,
-                              localidad: null
+                              localidad: null,
+                              geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
                             } : null)
                             loadMunicipiosData(parseInt(value))
                             setMunicipios([])
@@ -1500,7 +2383,8 @@ export default function PerfilEmpresaPage() {
                             setEditedData(editedData ? { 
                               ...editedData, 
                               municipio: parseInt(value),
-                              localidad: null
+                              localidad: null,
+                              geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
                             } : null)
                             loadLocalidadesData(parseInt(value))
                             setLocalidades([])
@@ -1543,7 +2427,11 @@ export default function PerfilEmpresaPage() {
                         <Select
                           value={editedData?.localidad ? String(typeof editedData.localidad === 'object' ? editedData.localidad.id : editedData.localidad) : ''}
                           onValueChange={(value) => {
-                            setEditedData(editedData ? { ...editedData, localidad: parseInt(value) } : null)
+                            setEditedData(editedData ? { 
+                              ...editedData, 
+                              localidad: parseInt(value),
+                              geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
+                            } : null)
                           }}
                           disabled={loadingGeo || !editedData?.municipio || localidades.length === 0}
                         >
@@ -1577,63 +2465,93 @@ export default function PerfilEmpresaPage() {
                     </div>
 
                     {/* Geolocalización / Mapa */}
-                    {empresaData?.geolocalizacion && (() => {
-                      const geoString = empresaData.geolocalizacion
-                      let coordinates: { lat: number; lng: number } | null = null
-                      if (typeof geoString === 'string' && geoString.trim()) {
+                    {(() => {
+                      // Función auxiliar para obtener coordenadas válidas
+                      const getValidCoordinates = (geoData: any): string | null => {
+                        if (!geoData) return null
+                        
+                        if (typeof geoData === 'string' && geoData.trim()) {
+                          try {
+                            const parts = geoData.split(',').map(v => parseFloat(v.trim()))
+                            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                              return `${parts[0]},${parts[1]}`
+                            }
+                          } catch (error) {
+                            console.error('Error parsing geolocalizacion:', error)
+                          }
+                        } else if (typeof geoData === 'object' && geoData.lat != null && geoData.lng != null) {
+                          const lat = Number(geoData.lat)
+                          const lng = Number(geoData.lng)
+                          if (!isNaN(lat) && !isNaN(lng)) {
+                            return `${lat},${lng}`
+                          }
+                        }
+                        return null
+                      }
+
+                      // Función auxiliar para convertir coordenadas string a objeto
+                      const parseCoordinates = (geoString: string | null): { lat: number; lng: number } | null => {
+                        if (!geoString) return null
                         try {
                           const parts = geoString.split(',').map(v => parseFloat(v.trim()))
                           if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                            coordinates = { lat: parts[0], lng: parts[1] }
+                            return { lat: parts[0], lng: parts[1] }
                           }
                         } catch (error) {
-                          console.error('Error parsing geolocalizacion:', error)
+                          console.error('Error parsing coordinates:', error)
                         }
-                      } else if (typeof geoString === 'object' && geoString.lat && geoString.lng) {
-                        coordinates = { lat: geoString.lat, lng: geoString.lng }
+                        return null
                       }
-                      return coordinates ? (
-                        <div className="md:col-span-2">
-                          <Label>Ubicación en el Mapa</Label>
-                          <div className="mt-2 relative z-0">
-                            {isEditing ? (
+
+                      // Si estamos editando, siempre mostrar el LocationPicker
+                      if (isEditing) {
+                        // Obtener coordenadas para mostrar en el LocationPicker
+                        const coordString = getValidCoordinates(editedData?.geolocalizacion) || 
+                                          getValidCoordinates(empresaData?.geolocalizacion) || 
+                                          ''
+
+                        return (
+                          <div className="md:col-span-2">
+                            <Label>Ubicación en el Mapa</Label>
+                            <div className="mt-2 relative z-0">
                               <LocationPicker
-                                value={(() => {
-                                  if (editedData?.geolocalizacion && 
-                                      editedData.geolocalizacion.lat !== null && 
-                                      editedData.geolocalizacion.lat !== undefined &&
-                                      editedData.geolocalizacion.lng !== null && 
-                                      editedData.geolocalizacion.lng !== undefined) {
-                                    return `${editedData.geolocalizacion.lat},${editedData.geolocalizacion.lng}`
-                                  }
-                                  if (empresaData?.geolocalizacion && 
-                                      empresaData.geolocalizacion.lat !== null && 
-                                      empresaData.geolocalizacion.lat !== undefined &&
-                                      empresaData.geolocalizacion.lng !== null && 
-                                      empresaData.geolocalizacion.lng !== undefined) {
-                                    return `${empresaData.geolocalizacion.lat},${empresaData.geolocalizacion.lng}`
-                                  }
-                                  return ''
-                                })()}
+                                value={coordString}
                                 onChange={(coords) => {
                                   const [lat, lng] = coords.split(',').map((v: string) => parseFloat(v.trim()))
                                   if (!isNaN(lat) && !isNaN(lng)) {
-                                    setEditedData({ 
+                                    setEditedData(editedData ? { 
                                       ...editedData, 
                                       geolocalizacion: { lat, lng } 
-                                    })
+                                    } : null)
                                   }
                                 }}
                               />
-                            ) : (
-                              <CompanyMap
-                                coordinates={coordinates}
-                                address={empresaData?.direccion || empresaData?.razon_social || empresaData?.razonSocial}
-                              />
-                            )}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Puedes hacer clic en el mapa para seleccionar la ubicación de tu empresa
+                            </p>
+                          </div>
+                        )
+                      }
+                      
+                      // Si no estamos editando, mostrar el mapa solo si hay coordenadas válidas
+                      const coordString = getValidCoordinates(empresaData?.geolocalizacion)
+                      if (!coordString) return null
+                      
+                      const coordinates = parseCoordinates(coordString)
+                      if (!coordinates) return null
+                      
+                      return (
+                        <div className="md:col-span-2">
+                          <Label>Ubicación en el Mapa</Label>
+                          <div className="mt-2 relative z-0">
+                            <CompanyMap
+                              coordinates={coordinates}
+                              address={empresaData?.direccion || empresaData?.razon_social || empresaData?.razonSocial}
+                            />
                           </div>
                         </div>
-                      ) : null
+                      )
                     })()}
                   </div>
                 </div>
@@ -1648,7 +2566,12 @@ export default function PerfilEmpresaPage() {
                       {isEditing ? (
                         <Input
                           value={editedData?.direccion_comercial || editedData?.direccionComercial || ''}
-                          onChange={(e) => setEditedData(editedData ? { ...editedData, direccion_comercial: e.target.value, direccionComercial: e.target.value } : null)}
+                          onChange={(e) => setEditedData(editedData ? { 
+                            ...editedData, 
+                            direccion_comercial: e.target.value, 
+                            direccionComercial: e.target.value,
+                            geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
+                          } : null)}
                           placeholder="Calle y número (opcional)"
                         />
                       ) : (
@@ -1662,7 +2585,12 @@ export default function PerfilEmpresaPage() {
                       {isEditing ? (
                         <Input
                           value={editedData?.codigo_postal_comercial || editedData?.codigoPostalComercial || ''}
-                          onChange={(e) => setEditedData(editedData ? { ...editedData, codigo_postal_comercial: e.target.value, codigoPostalComercial: e.target.value } : null)}
+                          onChange={(e) => setEditedData(editedData ? { 
+                            ...editedData, 
+                            codigo_postal_comercial: e.target.value, 
+                            codigoPostalComercial: e.target.value,
+                            geolocalizacion: editedData.geolocalizacion || empresaData?.geolocalizacion || null
+                          } : null)}
                           placeholder="Ej: 4700 (opcional)"
                         />
                       ) : (
@@ -1675,19 +2603,19 @@ export default function PerfilEmpresaPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="comercial" className="space-y-6">
+          <TabsContent value="comercial" className="space-y-6 w-full max-w-full mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="text-[#222A59]">Actividad Comercial</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 w-full max-w-full overflow-hidden p-4 sm:p-6">
                 {/* Datos de exportación/importación */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <Label>¿Exporta?</Label>
                     {isEditing ? (
                       <Select
-                        value={empresaData?.exporta || ''}
+                        value={editedData?.exporta || empresaData?.exporta || ''}
                         onValueChange={(value) => setEditedData(editedData ? { ...editedData, exporta: value } : null)}
                       >
                         <SelectTrigger>
@@ -1705,12 +2633,12 @@ export default function PerfilEmpresaPage() {
                   </div>
 
                   {/* Mostrar "Interés en Exportar" solo si NO exporta */}
-                  {(empresaData?.exporta === "No, solo ventas nacionales" || empresaData?.exporta === "No") && (
+                  {((editedData?.exporta || empresaData?.exporta) === "No, solo ventas nacionales" || (editedData?.exporta || empresaData?.exporta) === "No") && (
                     <div>
                       <Label>¿Interés en Exportar?</Label>
                       {isEditing ? (
                         <Select
-                          value={empresaData?.interes_exportar ? 'si' : 'no'}
+                          value={(editedData?.interes_exportar === true || editedData?.interes_exportar === 'true' || editedData?.interes_exportar === 'si') ? 'si' : 'no'}
                           onValueChange={(value) => setEditedData(editedData ? { 
                             ...editedData, 
                             interes_exportar: value === 'si' 
@@ -1739,8 +2667,12 @@ export default function PerfilEmpresaPage() {
                     <Label>Destino de Exportación</Label>
                     {isEditing ? (
                       <Textarea
-                        value={empresaData?.destinoexporta || (Array.isArray(empresaData?.destinosExportacion) ? empresaData.destinosExportacion.join(', ') : '') || ''}
-                        onChange={(e) => setEditedData(editedData ? { ...editedData, destinoexporta: e.target.value, destinosExportacion: e.target.value.split(',').map((d: string) => d.trim()).filter((d: string) => d) } : null)}
+                        value={editedData?.destinoexporta || editedData?.destinosExportacion?.join(', ') || empresaData?.destinoexporta || (Array.isArray(empresaData?.destinosExportacion) ? empresaData.destinosExportacion.join(', ') : '') || ''}
+                        onChange={(e) => setEditedData(editedData ? { 
+                          ...editedData, 
+                          destinoexporta: e.target.value, 
+                          destinosExportacion: e.target.value.split(',').map((d: string) => d.trim()).filter((d: string) => d) 
+                        } : null)}
                         rows={3}
                       />
                     ) : (
@@ -1751,13 +2683,31 @@ export default function PerfilEmpresaPage() {
                   </div>
                   <div>
                     <Label>¿Importa?</Label>
-                    <p className="mt-1 font-semibold">{empresaData?.importa ? 'Sí' : 'No'}</p>
+                    {isEditing ? (
+                      <Select
+                        value={(editedData?.importa === true || editedData?.importa === 'true' || editedData?.importa === 'si') ? 'si' : 'no'}
+                        onValueChange={(value) => {
+                          const importaValue = value === 'si'
+                          setEditedData(editedData ? { ...editedData, importa: importaValue } : null)
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="si">Sí</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="mt-1 font-semibold">{empresaData?.importa ? 'Sí' : 'No'}</p>
+                    )}
                   </div>
                   <div>
                     <Label>Idiomas de Trabajo</Label>
                     {isEditing ? (
                       <Input
-                        value={empresaData?.idiomas_trabaja || empresaData?.idiomasTrabajo || ''}
+                        value={editedData?.idiomas_trabaja || editedData?.idiomasTrabajo || empresaData?.idiomas_trabaja || empresaData?.idiomasTrabajo || ''}
                         onChange={(e) => setEditedData(editedData ? { ...editedData, idiomas_trabaja: e.target.value, idiomasTrabajo: e.target.value } : null)}
                       />
                     ) : (
@@ -1777,89 +2727,188 @@ export default function PerfilEmpresaPage() {
                     </p>
                   </div>
 
-                  {empresaData?.actividades_promocion_internacional && 
-                   Array.isArray(empresaData.actividades_promocion_internacional) && 
-                   empresaData.actividades_promocion_internacional.length > 0 ? (
-                    <div className="space-y-3">
-                      {empresaData.actividades_promocion_internacional.map((actividad: any, index: number) => (
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      {actividadesPromocion.map((actividad) => (
                         <div
-                          key={index}
-                          className="p-4 border border-[#3259B5]/30 rounded-lg bg-gradient-to-br from-[#3259B5]/5 to-transparent hover:border-[#3259B5]/50 transition-colors"
+                          key={actividad.id}
+                          className="space-y-3 p-4 border border-[#3259B5]/30 rounded-lg bg-[#3259B5]/5"
                         >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              {actividad.tipo === 'feria' && (
-                                <div className="flex items-center gap-2 text-[#3259B5]">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                  </svg>
-                                  <span className="font-semibold text-sm">Feria Internacional</span>
-                                </div>
-                              )}
-                              {actividad.tipo === 'mision' && (
-                                <div className="flex items-center gap-2 text-[#66A29C]">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <span className="font-semibold text-sm">Misión Comercial</span>
-                                </div>
-                              )}
-                              {actividad.tipo === 'ronda' && (
-                                <div className="flex items-center gap-2 text-[#807DA1]">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                  </svg>
-                                  <span className="font-semibold text-sm">Ronda de Negocios</span>
-                                </div>
-                              )}
-                            </div>
-                            <span className="px-3 py-1 bg-[#222A59] text-white text-xs font-semibold rounded-full">
-                              {actividad.anio || 'N/A'}
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-[#222A59] text-sm">
+                              {actividad.tipo === "feria"
+                                ? "Feria"
+                                : actividad.tipo === "mision"
+                                  ? "Misión Comercial"
+                                  : "Ronda de Negocios"}
                             </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => eliminarActividad(actividad.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
                           </div>
-                          
-                          <div className="space-y-2">
-                            <div className="flex items-start gap-2">
-                              <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              <div className="flex-1">
-                                <p className="text-xs text-gray-500">Lugar</p>
-                                <p className="font-medium text-[#222A59]">{actividad.lugar || 'No especificado'}</p>
-                              </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <Label>Lugar</Label>
+                              <Input
+                                value={actividad.lugar}
+                                onChange={(e) => actualizarActividad(actividad.id, "lugar", toUpperCase(e.target.value))}
+                                placeholder="CIUDAD, PAÍS"
+                                className="uppercase"
+                              />
                             </div>
-                            
-                            {actividad.observaciones && (
-                              <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200">
-                                <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                                </svg>
-                                <div className="flex-1">
-                                  <p className="text-xs text-gray-500">Observaciones</p>
-                                  <p className="text-sm text-gray-700">{actividad.observaciones}</p>
-                                </div>
-                              </div>
-                            )}
+                            <div>
+                              <Label>Año</Label>
+                              <Input
+                                value={actividad.anio}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "")
+                                  if (value.length <= 4) {
+                                    actualizarActividad(actividad.id, "anio", value)
+                                  }
+                                }}
+                                placeholder="2024"
+                                pattern="[0-9]{4}"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label>Observaciones</Label>
+                            <Textarea
+                              value={actividad.observaciones || ""}
+                              onChange={(e) =>
+                                actualizarActividad(actividad.id, "observaciones", toUpperCase(e.target.value))
+                              }
+                              placeholder="DETALLES O COMENTARIOS SOBRE LA ACTIVIDAD"
+                              rows={2}
+                              className="uppercase"
+                            />
                           </div>
                         </div>
                       ))}
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => agregarActividad("feria")}
+                          className="border-dashed border-[#3259B5] text-[#3259B5] hover:bg-[#3259B5]/5 bg-transparent"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Agregar Feria
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => agregarActividad("mision")}
+                          className="border-dashed border-[#66A29C] text-[#66A29C] hover:bg-[#66A29C]/5 bg-transparent"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Agregar Misión
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => agregarActividad("ronda")}
+                          className="border-dashed border-[#807DA1] text-[#807DA1] hover:bg-[#807DA1]/5 bg-transparent"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Agregar Ronda
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                      <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <p className="font-medium text-gray-600">No hay actividades de promoción registradas</p>
-                      <p className="text-sm text-gray-500 mt-1">Esta empresa no ha registrado participación en ferias, misiones o rondas</p>
-                    </div>
+                    empresaData?.actividades_promocion_internacional && 
+                    Array.isArray(empresaData.actividades_promocion_internacional) && 
+                    empresaData.actividades_promocion_internacional.length > 0 ? (
+                      <div className="space-y-3">
+                        {empresaData.actividades_promocion_internacional.map((actividad: any, index: number) => (
+                          <div
+                            key={index}
+                            className="p-4 border border-[#3259B5]/30 rounded-lg bg-gradient-to-br from-[#3259B5]/5 to-transparent hover:border-[#3259B5]/50 transition-colors"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                {actividad.tipo === 'feria' && (
+                                  <div className="flex items-center gap-2 text-[#3259B5]">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                    <span className="font-semibold text-sm">Feria Internacional</span>
+                                  </div>
+                                )}
+                                {actividad.tipo === 'mision' && (
+                                  <div className="flex items-center gap-2 text-[#66A29C]">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span className="font-semibold text-sm">Misión Comercial</span>
+                                  </div>
+                                )}
+                                {actividad.tipo === 'ronda' && (
+                                  <div className="flex items-center gap-2 text-[#807DA1]">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <span className="font-semibold text-sm">Ronda de Negocios</span>
+                                  </div>
+                                )}
+                              </div>
+                              <span className="px-3 py-1 bg-[#222A59] text-white text-xs font-semibold rounded-full">
+                                {actividad.anio || 'N/A'}
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500">Lugar</p>
+                                  <p className="font-medium text-[#222A59]">{actividad.lugar || 'No especificado'}</p>
+                                </div>
+                              </div>
+                              
+                              {actividad.observaciones && (
+                                <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200">
+                                  <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                  </svg>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500">Observaciones</p>
+                                    <p className="text-sm text-gray-700">{actividad.observaciones}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="font-medium text-gray-600">No hay actividades de promoción registradas</p>
+                        <p className="text-sm text-gray-500 mt-1">Esta empresa no ha registrado participación en ferias, misiones o rondas</p>
+                      </div>
+                    )
                   )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="productos-servicios" className="space-y-6">
+          <TabsContent value="productos-servicios" className="space-y-6 w-full max-w-full mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="text-[#222A59]">
@@ -1879,6 +2928,8 @@ export default function PerfilEmpresaPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                            const productosKey = esMixta ? 'productos_mixta' : 'productos'
                             const newProducto = {
                               id: `temp-${Date.now()}`,
                               nombre_producto: '',
@@ -1890,7 +2941,7 @@ export default function PerfilEmpresaPage() {
                             }
                             setEditedData(editedData ? {
                               ...editedData,
-                              productos: [...(editedData.productos || []), newProducto]
+                              [productosKey]: [...(editedData[productosKey] || []), newProducto]
                             } : null)
                           }}
                           className="gap-2"
@@ -1903,9 +2954,16 @@ export default function PerfilEmpresaPage() {
                       )}
                     </div>
 
-                    {(isEditing ? editedData?.productos : empresaData?.productos) && (isEditing ? editedData.productos : empresaData.productos).length > 0 ? (
-                      <div className="space-y-4">
-                        {(isEditing ? editedData.productos : empresaData.productos).map((producto: any, index: number) => (
+                    {(() => {
+                      const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                      const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                      const productosToShow = isEditing 
+                        ? (editedData?.[productosKey] || [])
+                        : (empresaData?.[productosKey] || empresaData?.productos || [])
+                      
+                      return productosToShow && productosToShow.length > 0 ? (
+                        <div className="space-y-4">
+                          {productosToShow.map((producto: any, index: number) => (
                           <div key={producto.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                             {isEditing ? (
                               // MODO EDICIÓN
@@ -1918,13 +2976,15 @@ export default function PerfilEmpresaPage() {
                                       <Input
                                         value={producto.nombre_producto || producto.nombre || ''}
                                         onChange={(e) => {
-                                          const updatedProductos = [...(editedData?.productos || [])]
+                                          const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                          const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                          const updatedProductos = [...(editedData?.[productosKey] || [])]
                                           updatedProductos[index] = {
                                             ...updatedProductos[index],
                                             nombre_producto: e.target.value,
                                             nombre: e.target.value
                                           }
-                                          setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                          setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                         }}
                                         placeholder="Nombre del producto"
                                       />
@@ -1936,12 +2996,14 @@ export default function PerfilEmpresaPage() {
                                       <Textarea
                                         value={producto.descripcion || ''}
                                         onChange={(e) => {
-                                          const updatedProductos = [...(editedData?.productos || [])]
+                                          const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                          const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                          const updatedProductos = [...(editedData?.[productosKey] || [])]
                                           updatedProductos[index] = {
                                             ...updatedProductos[index],
                                             descripcion: e.target.value
                                           }
-                                          setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                          setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                         }}
                                         placeholder="Descripción del producto"
                                         rows={3}
@@ -1957,13 +3019,15 @@ export default function PerfilEmpresaPage() {
                                           step="0.01"
                                           value={producto.capacidad_productiva || producto.capacidadProductiva || ''}
                                           onChange={(e) => {
-                                            const updatedProductos = [...(editedData?.productos || [])]
+                                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                            const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                            const updatedProductos = [...(editedData?.[productosKey] || [])]
                                             updatedProductos[index] = {
                                               ...updatedProductos[index],
                                               capacidad_productiva: e.target.value,
                                               capacidadProductiva: e.target.value
                                             }
-                                            setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                            setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                           }}
                                           placeholder="Ej: 1000"
                                         />
@@ -1974,13 +3038,15 @@ export default function PerfilEmpresaPage() {
                                         <Select
                                           value={producto.unidad_medida || producto.unidadMedida || 'kg'}
                                           onValueChange={(value) => {
-                                            const updatedProductos = [...(editedData?.productos || [])]
+                                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                            const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                            const updatedProductos = [...(editedData?.[productosKey] || [])]
                                             updatedProductos[index] = {
                                               ...updatedProductos[index],
                                               unidad_medida: value,
                                               unidadMedida: value
                                             }
-                                            setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                            setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                           }}
                                         >
                                           <SelectTrigger>
@@ -2002,13 +3068,15 @@ export default function PerfilEmpresaPage() {
                                         <Select
                                           value={producto.periodo_capacidad || producto.periodoCapacidad || 'mensual'}
                                           onValueChange={(value) => {
-                                            const updatedProductos = [...(editedData?.productos || [])]
+                                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                            const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                            const updatedProductos = [...(editedData?.[productosKey] || [])]
                                             updatedProductos[index] = {
                                               ...updatedProductos[index],
                                               periodo_capacidad: value,
                                               periodoCapacidad: value
                                             }
-                                            setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                            setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                           }}
                                         >
                                           <SelectTrigger>
@@ -2032,15 +3100,18 @@ export default function PerfilEmpresaPage() {
                                             ? producto.posicion_arancelaria.codigo_arancelario 
                                             : producto.posicion_arancelaria || producto.posicionArancelaria || ''}
                                           onChange={(e) => {
-                                            const updatedProductos = [...(editedData?.productos || [])]
+                                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                            const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                            const updatedProductos = [...(editedData?.[productosKey] || [])]
                                             updatedProductos[index] = {
                                               ...updatedProductos[index],
-                                              posicion_arancelaria: {
-                                                ...updatedProductos[index].posicion_arancelaria,
-                                                codigo_arancelario: e.target.value
-                                              }
+                                              posicion_arancelaria: e.target.value
+                                                ? {
+                                                    codigo_arancelario: e.target.value
+                                                  }
+                                                : null
                                             }
-                                            setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                            setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                           }}
                                           placeholder="Ej: 1234.56.78"
                                         />
@@ -2053,8 +3124,10 @@ export default function PerfilEmpresaPage() {
                                     variant="destructive"
                                     size="icon"
                                     onClick={() => {
-                                      const updatedProductos = editedData?.productos?.filter((_, i) => i !== index) || []
-                                      setEditedData(editedData ? { ...editedData, productos: updatedProductos } : null)
+                                      const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                      const productosKey = esMixta ? 'productos_mixta' : 'productos'
+                                      const updatedProductos = editedData?.[productosKey]?.filter((_, i) => i !== index) || []
+                                      setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                     }}
                                     className="flex-shrink-0"
                                   >
@@ -2100,9 +3173,10 @@ export default function PerfilEmpresaPage() {
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-muted-foreground py-4">No hay productos registrados</p>
-                    )}
+                      ) : (
+                        <p className="text-muted-foreground py-4">No hay productos registrados</p>
+                      )
+                    })()}
                   </div>
                 )}
 
@@ -2116,6 +3190,8 @@ export default function PerfilEmpresaPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                            const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
                             const newServicio = {
                               id: `temp-${Date.now()}`,
                               nombre_servicio: '',
@@ -2127,13 +3203,10 @@ export default function PerfilEmpresaPage() {
                               forma_contratacion: 'hora',
                               es_principal: false,
                             }
-                            const serviciosKey = empresaData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                            const currentServicios = editedData?.[serviciosKey] || []
-                            const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
                             
                             setEditedData(editedData ? {
                               ...editedData,
-                              [serviciosKey]: [...serviciosArray, newServicio]
+                              [serviciosKey]: [...(editedData[serviciosKey] || []), newServicio]
                             } : null)
                           }}
                           className="gap-2"
@@ -2147,15 +3220,17 @@ export default function PerfilEmpresaPage() {
                     </div>
 
                     {(() => {
-                      const servicios = empresaData?.servicios_ofrecidos 
-                        ? (Array.isArray(empresaData.servicios_ofrecidos)
-                            ? empresaData.servicios_ofrecidos
-                            : (Object.keys(empresaData.servicios_ofrecidos || {}).length ? [empresaData.servicios_ofrecidos] : []))
-                        : (empresaData?.servicios || []);
+                      const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                      const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                      const serviciosToShow = isEditing
+                        ? (editedData?.[serviciosKey] || [])
+                        : (empresaData?.[serviciosKey] || empresaData?.servicios || empresaData?.servicios_ofrecidos || [])
                       
-                      return servicios && servicios.length > 0 ? (
+                      const serviciosArray = Array.isArray(serviciosToShow) ? serviciosToShow : []
+                      
+                      return serviciosArray && serviciosArray.length > 0 ? (
                         <div className="space-y-4">
-                          {servicios.map((servicio: any, index: number) => (
+                          {serviciosArray.map((servicio: any, index: number) => (
                             <div key={servicio.id || index} className="p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                               {isEditing ? (
                                 // MODO EDICIÓN
@@ -2168,10 +3243,9 @@ export default function PerfilEmpresaPage() {
                                         <Input
                                           value={servicio.nombre || servicio.nombre_servicio || servicio.descripcion || ''}
                                           onChange={(e) => {
-                                            const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                            const currentServicios = editedData?.[serviciosKey] || []
-                                            const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                            const updatedServicios = [...serviciosArray]
+                                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                            const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                            const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                             updatedServicios[index] = {
                                               ...updatedServicios[index],
                                               nombre: e.target.value,
@@ -2189,10 +3263,9 @@ export default function PerfilEmpresaPage() {
                                         <Textarea
                                           value={servicio.descripcion || ''}
                                           onChange={(e) => {
-                                            const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                            const currentServicios = editedData?.[serviciosKey] || []
-                                            const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                            const updatedServicios = [...serviciosArray]
+                                            const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                            const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                            const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                             updatedServicios[index] = {
                                               ...updatedServicios[index],
                                               descripcion: e.target.value
@@ -2211,10 +3284,9 @@ export default function PerfilEmpresaPage() {
                                           <Select
                                             value={Array.isArray(servicio.tipo_servicio) ? servicio.tipo_servicio[0] : servicio.tipo_servicio || ''}
                                             onValueChange={(value) => {
-                                              const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                              const currentServicios = editedData?.[serviciosKey] || []
-                                              const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                              const updatedServicios = [...serviciosArray]
+                                              const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                              const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                              const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                               updatedServicios[index] = {
                                                 ...updatedServicios[index],
                                                 tipo_servicio: value
@@ -2243,10 +3315,9 @@ export default function PerfilEmpresaPage() {
                                           <Input
                                             value={servicio.sector_atendido || (Array.isArray(servicio.sectores) ? servicio.sectores.join(', ') : servicio.sectores || '')}
                                             onChange={(e) => {
-                                              const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                              const currentServicios = editedData?.[serviciosKey] || []
-                                              const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                              const updatedServicios = [...serviciosArray]
+                                              const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                              const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                              const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                               updatedServicios[index] = {
                                                 ...updatedServicios[index],
                                                 sector_atendido: e.target.value
@@ -2265,10 +3336,9 @@ export default function PerfilEmpresaPage() {
                                           <Select
                                             value={servicio.alcance_geografico || servicio.alcance_servicio || 'local'}
                                             onValueChange={(value) => {
-                                              const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                              const currentServicios = editedData?.[serviciosKey] || []
-                                              const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                              const updatedServicios = [...serviciosArray]
+                                              const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                              const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                              const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                               updatedServicios[index] = {
                                                 ...updatedServicios[index],
                                                 alcance_geografico: value,
@@ -2293,10 +3363,9 @@ export default function PerfilEmpresaPage() {
                                           <Select
                                             value={Array.isArray(servicio.forma_contratacion) ? servicio.forma_contratacion[0] : servicio.forma_contratacion || 'hora'}
                                             onValueChange={(value) => {
-                                              const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                              const currentServicios = editedData?.[serviciosKey] || []
-                                              const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                              const updatedServicios = [...serviciosArray]
+                                              const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                              const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                              const updatedServicios = [...(editedData?.[serviciosKey] || [])]
                                               updatedServicios[index] = {
                                                 ...updatedServicios[index],
                                                 forma_contratacion: value
@@ -2323,10 +3392,9 @@ export default function PerfilEmpresaPage() {
                                       variant="destructive"
                                       size="icon"
                                       onClick={() => {
-                                        const serviciosKey = editedData?.servicios_ofrecidos ? 'servicios_ofrecidos' : 'servicios'
-                                        const currentServicios = editedData?.[serviciosKey] || []
-                                        const serviciosArray = Array.isArray(currentServicios) ? currentServicios : [currentServicios]
-                                        const updatedServicios = serviciosArray.filter((_, i) => i !== index)
+                                        const esMixta = empresaData?.tipo_empresa_valor === 'mixta' || empresaData?.tipo_empresa === 'mixta'
+                                        const serviciosKey = esMixta ? 'servicios_mixta' : 'servicios'
+                                        const updatedServicios = editedData?.[serviciosKey]?.filter((_, i) => i !== index) || []
                                         setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                                       }}
                                       className="flex-shrink-0"
@@ -2392,7 +3460,7 @@ export default function PerfilEmpresaPage() {
                         </div>
                       ) : (
                         <p className="text-muted-foreground py-4">No hay servicios registrados</p>
-                      );
+                      )
                     })()}
                   </div>
                 )}
@@ -2400,19 +3468,55 @@ export default function PerfilEmpresaPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="certificaciones" className="space-y-6">
+          <TabsContent value="certificaciones" className="space-y-6 w-full max-w-full mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="text-[#222A59]">Certificaciones</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full overflow-hidden p-4 sm:p-6">
+                <div className="min-w-0 w-full">
                   <Label>Certificado MiPyME</Label>
-                  <p className="mt-1 font-semibold">{empresaData?.certificadopyme || empresaData?.certificadoMiPyme ? 'Sí' : 'No'}</p>
+                  {isEditing ? (
+                    <Select
+                      value={(editedData?.certificadopyme === true || editedData?.certificadopyme === 'true' || editedData?.certificadopyme === 'si') ? 'si' : 'no'}
+                      onValueChange={(value) => {
+                        const certificadopymeValue = value === 'si'
+                        setEditedData(editedData ? { ...editedData, certificadopyme: certificadopymeValue } : null)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="mt-1 font-semibold">{empresaData?.certificadopyme ? 'Sí' : 'No'}</p>
+                  )}
                 </div>
-                <div>
+                <div className="min-w-0 w-full">
                   <Label>Material Promocional en 2 Idiomas</Label>
-                  <p className="mt-1 font-semibold">{empresaData?.promo2idiomas || empresaData?.materialPromocion2Idiomas ? 'Sí' : 'No'}</p>
+                  {isEditing ? (
+                    <Select
+                      value={(editedData?.promo2idiomas === true || editedData?.promo2idiomas === 'true' || editedData?.promo2idiomas === 'si') ? 'si' : 'no'}
+                      onValueChange={(value) => {
+                        const promo2idiomasValue = value === 'si'
+                        setEditedData(editedData ? { ...editedData, promo2idiomas: promo2idiomasValue } : null)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="mt-1 font-semibold">{empresaData?.promo2idiomas ? 'Sí' : 'No'}</p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <Label>Certificaciones</Label>
@@ -2485,7 +3589,7 @@ export default function PerfilEmpresaPage() {
 
       {/* Footer */}
       <footer className="bg-[#222A59] text-white py-8 md:py-12">
-        <div className="container mx-auto px-4">
+        <div className="w-full px-4">
           {/* Grid de contenido */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
             <div>

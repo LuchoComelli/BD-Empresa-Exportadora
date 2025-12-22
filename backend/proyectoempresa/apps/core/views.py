@@ -56,6 +56,7 @@ class CustomTokenObtainPairView(APIView):
             'apellido': user.apellido,
             'is_superuser': user.is_superuser,
             'is_staff': user.is_staff,
+            'debe_cambiar_password': user.debe_cambiar_password if hasattr(user, 'debe_cambiar_password') else False,
         }
         
         # Incluir información completa del rol con todos los permisos

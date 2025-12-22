@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { MapPin } from "lucide-react"
 import { Card } from "@/components/ui/card"
 
@@ -11,7 +11,8 @@ interface CompanyMapProps {
 
 export function CompanyMap({ coordinates, address }: CompanyMapProps) {
   const [mounted, setMounted] = useState(false)
-  const [map, setMap] = useState<any>(null)
+  const mapRef = useRef<any>(null)
+  const markerRef = useRef<any>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -20,100 +21,165 @@ export function CompanyMap({ coordinates, address }: CompanyMapProps) {
   useEffect(() => {
     if (!mounted || typeof window === "undefined") return
     if (!coordinates || !coordinates.lat || !coordinates.lng) {
-      console.error('[CompanyMap] Coordenadas inválidas:', coordinates)
       return
     }
-
-    console.log('[CompanyMap] Inicializando mapa con coordenadas:', coordinates)
 
     const loadLeaflet = async () => {
-  try {
-    // Dynamically import Leaflet
-    const L = (await import("leaflet")).default
+      try {
+        // Dynamically import Leaflet
+        const L = (await import("leaflet")).default
 
-    // Load Leaflet CSS
-    if (!document.querySelector('link[href*="leaflet.css"]')) {
-      const link = document.createElement("link")
-      link.rel = "stylesheet"
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      document.head.appendChild(link)
+        // Load Leaflet CSS
+        if (!document.querySelector('link[href*="leaflet.css"]')) {
+          const link = document.createElement("link")
+          link.rel = "stylesheet"
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          document.head.appendChild(link)
+        }
+
+        // Fix default marker icon issue
+        delete (L.Icon.Default.prototype as any)._getIconUrl
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+          iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+          shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        })
+
+        // Verify element exists
+        const mapElement = document.getElementById("company-map")
+        if (!mapElement) {
+          return
+        }
+
+        // Initialize map only if it doesn't exist
+        let mapInstance = mapRef.current
+        
+        if (!mapInstance) {
+          const lat = Number(coordinates.lat)
+          const lng = Number(coordinates.lng)
+          
+          if (isNaN(lat) || isNaN(lng)) {
+            return
+          }
+
+          mapInstance = L.map("company-map", {
+            zoomControl: true,
+            scrollWheelZoom: true,
+            zoomAnimation: true,
+          }).setView([lat, lng], 15)
+
+          // Ajustar z-index del contenedor del mapa
+          const mapContainer = mapInstance.getContainer()
+          if (mapContainer) {
+            mapContainer.style.zIndex = '0'
+          }
+
+          // Add OpenStreetMap tiles
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+          }).addTo(mapInstance)
+
+          mapRef.current = mapInstance
+        }
+
+        // Update map view and marker if coordinates changed
+        const lat = Number(coordinates.lat)
+        const lng = Number(coordinates.lng)
+        
+        if (!isNaN(lat) && !isNaN(lng) && mapInstance) {
+          // Update map view
+          mapInstance.setView([lat, lng], mapInstance.getZoom())
+
+          // Remove old marker if exists
+          if (markerRef.current) {
+            mapInstance.removeLayer(markerRef.current)
+          }
+
+          // Add new marker
+          const customIcon = L.icon({
+            iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+            iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+            shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41],
+          })
+
+          markerRef.current = L.marker([lat, lng], { icon: customIcon })
+            .addTo(mapInstance)
+            .bindPopup(address || "Ubicación de la empresa")
+        }
+      } catch (error) {
+        // Silently handle errors to avoid console spam
+      }
     }
-
-    // Fix default marker icon issue
-    delete (L.Icon.Default.prototype as any)._getIconUrl
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-    })
-
-    // Verify element exists
-    const mapElement = document.getElementById("company-map")
-    if (!mapElement) {
-      console.error('[CompanyMap] Elemento #company-map no encontrado')
-      return
-    }
-
-    // Initialize map
-    const lat = Number(coordinates.lat)
-    const lng = Number(coordinates.lng)
-    
-    if (isNaN(lat) || isNaN(lng)) {
-      console.error('[CompanyMap] Coordenadas no son números válidos:', { lat, lng })
-      return
-    }
-
-    console.log('[CompanyMap] Creando mapa con:', { lat, lng })
-    const mapInstance = L.map("company-map", {
-      zoomControl: true,
-      scrollWheelZoom: true,
-      zoomAnimation: true,
-    }).setView([lat, lng], 15)
-
-    // ✅ AGREGAR: Ajustar z-index del contenedor del mapa
-    const mapContainer = mapInstance.getContainer()
-    if (mapContainer) {
-      mapContainer.style.zIndex = '0'
-    }
-
-    // Add OpenStreetMap tiles
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19,
-    }).addTo(mapInstance)
-
-    // Add marker with custom icon
-    const customIcon = L.icon({
-      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-      iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41],
-    })
-
-    const markerLat = Number(coordinates.lat)
-    const markerLng = Number(coordinates.lng)
-    
-    L.marker([markerLat, markerLng], { icon: customIcon })
-      .addTo(mapInstance)
-      .bindPopup(address || "Ubicación de la empresa")
-
-    console.log('[CompanyMap] Mapa creado exitosamente')
-    setMap(mapInstance)
-  } catch (error) {
-    console.error("[CompanyMap] Error loading map:", error)
-  }
-}
 
     loadLeaflet()
 
     return () => {
-      if (map) {
-        map.remove()
+      // Only cleanup on unmount, not on every coordinate change
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove()
+          mapRef.current = null
+          markerRef.current = null
+        } catch (error) {
+          // Ignore cleanup errors
+        }
       }
     }
+  }, [mounted]) // Only run once when mounted
+
+  // Separate effect to update marker when coordinates change (if map already exists)
+  useEffect(() => {
+    if (!mounted || !mapRef.current) return
+    if (!coordinates || !coordinates.lat || !coordinates.lng) return
+
+    const updateMarker = async () => {
+      try {
+        const L = (await import("leaflet")).default
+        const mapInstance = mapRef.current
+        
+        if (!mapInstance) return
+
+        const lat = Number(coordinates.lat)
+        const lng = Number(coordinates.lng)
+        
+        if (isNaN(lat) || isNaN(lng)) return
+
+        // Update map view (only if coordinates actually changed)
+        const currentCenter = mapInstance.getCenter()
+        if (Math.abs(currentCenter.lat - lat) > 0.0001 || Math.abs(currentCenter.lng - lng) > 0.0001) {
+          mapInstance.setView([lat, lng], mapInstance.getZoom())
+        }
+
+        // Remove old marker
+        if (markerRef.current) {
+          mapInstance.removeLayer(markerRef.current)
+        }
+
+        // Add new marker
+        const customIcon = L.icon({
+          iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+          iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+          shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41],
+        })
+
+        markerRef.current = L.marker([lat, lng], { icon: customIcon })
+          .addTo(mapInstance)
+          .bindPopup(address || "Ubicación de la empresa")
+      } catch (error) {
+        // Silently handle errors
+      }
+    }
+
+    updateMarker()
   }, [mounted, coordinates?.lat, coordinates?.lng, address])
 
   if (!mounted) {

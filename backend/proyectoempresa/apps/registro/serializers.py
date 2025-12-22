@@ -167,6 +167,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
     
     # Campos explícitos para contacto principal
     nombre_contacto = serializers.CharField(required=False, allow_blank=False, allow_null=True)
+    apellido_contacto = serializers.CharField(required=False, allow_blank=False, allow_null=True)
     cargo_contacto = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     telefono_contacto = serializers.CharField(required=False, allow_blank=False, allow_null=True)
     email_contacto = serializers.EmailField(required=False, write_only=True, allow_blank=True)
@@ -183,7 +184,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             'productos', 'servicios', 'actividades_promocion',
             'actividades_promocion_internacional',
             'contacto_principal', 'contactos_secundarios',
-            'nombre_contacto', 'cargo_contacto', 'telefono_contacto', 'email_contacto',
+            'nombre_contacto', 'apellido_contacto', 'cargo_contacto', 'telefono_contacto', 'email_contacto',
             'exporta', 'destino_exportacion', 'interes_exportar', 'importa', 'tipo_importacion',
             'certificado_pyme', 'certificaciones', 'brochure_url', 'catalogo_pdf', 'material_promocional_idiomas',
             'idiomas_trabajo', 'observaciones',
@@ -313,6 +314,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             
             # Mapear contacto principal a campos del modelo
             nombre_contacto = contacto_principal.get('nombre', '') or validated_data.pop('nombre_contacto', '')
+            apellido_contacto = contacto_principal.get('apellido', '') or validated_data.pop('apellido_contacto', '')
             cargo_contacto = contacto_principal.get('cargo', '') or validated_data.pop('cargo_contacto', '')
             telefono_contacto = contacto_principal.get('telefono', '') or validated_data.pop('telefono_contacto', '')
             email_contacto = contacto_principal.get('email', '') or validated_data.pop('email_contacto', '')
@@ -320,6 +322,8 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             # Validar que los campos del contacto principal estén presentes
             if not nombre_contacto:
                 raise serializers.ValidationError({'contacto_principal': {'nombre': ['Este campo es requerido.']}})
+            if not apellido_contacto:
+                raise serializers.ValidationError({'contacto_principal': {'apellido': ['Este campo es requerido.']}})
             if not cargo_contacto:
                 raise serializers.ValidationError({'contacto_principal': {'cargo': ['Este campo es requerido.']}})
             if not telefono_contacto:
@@ -395,6 +399,7 @@ class SolicitudRegistroCreateSerializer(serializers.ModelSerializer):
             
             # Establecer campos del contacto
             validated_data['nombre_contacto'] = nombre_contacto
+            validated_data['apellido_contacto'] = apellido_contacto
             validated_data['cargo_contacto'] = cargo_contacto
             validated_data['telefono_contacto'] = telefono_contacto
             validated_data['email_contacto'] = email_contacto
@@ -557,6 +562,15 @@ class SolicitudRegistroUpdateSerializer(serializers.ModelSerializer):
                         nombre_limpio = str(nombre_directo).strip()
                         instance.nombre_contacto = nombre_limpio
                     # Si viene vacío, mantener el existente (ya lo removimos de validated_data)
+                
+                # Validar y actualizar apellido
+                apellido = contacto.get('apellido') if contacto else None
+                if apellido is not None:
+                    instance.apellido_contacto = str(apellido).strip()
+                elif 'apellido_contacto' in validated_data:
+                    apellido_directo = validated_data.pop('apellido_contacto')
+                    if apellido_directo:
+                        instance.apellido_contacto = str(apellido_directo).strip()
                 
                 # Cargo es opcional
                 if cargo is not None:

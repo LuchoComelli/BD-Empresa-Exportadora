@@ -21,6 +21,7 @@ import { handleTextInputChange, handleNumericInputChange, validateAndNormalizeTe
 interface ContactoSecundario {
   id: string
   nombre: string
+  apellido: string
   cargo: string
   telefono: string
   email: string
@@ -129,6 +130,7 @@ export default function RegistroPage() {
 
   const [contactoPrincipal, setContactoPrincipal] = useState({
     nombre: "",
+    apellido: "",
     cargo: "",
     telefono: "",
     email: "",
@@ -609,12 +611,14 @@ useEffect(() => {
         linkedin: formData.linkedin || null,
         contacto_principal: {
           nombre: contactoPrincipal.nombre,
+          apellido: contactoPrincipal.apellido,
           cargo: contactoPrincipal.cargo,
           telefono: contactoPrincipal.telefono,
           email: contactoPrincipal.email,
         },
         contactos_secundarios: contactosSecundarios.map(c => ({
           nombre: c.nombre,
+          apellido: c.apellido,
           cargo: c.cargo,
           telefono: c.telefono,
           email: c.email,
@@ -811,7 +815,7 @@ useEffect(() => {
     if (contactosSecundarios.length < 2) {
       setContactosSecundarios([
         ...contactosSecundarios,
-        { id: Date.now().toString(), nombre: "", cargo: "", telefono: "", email: "" },
+        { id: Date.now().toString(), nombre: "", apellido: "", cargo: "", telefono: "", email: "" },
       ])
     }
   }
@@ -1588,19 +1592,35 @@ useEffect(() => {
                 <div className="space-y-6">
                   <div className="space-y-4 p-4 border border-[#629BD2]/30 rounded-lg bg-[#629BD2]/5">
                     <h3 className="font-semibold text-[#222A59] flex items-center gap-2">Contacto Principal</h3>
-                    <div>
-                      <Label htmlFor="contacto">Persona de Contacto *</Label>
-                      <Input
-                        id="contacto"
-                        required
-                        value={contactoPrincipal.nombre}
-                        onChange={(e) => {
-                          const normalized = handleTextInputChange(e.target.value, contactoPrincipal.nombre)
-                          setContactoPrincipal({ ...contactoPrincipal, nombre: toUpperCase(normalized) })
-                        }}
-                        placeholder="NOMBRE COMPLETO"
-                        className="uppercase"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="nombreContacto">Nombre *</Label>
+                        <Input
+                          id="nombreContacto"
+                          required
+                          value={contactoPrincipal.nombre}
+                          onChange={(e) => {
+                            const normalized = handleTextInputChange(e.target.value, contactoPrincipal.nombre)
+                            setContactoPrincipal({ ...contactoPrincipal, nombre: toUpperCase(normalized) })
+                          }}
+                          placeholder="NOMBRE"
+                          className="uppercase"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="apellidoContacto">Apellido *</Label>
+                        <Input
+                          id="apellidoContacto"
+                          required
+                          value={contactoPrincipal.apellido}
+                          onChange={(e) => {
+                            const normalized = handleTextInputChange(e.target.value, contactoPrincipal.apellido)
+                            setContactoPrincipal({ ...contactoPrincipal, apellido: toUpperCase(normalized) })
+                          }}
+                          placeholder="APELLIDO"
+                          className="uppercase"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -1667,17 +1687,31 @@ useEffect(() => {
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
-                      <div>
-                        <Label>Persona de Contacto</Label>
-                        <Input
-                          value={contacto.nombre}
-                          onChange={(e) => {
-                            const normalized = handleTextInputChange(e.target.value, contacto.nombre)
-                            actualizarContacto(contacto.id, "nombre", toUpperCase(normalized))
-                          }}
-                          placeholder="NOMBRE COMPLETO"
-                          className="uppercase"
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label>Nombre</Label>
+                          <Input
+                            value={contacto.nombre}
+                            onChange={(e) => {
+                              const normalized = handleTextInputChange(e.target.value, contacto.nombre)
+                              actualizarContacto(contacto.id, "nombre", toUpperCase(normalized))
+                            }}
+                            placeholder="NOMBRE"
+                            className="uppercase"
+                          />
+                        </div>
+                        <div>
+                          <Label>Apellido</Label>
+                          <Input
+                            value={contacto.apellido}
+                            onChange={(e) => {
+                              const normalized = handleTextInputChange(e.target.value, contacto.apellido)
+                              actualizarContacto(contacto.id, "apellido", toUpperCase(normalized))
+                            }}
+                            placeholder="APELLIDO"
+                            className="uppercase"
+                          />
+                        </div>
                       </div>
 
                       <div>

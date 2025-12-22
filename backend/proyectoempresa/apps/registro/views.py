@@ -282,9 +282,27 @@ def enviar_email_rechazo(solicitud):
     Enviar email de rechazo
     """
     subject = 'Solicitud Rechazada - BD Empresa Exportadora'
-    message = render_to_string('registro/emails/rechazo.html', {
-        'solicitud': solicitud,
-    })
+    
+    try:
+        # Intentar renderizar el template
+        message = render_to_string('registro/emails/rechazo.html', {
+            'solicitud': solicitud,
+        })
+    except Exception as e:
+        # Si el template no existe, crear un mensaje simple
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f'Template de email de rechazo no encontrado, usando mensaje simple: {str(e)}')
+        message = f"""
+        <html>
+        <body>
+            <h2>Solicitud Rechazada</h2>
+            <p>Su solicitud de registro para la empresa <strong>{solicitud.razon_social}</strong> ha sido rechazada.</p>
+            {f'<p><strong>Observaciones:</strong> {solicitud.observaciones_admin}</p>' if solicitud.observaciones_admin else ''}
+            <p>Por favor, contacte con el administrador para más información.</p>
+        </body>
+        </html>
+        """
     
     try:
         send_mail(
@@ -315,6 +333,8 @@ def enviar_email_rechazo(solicitud):
             email_enviado=False,
             error_envio=str(e)
         )
+        # Re-lanzar la excepción para que el ViewSet la maneje
+        raise
 
 def crear_empresa_desde_solicitud(solicitud):
     from apps.empresas.models import Empresa, Rubro, TipoEmpresa
@@ -542,7 +562,7 @@ def crear_empresa_desde_solicitud(solicitud):
     try:
         usuario_empresa = User.objects.get(email=solicitud.correo)
         usuario_empresa.nombre = solicitud.nombre_contacto
-        usuario_empresa.apellido = solicitud.cargo_contacto
+        usuario_empresa.apellido = solicitud.apellido_contacto
         usuario_empresa.rol = rol_empresa
         usuario_empresa.telefono = solicitud.telefono_contacto
         usuario_empresa.departamento = solicitud.departamento
@@ -558,7 +578,7 @@ def crear_empresa_desde_solicitud(solicitud):
             email=solicitud.correo,
             password=solicitud.cuit_cuil,
             nombre=solicitud.nombre_contacto,
-            apellido=solicitud.cargo_contacto,
+            apellido=solicitud.apellido_contacto,
             rol=rol_empresa,
             telefono=solicitud.telefono_contacto,
             departamento=solicitud.departamento,
@@ -600,15 +620,18 @@ def crear_empresa_desde_solicitud(solicitud):
         'certificaciones': solicitud.certificaciones[:500] if solicitud.certificaciones else None,
         'promo2idiomas': True if solicitud.material_promocional_idiomas == 'si' else False,
         'idiomas_trabaja': (solicitud.idiomas_trabajo[:100] if solicitud.idiomas_trabajo else None),
-        'contacto_principal_nombre': (solicitud.nombre_contacto[:100] if solicitud.nombre_contacto else ''),
+        'contacto_principal_nombre': (solicitud.nombre_contacto[:50] if solicitud.nombre_contacto else ''),
+        'contacto_principal_apellido': (solicitud.apellido_contacto[:50] if solicitud.apellido_contacto else ''),
         'contacto_principal_cargo': (solicitud.cargo_contacto[:100] if solicitud.cargo_contacto else ''),
         'contacto_principal_telefono': (solicitud.telefono_contacto[:20] if solicitud.telefono_contacto else ''),
         'contacto_principal_email': (solicitud.email_contacto or solicitud.correo),
         'contacto_secundario_nombre': None,
+        'contacto_secundario_apellido': None,
         'contacto_secundario_cargo': None,
         'contacto_secundario_telefono': None,
         'contacto_secundario_email': None,
         'contacto_terciario_nombre': None,
+        'contacto_terciario_apellido': None,
         'contacto_terciario_cargo': None,
         'contacto_terciario_telefono': None,
         'contacto_terciario_email': None,
@@ -629,20 +652,22 @@ def crear_empresa_desde_solicitud(solicitud):
             # Contacto secundario (índice 0)
             if len(solicitud.contactos_secundarios) > 0:
                 contacto_sec = solicitud.contactos_secundarios[0]
-                empresa_kwargs['contacto_secundario_nombre'] = contacto_sec.get('nombre', '')[:100] if contacto_sec.get('nombre') else None
+                empresa_kwargs['contacto_secundario_nombre'] = contacto_sec.get('nombre', '')[:50] if contacto_sec.get('nombre') else None
+                empresa_kwargs['contacto_secundario_apellido'] = contacto_sec.get('apellido', '')[:50] if contacto_sec.get('apellido') else None
                 empresa_kwargs['contacto_secundario_cargo'] = contacto_sec.get('cargo', '')[:100] if contacto_sec.get('cargo') else None
                 empresa_kwargs['contacto_secundario_telefono'] = contacto_sec.get('telefono', '')[:20] if contacto_sec.get('telefono') else None
                 empresa_kwargs['contacto_secundario_email'] = contacto_sec.get('email', '') if contacto_sec.get('email') else None
-                logger.info(f"[Registro->Empresa] Contacto secundario mapeado: {contacto_sec.get('nombre', 'N/A')}")
+                logger.info(f"[Registro->Empresa] Contacto secundario mapeado: {contacto_sec.get('nombre', 'N/A')} {contacto_sec.get('apellido', '')}")
         
             # Contacto terciario (índice 1)
             if len(solicitud.contactos_secundarios) > 1:
                 contacto_ter = solicitud.contactos_secundarios[1]
-                empresa_kwargs['contacto_terciario_nombre'] = contacto_ter.get('nombre', '')[:100] if contacto_ter.get('nombre') else None
+                empresa_kwargs['contacto_terciario_nombre'] = contacto_ter.get('nombre', '')[:50] if contacto_ter.get('nombre') else None
+                empresa_kwargs['contacto_terciario_apellido'] = contacto_ter.get('apellido', '')[:50] if contacto_ter.get('apellido') else None
                 empresa_kwargs['contacto_terciario_cargo'] = contacto_ter.get('cargo', '')[:100] if contacto_ter.get('cargo') else None
                 empresa_kwargs['contacto_terciario_telefono'] = contacto_ter.get('telefono', '')[:20] if contacto_ter.get('telefono') else None
                 empresa_kwargs['contacto_terciario_email'] = contacto_ter.get('email', '') if contacto_ter.get('email') else None
-                logger.info(f"[Registro->Empresa] Contacto terciario mapeado: {contacto_ter.get('nombre', 'N/A')}")
+                logger.info(f"[Registro->Empresa] Contacto terciario mapeado: {contacto_ter.get('nombre', 'N/A')} {contacto_ter.get('apellido', '')}")
         else:
             logger.info(f"[Registro->Empresa] No hay contactos secundarios en la solicitud ID={solicitud.id}")
     except Exception as e:

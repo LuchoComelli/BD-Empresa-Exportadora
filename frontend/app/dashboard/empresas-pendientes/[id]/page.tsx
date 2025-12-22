@@ -15,6 +15,16 @@ import Link from "next/link"
 import api from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface EmpresaPendiente {
   id: number
@@ -70,6 +80,7 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
   const [loading, setLoading] = useState(true)
   const [loadingAction, setLoadingAction] = useState(false)
   const [observaciones, setObservaciones] = useState("")
+  const [showRejectDialog, setShowRejectDialog] = useState(false)
 
   useEffect(() => {
     loadEmpresa()
@@ -151,29 +162,57 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
     }
   }
 
-  const handleRechazar = async () => {
-    if (!confirm("¿Estás seguro de que deseas rechazar esta solicitud?")) {
-      return
-    }
-    
+  const handleRechazar = () => {
+    setShowRejectDialog(true)
+  }
+
+  const confirmarRechazo = async () => {
     try {
       setLoadingAction(true)
-      await api.post(`/registro/solicitudes/${resolvedParams.id}/rechazar/`, {
+      const response = await api.post(`/registro/solicitudes/${resolvedParams.id}/rechazar/`, {
         observaciones: observaciones
       })
-      toast({
-        title: "Solicitud rechazada",
-        description: `La solicitud de "${empresa?.razon_social}" ha sido rechazada.`,
-        variant: "default",
-      })
+      
+      // Verificar si hay una advertencia sobre el email
+      if (response?.warning) {
+        toast({
+          title: "Solicitud rechazada",
+          description: `La solicitud de "${empresa?.razon_social}" ha sido rechazada. ${response.warning}`,
+          variant: "default",
+        })
+      } else {
+        toast({
+          title: "Solicitud rechazada",
+          description: `La solicitud de "${empresa?.razon_social}" ha sido rechazada.`,
+          variant: "default",
+        })
+      }
+      
+      setShowRejectDialog(false)
       router.push("/dashboard/empresas-pendientes")
     } catch (error: any) {
       console.error("Error rechazando empresa:", error)
-      toast({
-        title: "Error al rechazar",
-        description: error.message || "Error al rechazar la empresa. Por favor, intenta nuevamente.",
-        variant: "destructive",
-      })
+      
+      // Si el error menciona email pero la operación fue exitosa, mostrar advertencia
+      const errorMessage = error?.message || error?.errorData?.error || ""
+      if (errorMessage.toLowerCase().includes('email') || 
+          errorMessage.toLowerCase().includes('template') ||
+          errorMessage.toLowerCase().includes('rechazo.html')) {
+        // La solicitud probablemente fue rechazada pero el email falló
+        toast({
+          title: "Solicitud rechazada",
+          description: `La solicitud de "${empresa?.razon_social}" ha sido rechazada, pero hubo un problema al enviar el email de notificación.`,
+          variant: "default",
+        })
+        setShowRejectDialog(false)
+        router.push("/dashboard/empresas-pendientes")
+      } else {
+        toast({
+          title: "Error al rechazar",
+          description: errorMessage || "Error al rechazar la empresa. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoadingAction(false)
     }
@@ -508,6 +547,10 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
                       <p className="font-medium">{empresa.contacto_principal.nombre}</p>
                     </div>
                     <div>
+                      <Label className="text-sm text-muted-foreground">Apellido</Label>
+                      <p className="font-medium">{empresa.contacto_principal.apellido || 'N/A'}</p>
+                    </div>
+                    <div>
                       <Label className="text-sm text-muted-foreground">Cargo</Label>
                       <p className="font-medium">{empresa.contacto_principal.cargo || 'N/A'}</p>
                     </div>
@@ -558,6 +601,52 @@ export default function EmpresaPendientePage({ params }: { params: Promise<{ id:
             )}
           </div>
         </div>
+
+        {/* Reject Confirmation Dialog */}
+        <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+          <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-lg sm:text-xl">¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm sm:text-base">
+                  <p>
+                    Estás a punto de rechazar la solicitud de registro de la empresa{" "}
+                    <span className="font-semibold text-foreground break-words">
+                      {empresa?.razon_social}
+                    </span>
+                    .
+                  </p>
+                  <p className="text-muted-foreground">
+                    Esta acción marcará la solicitud como rechazada. El usuario será notificado y no podrá acceder al sistema con esta solicitud.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+              <AlertDialogCancel 
+                onClick={() => setShowRejectDialog(false)}
+                className="w-full sm:w-auto order-2 sm:order-1"
+                disabled={loadingAction}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmarRechazo}
+                className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto order-1 sm:order-2"
+                disabled={loadingAction}
+              >
+                {loadingAction ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Rechazando...
+                  </>
+                ) : (
+                  "Rechazar solicitud"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </MainLayout>
   )

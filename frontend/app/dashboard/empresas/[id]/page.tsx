@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Edit, Save, X, Download, Loader2, Building2, Mail, Phone, MapPin, Globe } from "lucide-react"
+import { ArrowLeft, Edit, Save, X, Download, Loader2, Building2, Mail, Phone, MapPin, Globe, Plus } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,6 +20,14 @@ import { CompanyMap } from "@/components/map/company-map"
 import { LocationPicker } from "@/components/map/location-picker"
 import { useToast } from "@/hooks/use-toast"
 import { ExportEmpresaDialog } from "@/components/empresas/export-empresa-dialog"
+
+interface ActividadPromocion {
+  id: string
+  tipo: "feria" | "mision" | "ronda"
+  lugar: string
+  anio: string
+  observaciones?: string
+}
 
 interface Empresa {
   id: number
@@ -66,9 +74,20 @@ interface Empresa {
   facebook?: string
   linkedin?: string
   contacto_principal_nombre?: string
+  contacto_principal_apellido?: string
   contacto_principal_cargo?: string
   contacto_principal_telefono?: string
   contacto_principal_email?: string
+  contacto_secundario_nombre?: string
+  contacto_secundario_apellido?: string
+  contacto_secundario_cargo?: string
+  contacto_secundario_telefono?: string
+  contacto_secundario_email?: string
+  contacto_terciario_nombre?: string
+  contacto_terciario_apellido?: string
+  contacto_terciario_cargo?: string
+  contacto_terciario_telefono?: string
+  contacto_terciario_email?: string
   fecha_creacion?: string
   fecha_actualizacion?: string
   rubro_producto_nombre?: string 
@@ -101,6 +120,9 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
   const [subRubrosServicios, setSubRubrosServicios] = useState<any[]>([])
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [loadingRubros, setLoadingRubros] = useState(false)
+
+  // Estado para actividades de promoción internacional
+  const [actividadesPromocion, setActividadesPromocion] = useState<ActividadPromocion[]>([])
 
   // Estado para centrar el mapa
   const [mapCenter, setMapCenter] = useState<{ lat: number | null; lng: number | null; zoom: number }>({
@@ -157,7 +179,6 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
         ? editedData.id_rubro.id
         : editedData.id_rubro
       if (rubroId) {
-        console.log('🔵 [useEffect] Cargando subrubros para rubro:', rubroId)
         loadSubRubrosData(rubroId)
       }
     }
@@ -233,13 +254,6 @@ function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) 
 // 6. DEBUGGING TEMPORAL - Agregar esto al componente para ver el estado
 useEffect(() => {
   if (isEditing) {
-    console.log('=== DEBUG ESTADO EDICIÓN ===')
-    console.log('editedData:', editedData)
-    console.log('editedData.id_rubro:', editedData?.id_rubro)
-    console.log('editedData.sub_rubro:', editedData?.sub_rubro)
-    console.log('subRubros disponibles:', subRubros)
-    console.log('subRubros.length:', subRubros.length)
-    console.log('================================')
   }
 }, [isEditing, editedData, subRubros])
 
@@ -251,14 +265,6 @@ useEffect(() => {
       const data = await api.getEmpresaById(empresaId)
 
           // ✅ AGREGAR ESTE DEBUG
-    console.log('=== DEBUG EMPRESA ===')
-    console.log('Empresa completa:', data)
-    console.log('Productos:', data.productos)
-    data.productos?.forEach((prod: any, index: number) => {
-      console.log(`Producto ${index + 1}:`, prod.nombre_producto)
-      console.log(`  - Posición arancelaria:`, prod.posicion_arancelaria)
-    })
-    console.log('=====================')
       
       if (!data || !data.id) {
         toast({
@@ -272,6 +278,21 @@ useEffect(() => {
       
       setEmpresa(data)
       setEditedData(data)
+      
+      // Inicializar actividades de promoción internacional
+      if (data.actividades_promocion_internacional && Array.isArray(data.actividades_promocion_internacional)) {
+        // Convertir las actividades del formato del backend al formato del frontend
+        const actividadesFormateadas: ActividadPromocion[] = data.actividades_promocion_internacional.map((act: any, index: number) => ({
+          id: act.id?.toString() || `act-${index}-${Date.now()}`,
+          tipo: act.tipo || 'feria',
+          lugar: act.lugar || '',
+          anio: act.anio?.toString() || '',
+          observaciones: act.observaciones || ''
+        }))
+        setActividadesPromocion(actividadesFormateadas)
+      } else {
+        setActividadesPromocion([])
+      }
       
       const editParam = searchParams?.get('edit')
       if (editParam === 'true') {
@@ -355,11 +376,8 @@ useEffect(() => {
   try {
     setLoadingRubros(true)
     const data = await api.getRubros()
-    console.log('✅ [loadRubrosData] Rubros cargados (raw):', data)
-    
     // El API puede devolver un array directamente O un objeto con { results: [...] }
     const rubrosArray = Array.isArray(data) ? data : (data?.results || [])
-    console.log('✅ [loadRubrosData] Rubros array:', rubrosArray.length, rubrosArray)
     
     setRubros(rubrosArray)
   } catch (error) {
@@ -372,12 +390,8 @@ useEffect(() => {
   const loadSubRubrosData = async (rubroId: any) => {
   try {
     setLoadingRubros(true)
-    console.log('🔍 [loadSubRubrosData] Cargando subrubros para rubro:', rubroId)
-    const data = await api.getSubRubrosPorRubro(rubroId)
-    console.log('✅ [loadSubRubrosData] SubRubros cargados (raw):', data)
-    
-    const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
-    console.log('✅ [loadSubRubrosData] SubRubros array:', subRubrosArray.length, subRubrosArray)
+      const data = await api.getSubRubrosPorRubro(rubroId)
+      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
     
     setSubRubros(subRubrosArray)
   } catch (error) {
@@ -392,12 +406,8 @@ useEffect(() => {
   const loadSubRubrosProductos = async (rubroId: any) => {
     try {
       setLoadingRubros(true)
-      console.log('🔍 [loadSubRubrosProductos] Cargando subrubros para rubro productos:', rubroId)
-      const data = await api.getSubRubrosPorRubro(rubroId)
-      console.log('✅ [loadSubRubrosProductos] SubRubros cargados (raw):', data)
-      
-      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
-      console.log('✅ [loadSubRubrosProductos] SubRubros array:', subRubrosArray.length, subRubrosArray)
+        const data = await api.getSubRubrosPorRubro(rubroId)
+        const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
       
       setSubRubrosProductos(subRubrosArray)
     } catch (error) {
@@ -412,12 +422,8 @@ useEffect(() => {
   const loadSubRubrosServicios = async (rubroId: any) => {
     try {
       setLoadingRubros(true)
-      console.log('🔍 [loadSubRubrosServicios] Cargando subrubros para rubro servicios:', rubroId)
-      const data = await api.getSubRubrosPorRubro(rubroId)
-      console.log('✅ [loadSubRubrosServicios] SubRubros cargados (raw):', data)
-      
-      const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
-      console.log('✅ [loadSubRubrosServicios] SubRubros array:', subRubrosArray.length, subRubrosArray)
+        const data = await api.getSubRubrosPorRubro(rubroId)
+        const subRubrosArray = Array.isArray(data) ? data : (data?.results || [])
       
       setSubRubrosServicios(subRubrosArray)
     } catch (error) {
@@ -428,56 +434,96 @@ useEffect(() => {
     }
   }
 
+  // Funciones para manejar actividades de promoción internacional
+  const agregarActividad = (tipo: "feria" | "mision" | "ronda") => {
+    setActividadesPromocion([...actividadesPromocion, { 
+      id: Date.now().toString(), 
+      tipo, 
+      lugar: "", 
+      anio: "",
+      observaciones: ""
+    }])
+  }
+
+  const eliminarActividad = (id: string) => {
+    setActividadesPromocion(actividadesPromocion.filter((a) => a.id !== id))
+  }
+
+  const actualizarActividad = (id: string, field: string, value: string) => {
+    setActividadesPromocion(actividadesPromocion.map((a) => (a.id === id ? { ...a, [field]: value } : a)))
+  }
+
+  const toUpperCase = (value: string) => value.toUpperCase()
+
   const handleEdit = () => {
-  console.log('🔵 [handleEdit] INICIANDO EDICIÓN')
-  console.log('🔵 [handleEdit] empresa:', empresa)
-  
-  setIsEditing(true)
-  
-  if (empresa) {
-    console.log('🔵 [handleEdit] Copiando datos de empresa a editedData')
-    setEditedData({ ...empresa })
+    setIsEditing(true)
     
-    // Cargar municipios si hay departamento
-    if (empresa.departamento) {
-      const deptoId = typeof empresa.departamento === 'object' 
-        ? empresa.departamento.id 
-        : empresa.departamento
-      if (deptoId) {
-        console.log('🔵 [handleEdit] Cargando municipios para depto:', deptoId)
-        loadMunicipiosData(deptoId)
+    if (empresa) {
+      setEditedData({ ...empresa })
+      
+      // Inicializar actividades de promoción internacional cuando se entra en modo edición
+      if (empresa.actividades_promocion_internacional && Array.isArray(empresa.actividades_promocion_internacional)) {
+        const actividadesFormateadas: ActividadPromocion[] = empresa.actividades_promocion_internacional.map((act: any, index: number) => ({
+          id: act.id?.toString() || `act-${index}-${Date.now()}`,
+          tipo: act.tipo || 'feria',
+          lugar: act.lugar || '',
+          anio: act.anio?.toString() || '',
+          observaciones: act.observaciones || ''
+        }))
+        setActividadesPromocion(actividadesFormateadas)
+      } else {
+        setActividadesPromocion([])
       }
-    }
-    
-    // Cargar localidades si hay municipio
-    if (empresa.municipio) {
-      const munId = typeof empresa.municipio === 'object'
-        ? empresa.municipio.id
-        : empresa.municipio
-      if (munId) {
-        console.log('🔵 [handleEdit] Cargando localidades para municipio:', munId)
-        loadLocalidadesData(munId)
+      
+      // Cargar municipios si hay departamento
+      if (empresa.departamento) {
+        const deptoId = typeof empresa.departamento === 'object' 
+          ? empresa.departamento.id 
+          : empresa.departamento
+        if (deptoId) {
+          loadMunicipiosData(deptoId)
+        }
       }
-    }
-    
-    // ⭐ CRÍTICO: Cargar subrubros si hay rubro
-    if (empresa.id_rubro) {
-      const rubroId = typeof empresa.id_rubro === 'object'
-        ? empresa.id_rubro.id
-        : empresa.id_rubro
-      if (rubroId) {
-        console.log('🔵 [handleEdit] Cargando subrubros para rubro:', rubroId)
-        loadSubRubrosData(rubroId)
+      
+      // Cargar localidades si hay municipio
+      if (empresa.municipio) {
+        const munId = typeof empresa.municipio === 'object'
+          ? empresa.municipio.id
+          : empresa.municipio
+        if (munId) {
+          loadLocalidadesData(munId)
+        }
+      }
+      
+      // ⭐ CRÍTICO: Cargar subrubros si hay rubro
+      if (empresa.id_rubro) {
+        const rubroId = typeof empresa.id_rubro === 'object'
+          ? empresa.id_rubro.id
+          : empresa.id_rubro
+        if (rubroId) {
+          loadSubRubrosData(rubroId)
+        }
       }
     }
   }
-  
-  console.log('🔵 [handleEdit] EDICIÓN INICIADA')
-}
 
   const handleCancel = () => {
     setIsEditing(false)
     setEditedData(empresa ? { ...empresa } : null)
+    
+    // Restaurar actividades de promoción internacional cuando se cancela la edición
+    if (empresa?.actividades_promocion_internacional && Array.isArray(empresa.actividades_promocion_internacional)) {
+      const actividadesFormateadas: ActividadPromocion[] = empresa.actividades_promocion_internacional.map((act: any, index: number) => ({
+        id: act.id?.toString() || `act-${index}-${Date.now()}`,
+        tipo: act.tipo || 'feria',
+        lugar: act.lugar || '',
+        anio: act.anio?.toString() || '',
+        observaciones: act.observaciones || ''
+      }))
+      setActividadesPromocion(actividadesFormateadas)
+    } else {
+      setActividadesPromocion([])
+    }
     // Limpiar estados de rubros y subrubros para empresas mixtas
     setRubroProducto(null)
     setRubroServicio(null)
@@ -491,32 +537,25 @@ const handleSave = async () => {
   try {
     setSaving(true)
     
-    console.log('📤 [handleSave] Iniciando guardado')
-    
     // 0. DETERMINAR TIPO DE EMPRESA PRIMERO
     const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa || 'producto'
     const esProducto = tipoEmpresa === 'producto'
     const esServicio = tipoEmpresa === 'servicio'
     const esMixta = tipoEmpresa === 'mixta'
-    
-    console.log('📦 [handleSave] Tipo de empresa:', tipoEmpresa)
 
     // 1. GUARDAR DATOS BÁSICOS DE LA EMPRESA (sin productos/servicios)
     // ✅ IMPORTANTE: Excluir 'brochure' del destructuring porque es la URL del archivo existente,
     // no el archivo en sí. El manejo del archivo se hace por separado más abajo.
-    const { productos, servicios, productos_mixta, servicios_mixta, brochure_file, brochure_filename, brochure, ...empresaData } = editedData
+    // ✅ IMPORTANTE: Excluir 'redes_sociales' porque se manejan como campos individuales
+    const { productos, servicios, productos_mixta, servicios_mixta, brochure_file, brochure_filename, brochure, redes_sociales, ...empresaData } = editedData
     
     // ✅ CREAR FormData para enviar archivos
     const formData = new FormData()
     
     // ✅ MANEJAR ARCHIVO PDF
     if (brochure_file) {
-      // Subir nuevo archivo
-      console.log('📎 [handleSave] Agregando archivo brochure:', brochure_file.name)
       formData.append('brochure', brochure_file)
     } else if (editedData.brochure === null && empresa.brochure) {
-      // El usuario eliminó el archivo (brochure es null pero antes existía)
-      console.log('🗑️ [handleSave] Eliminando archivo brochure existente')
       formData.append('brochure', '') // Enviar string vacío para eliminar
     }
     // Si no hay cambios en el archivo (no hay brochure_file y brochure no es null),
@@ -525,22 +564,38 @@ const handleSave = async () => {
     // Normalizar relaciones a IDs
     const dataToSend: any = {
       ...empresaData,
-      departamento: typeof empresaData.departamento === 'object' 
-        ? empresaData.departamento.id 
-        : empresaData.departamento,
-      municipio: empresaData.municipio 
-        ? (typeof empresaData.municipio === 'object' 
-            ? empresaData.municipio.id 
-            : empresaData.municipio)
+      // ✅ IMPORTANTE: Usar editedData para campos que pueden cambiar
+      razon_social: editedData.razon_social || empresaData.razon_social,
+      nombre_fantasia: editedData.nombre_fantasia || empresaData.nombre_fantasia || null,
+      tipo_sociedad: editedData.tipo_sociedad || empresaData.tipo_sociedad || null,
+      cuit_cuil: editedData.cuit_cuil || empresaData.cuit_cuil,
+      direccion: editedData.direccion || empresaData.direccion || '',
+      codigo_postal: editedData.codigo_postal || empresaData.codigo_postal || null,
+      direccion_comercial: editedData.direccion_comercial || empresaData.direccion_comercial || null,
+      codigo_postal_comercial: editedData.codigo_postal_comercial || empresaData.codigo_postal_comercial || null,
+      departamento: typeof (editedData.departamento || empresaData.departamento) === 'object' 
+        ? (editedData.departamento || empresaData.departamento).id 
+        : (editedData.departamento || empresaData.departamento),
+      municipio: (editedData.municipio || empresaData.municipio)
+        ? (typeof (editedData.municipio || empresaData.municipio) === 'object' 
+            ? (editedData.municipio || empresaData.municipio).id 
+            : (editedData.municipio || empresaData.municipio))
         : null,
-      localidad: empresaData.localidad 
-        ? (typeof empresaData.localidad === 'object' 
-            ? empresaData.localidad.id 
-            : empresaData.localidad)
+      localidad: (editedData.localidad || empresaData.localidad)
+        ? (typeof (editedData.localidad || empresaData.localidad) === 'object' 
+            ? (editedData.localidad || empresaData.localidad).id 
+            : (editedData.localidad || empresaData.localidad))
         : null,
-      id_rubro: typeof empresaData.id_rubro === 'object' 
-        ? empresaData.id_rubro.id 
-        : empresaData.id_rubro,
+      telefono: editedData.telefono || empresaData.telefono || '',
+      correo: editedData.correo || editedData.email || empresaData.correo || empresaData.email,
+      sitioweb: editedData.sitioweb || editedData.paginaWeb || empresaData.sitioweb || empresaData.paginaWeb || null,
+      id_rubro: typeof (editedData.id_rubro || empresaData.id_rubro) === 'object' 
+        ? (editedData.id_rubro || empresaData.id_rubro).id 
+        : (editedData.id_rubro || empresaData.id_rubro),
+      // ✅ Redes sociales - usar editedData explícitamente, null si están vacías
+      instagram: (editedData.instagram && editedData.instagram.trim() !== '') ? editedData.instagram.trim() : null,
+      facebook: (editedData.facebook && editedData.facebook.trim() !== '') ? editedData.facebook.trim() : null,
+      linkedin: (editedData.linkedin && editedData.linkedin.trim() !== '') ? editedData.linkedin.trim() : null,
     }
     
     // ✅ CRÍTICO: Manejar subrubros según tipo de empresa
@@ -570,28 +625,44 @@ const handleSave = async () => {
       delete dataToSend.id_subrubro_servicio
     }
     
-    // ✅ AGREGAR TODOS LOS CAMPOS AL FormData
-    console.log('📋 [handleSave] Campos a enviar en FormData:')
+    // ✅ Agregar actividades de promoción internacional
+    if (actividadesPromocion.length > 0) {
+      dataToSend.actividades_promocion_internacional = actividadesPromocion.map(a => ({
+        tipo: a.tipo,
+        lugar: a.lugar.trim(),
+        anio: a.anio.trim(),
+        observaciones: a.observaciones?.trim() || ''
+      }))
+    } else {
+      dataToSend.actividades_promocion_internacional = []
+    }
+    
+    // Agregar todos los campos al FormData
     for (const [key, value] of Object.entries(dataToSend)) {
+      // ✅ IMPORTANTE: Excluir redes_sociales del FormData (solo usamos campos individuales)
+      if (key === 'redes_sociales') {
+        continue
+      }
+      
+      // Para redes sociales, enviar null como cadena vacía para limpiar el campo
+      if ((key === 'instagram' || key === 'facebook' || key === 'linkedin')) {
+        formData.append(key, value === null ? '' : String(value))
+        continue
+      }
+      
+      // Saltar otros valores null o undefined
       if (value === null || value === undefined) {
-        console.log(`  ⏭️ Saltando ${key}: ${value}`)
         continue
       }
       
       if (typeof value === 'object' && !(value instanceof File) && !Array.isArray(value)) {
-        console.log(`  📄 ${key}: ${JSON.stringify(value)} (JSON)`)
         formData.append(key, JSON.stringify(value))
       } else if (Array.isArray(value)) {
-        console.log(`  📋 ${key}: ${JSON.stringify(value)} (Array)`)
         formData.append(key, JSON.stringify(value))
       } else {
-        console.log(`  ✏️ ${key}: ${value}`)
         formData.append(key, String(value))
       }
     }
-    
-    console.log('📤 [handleSave] Guardando empresa (datos básicos + archivo)')
-    console.log('📤 [handleSave] Tipo empresa para backend:', tipoEmpresa)
     
     // ✅ USAR FormData en lugar de JSON
     await api.updateEmpresa(empresa.id, formData)
@@ -601,7 +672,6 @@ const handleSave = async () => {
       const productosData = esMixta ? productos_mixta : productos
       
       if (productosData && Array.isArray(productosData)) {
-        console.log('📦 [handleSave] Procesando productos:', productosData.length)
         
         // Obtener IDs de productos actuales
         const productosActualesIds = productosData
@@ -620,7 +690,6 @@ const handleSave = async () => {
         )
         
         for (const id of productosAEliminar) {
-          console.log('🗑️ [handleSave] Eliminando producto:', id)
           if (esMixta) {
             await api.deleteProductoMixta(id)
           } else {
@@ -653,14 +722,12 @@ const handleSave = async () => {
           }
           
           if (producto.id && !String(producto.id).startsWith('temp-')) {
-            console.log('✏️ [handleSave] Actualizando producto:', producto.id)
             if (esMixta) {
               await api.updateProductoMixta(producto.id, productoData)
             } else {
               await api.updateProducto(producto.id, productoData)
             }
           } else {
-            console.log('➕ [handleSave] Creando producto nuevo')
             if (esMixta) {
               await api.createProductoMixta(productoData)
             } else {
@@ -676,7 +743,6 @@ const handleSave = async () => {
       const serviciosData = esMixta ? servicios_mixta : servicios
       
       if (serviciosData && Array.isArray(serviciosData)) {
-        console.log('🔧 [handleSave] Procesando servicios:', serviciosData.length)
         
         const serviciosActualesIds = serviciosData
           .filter((s: any) => s.id && !String(s.id).startsWith('temp-'))
@@ -692,7 +758,6 @@ const handleSave = async () => {
         )
         
         for (const id of serviciosAEliminar) {
-          console.log('🗑️ [handleSave] Eliminando servicio:', id)
           if (esMixta) {
             await api.deleteServicioMixta(id)
           } else {
@@ -724,14 +789,12 @@ const handleSave = async () => {
           }
           
           if (servicio.id && !String(servicio.id).startsWith('temp-')) {
-            console.log('✏️ [handleSave] Actualizando servicio:', servicio.id)
             if (esMixta) {
               await api.updateServicioMixta(servicio.id, servicioData)
             } else {
               await api.updateServicio(servicio.id, servicioData)
             }
           } else {
-            console.log('➕ [handleSave] Creando servicio nuevo')
             if (esMixta) {
               await api.createServicioMixta(servicioData)
             } else {
@@ -743,7 +806,6 @@ const handleSave = async () => {
     }
     
     // 5. RECARGAR LA EMPRESA ACTUALIZADA
-    console.log('🔄 [handleSave] Recargando empresa actualizada')
     const updatedEmpresa = await api.getEmpresaById(empresa.id)
     setEmpresa(updatedEmpresa)
     setEditedData(updatedEmpresa)
@@ -849,16 +911,16 @@ const handleSave = async () => {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6 px-2 sm:px-0 w-full max-w-full overflow-x-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 md:gap-4 flex-wrap">
-          <Button variant="ghost" size="icon" asChild className="flex-shrink-0">
+          <Button variant="ghost" size="icon" asChild className="flex-shrink-0 h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10">
             <Link href="/dashboard/empresas">
               <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
             </Link>
           </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-[#222A59] break-words">Perfil de Empresa</h1>
-            <p className="text-xs md:text-sm lg:text-base text-muted-foreground mt-1 break-words">
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#222A59] break-words">Perfil de Empresa</h1>
+            <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1 break-words">
               {empresa?.razon_social || 'Cargando...'}
             </p>
             {empresa?.id && (
@@ -868,81 +930,85 @@ const handleSave = async () => {
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {!isEditing ? (
               <>
-                <Button onClick={handleEdit} variant="outline" className="gap-2 text-xs md:text-sm">
-                  <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                  <span className="hidden sm:inline">Editar</span>
+                <Button onClick={handleEdit} variant="outline" className="gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10 px-3 sm:px-4 flex-1 sm:flex-initial">
+                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Editar</span>
+                  <span className="xs:hidden">Edit</span>
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="gap-2"
+                  className="gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10 px-3 sm:px-4 flex-1 sm:flex-initial"
                   onClick={() => setShowExportDialog(true)}
                 >
-                  <Download className="h-4 w-4" />
-                  Exportar
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Exportar</span>
+                  <span className="xs:hidden">Exp.</span>
                 </Button>
               </>
             ) : (
               <>
-                <Button onClick={handleCancel} variant="outline" className="gap-2">
-                  <X className="h-4 w-4" />
-                  Cancelar
+                <Button onClick={handleCancel} variant="outline" className="gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10 px-3 sm:px-4 flex-1 sm:flex-initial">
+                  <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Cancelar</span>
+                  <span className="xs:hidden">Cancel</span>
                 </Button>
-                <Button onClick={handleSave} className="bg-[#3259B5] hover:bg-[#3259B5]/90 text-white gap-2" disabled={saving}>
+                <Button onClick={handleSave} className="bg-[#3259B5] hover:bg-[#3259B5]/90 text-white gap-2 text-xs sm:text-sm h-8 sm:h-9 md:h-10 px-3 sm:px-4 flex-1 sm:flex-initial" disabled={saving}>
                   {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                   ) : (
-                    <Save className="h-4 w-4" />
+                    <Save className="h-3 w-3 sm:h-4 sm:w-4" />
                   )}
-                  Guardar
+                  <span className="hidden xs:inline">{saving ? 'Guardando...' : 'Guardar'}</span>
+                  <span className="xs:hidden">{saving ? '...' : 'Save'}</span>
                 </Button>
               </>
             )}
           </div>
         </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-              <div className="flex gap-4">
-                <div className="w-16 h-16 bg-[#3259B5]/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Building2 className="h-8 w-8 text-[#3259B5]" />
+        <Card className="w-full max-w-full overflow-hidden">
+          <CardContent className="p-4 sm:p-6 w-full max-w-full overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 sm:gap-6">
+              <div className="flex gap-3 sm:gap-4 min-w-0 w-full">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#3259B5]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-[#3259B5]" />
                 </div>
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-[#222A59]">{displayData?.razon_social}</h2>
-                  <div className="flex flex-wrap items-center gap-3 mt-2">
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <h2 className="text-xl sm:text-2xl font-bold text-[#222A59] break-words">{displayData?.razon_social}</h2>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2">
                     <Badge className={getCategoryColor(category)}>{category}</Badge>
                     {(displayData?.rubro_nombre || displayData?.id_rubro) && (
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs sm:text-sm text-muted-foreground break-words">
                         {displayData.rubro_nombre || (typeof displayData.id_rubro === 'object' ? displayData.id_rubro.nombre : displayData.id_rubro) || 'N/A'}
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-4 mt-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap gap-3 sm:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm text-muted-foreground">
                     {displayData?.direccion && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>{displayData.direccion}</span>
+                      <div className="flex items-start gap-2 min-w-0 flex-1 sm:flex-initial">
+                        <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span className="break-words">{displayData.direccion}
                         {(displayData.departamento_nombre || displayData.departamento) && (
                           <span>, {displayData.departamento_nombre || (typeof displayData.departamento === 'object' ? displayData.departamento.nombre : displayData.departamento)}</span>
-                        )}
+                        )}</span>
                       </div>
                     )}
                     {displayData?.correo && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        <span>{displayData.correo}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Mail className="h-4 w-4 flex-shrink-0" />
+                        <span className="break-all">{displayData.correo}</span>
                       </div>
                     )}
                     {displayData?.telefono && (
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
+                        <Phone className="h-4 w-4 flex-shrink-0" />
                         <span>{displayData.telefono}</span>
                       </div>
                     )}
                     {displayData?.sitioweb && (
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4" />
-                        <a href={displayData.sitioweb} target="_blank" rel="noopener noreferrer" className="text-[#3259B5] hover:underline">
+                      <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
+                        <Globe className="h-4 w-4 flex-shrink-0" />
+                        <a href={displayData.sitioweb} target="_blank" rel="noopener noreferrer" className="text-[#3259B5] hover:underline break-all">
                           {displayData.sitioweb}
                         </a>
                       </div>
@@ -954,54 +1020,59 @@ const handleSave = async () => {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="inline-flex w-full sm:w-auto overflow-x-auto gap-2 flex-nowrap">
-  <TabsTrigger value="general" className="flex-shrink-0">Información General</TabsTrigger>
-  <TabsTrigger value="ubicacion" className="flex-shrink-0">Ubicación</TabsTrigger>
-  <TabsTrigger value="comercial" className="flex-shrink-0">Actividad Comercial</TabsTrigger>
-  <TabsTrigger value="productos-servicios" className="flex-shrink-0">Productos/Servicios</TabsTrigger>
-  <TabsTrigger value="certificaciones" className="flex-shrink-0">Certificaciones</TabsTrigger>
-</TabsList>
+        <Tabs defaultValue="general" className="w-full max-w-full">
+          <div className="mb-4 sm:mb-6 w-full max-w-full">
+            <TabsList className="flex flex-col sm:flex-row w-full max-w-full h-auto sm:h-10 gap-2 sm:gap-1 p-2 sm:p-1 bg-muted/50 rounded-lg">
+              <TabsTrigger value="general" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">General</TabsTrigger>
+              <TabsTrigger value="ubicacion" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Ubicación</TabsTrigger>
+              <TabsTrigger value="comercial" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Comercial</TabsTrigger>
+              <TabsTrigger value="productos-servicios" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Productos/Servicios</TabsTrigger>
+              <TabsTrigger value="certificaciones" className="w-full sm:w-auto text-xs sm:text-sm px-4 py-3 sm:py-1.5 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all">Certificaciones</TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value="general" className="space-y-6">
-  <Card>
+          <TabsContent value="general" className="space-y-4 sm:space-y-6 w-full max-w-full mt-0">
+  <Card className="w-full max-w-full overflow-hidden">
     <CardHeader>
-      <CardTitle className="text-[#222A59]">Datos de la Empresa</CardTitle>
+      <CardTitle className="text-[#222A59] text-base sm:text-lg md:text-xl">Datos de la Empresa</CardTitle>
     </CardHeader>
-    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 w-full max-w-full overflow-hidden">
       {/* Razón Social */}
-      <div>
+      <div className="min-w-0 w-full">
         <Label>Razón Social</Label>
         {isEditing ? (
           <Input
             value={editedData?.razon_social || ''}
             onChange={(e) => setEditedData(editedData ? { ...editedData, razon_social: e.target.value } : null)}
+            className="w-full max-w-full"
           />
         ) : (
-          <p className="mt-1 font-semibold">{displayData?.razon_social}</p>
+          <p className="mt-1 font-semibold break-words overflow-wrap-anywhere">{displayData?.razon_social}</p>
         )}
       </div>
 
       {/* Nombre de Fantasía */}
-      <div>
+      <div className="min-w-0 w-full">
         <Label>Nombre de Fantasía</Label>
         {isEditing ? (
           <Input
             value={editedData?.nombre_fantasia || ''}
             onChange={(e) => setEditedData(editedData ? { ...editedData, nombre_fantasia: e.target.value } : null)}
+            className="w-full max-w-full"
           />
         ) : (
-          <p className="mt-1 font-semibold">{displayData?.nombre_fantasia || 'N/A'}</p>
+          <p className="mt-1 font-semibold break-words overflow-wrap-anywhere">{displayData?.nombre_fantasia || 'N/A'}</p>
         )}
       </div>
 
       {/* CUIT */}
-      <div>
+      <div className="min-w-0 w-full">
         <Label>CUIT</Label>
         {isEditing ? (
           <Input
             value={editedData?.cuit_cuil || ''}
             onChange={(e) => setEditedData(editedData ? { ...editedData, cuit_cuil: e.target.value } : null)}
+            className="w-full max-w-full"
           />
         ) : (
           <p className="mt-1 font-semibold">{displayData?.cuit_cuil}</p>
@@ -1009,14 +1080,14 @@ const handleSave = async () => {
       </div>
 
       {/* Tipo de Sociedad */}
-      <div>
+      <div className="min-w-0 w-full">
         <Label>Tipo de Sociedad</Label>
         {isEditing ? (
           <Select
             value={editedData?.tipo_sociedad || ''}
             onValueChange={(value) => setEditedData(editedData ? { ...editedData, tipo_sociedad: value } : null)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
               <SelectValue placeholder="Selecciona" />
             </SelectTrigger>
             <SelectContent>
@@ -1036,9 +1107,9 @@ const handleSave = async () => {
       </div>
 
       {/* Tipo de Empresa */}
-      <div>
+      <div className="min-w-0 w-full">
         <Label>Tipo de Empresa</Label>
-        <p className="mt-1 font-semibold">
+        <p className="mt-1 font-semibold break-words overflow-wrap-anywhere">
           {displayData?.tipo_empresa_detalle?.nombre || 
            displayData?.tipo_empresa_valor || 
            displayData?.tipo_empresa || 
@@ -1050,18 +1121,17 @@ const handleSave = async () => {
       {(displayData?.tipo_empresa_valor === 'mixta' || editedData?.tipo_empresa_valor === 'mixta') ? (
         <>
           {/* Rubro de Productos */}
-          <div>
+          <div className="min-w-0 w-full">
             <Label>Rubro de Productos</Label>
             {isEditing ? (
               <Select
                 value={rubroProducto ? String(rubroProducto) : ''}
                 onValueChange={(value) => {
-                  console.log('🔵 [Rubro Productos] Cambiando rubro a:', value)
                   setRubroProducto(parseInt(value))
                 }}
                 disabled={loadingRubros || rubros.length === 0}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full max-w-full">
                   <SelectValue placeholder={
                     loadingRubros 
                       ? "Cargando..." 
@@ -1098,12 +1168,11 @@ const handleSave = async () => {
               <Select
                 value={rubroServicio ? String(rubroServicio) : ''}
                 onValueChange={(value) => {
-                  console.log('🔵 [Rubro Servicios] Cambiando rubro a:', value)
                   setRubroServicio(parseInt(value))
                 }}
                 disabled={loadingRubros || rubros.length === 0}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full max-w-full">
                   <SelectValue placeholder={
                     loadingRubros 
                       ? "Cargando..." 
@@ -1140,7 +1209,6 @@ const handleSave = async () => {
             <Select
               value={editedData?.id_rubro ? String(typeof editedData.id_rubro === 'object' ? editedData.id_rubro.id : editedData.id_rubro) : ''}
               onValueChange={(value) => {
-                console.log('🔵 [Rubro] Cambiando rubro a:', value)
                 setEditedData(editedData ? { 
                   ...editedData, 
                   id_rubro: parseInt(value),
@@ -1186,7 +1254,6 @@ const handleSave = async () => {
                     : ''
                   }
                   onValueChange={(value) => {
-                    console.log('🔵 [SubRubro Productos] Cambiando subrubro a:', value)
                     setEditedData(editedData ? { 
                       ...editedData, 
                       id_subrubro_producto: parseInt(value)
@@ -1238,7 +1305,6 @@ const handleSave = async () => {
                     : ''
                   }
                   onValueChange={(value) => {
-                    console.log('🔵 [SubRubro Servicios] Cambiando subrubro a:', value)
                     setEditedData(editedData ? { 
                       ...editedData, 
                       id_subrubro_servicio: parseInt(value)
@@ -1288,7 +1354,6 @@ const handleSave = async () => {
                   : ''
                 }
                 onValueChange={(value) => {
-                  console.log('🔵 [SubRubro] Cambiando subrubro a:', value)
                   setEditedData(editedData ? { 
                     ...editedData, 
                     id_subrubro: parseInt(value)
@@ -1296,7 +1361,7 @@ const handleSave = async () => {
                 }}
                 disabled={loadingRubros || !editedData?.id_rubro || subRubros.length === 0}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full max-w-full">
                   <SelectValue placeholder={
                     loadingRubros 
                       ? "Cargando..." 
@@ -1386,12 +1451,13 @@ const handleSave = async () => {
       {(displayData?.instagram || displayData?.facebook || displayData?.linkedin || isEditing) && (
         <div className="md:col-span-2">
           <Label>Redes Sociales</Label>
-          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 w-full max-w-full">
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">Instagram</span>
               {isEditing ? (
                 <Input
                   value={editedData?.instagram || ''}
+                  className="w-full max-w-full"
                   onChange={(e) => setEditedData(editedData ? { ...editedData, instagram: e.target.value } : null)}
                   placeholder="usuario o URL"
                 />
@@ -1399,7 +1465,7 @@ const handleSave = async () => {
                 displayData?.instagram ? (
                   <a href={displayData.instagram.startsWith('http') ? displayData.instagram : `https://instagram.com/${displayData.instagram}`} 
                      target="_blank" rel="noopener noreferrer" 
-                     className="text-[#3259B5] hover:underline block mt-1">
+                     className="text-[#3259B5] hover:underline block mt-1 break-all">
                     {displayData.instagram}
                   </a>
                 ) : (
@@ -1407,19 +1473,20 @@ const handleSave = async () => {
                 )
               )}
             </div>
-            <div>
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">Facebook</span>
               {isEditing ? (
                 <Input
                   value={editedData?.facebook || ''}
                   onChange={(e) => setEditedData(editedData ? { ...editedData, facebook: e.target.value } : null)}
                   placeholder="usuario o URL"
+                  className="w-full max-w-full"
                 />
               ) : (
                 displayData?.facebook ? (
                   <a href={displayData.facebook.startsWith('http') ? displayData.facebook : `https://facebook.com/${displayData.facebook}`} 
                      target="_blank" rel="noopener noreferrer" 
-                     className="text-[#3259B5] hover:underline block mt-1">
+                     className="text-[#3259B5] hover:underline block mt-1 break-all">
                     {displayData.facebook}
                   </a>
                 ) : (
@@ -1427,19 +1494,20 @@ const handleSave = async () => {
                 )
               )}
             </div>
-            <div>
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">LinkedIn</span>
               {isEditing ? (
                 <Input
                   value={editedData?.linkedin || ''}
                   onChange={(e) => setEditedData(editedData ? { ...editedData, linkedin: e.target.value } : null)}
                   placeholder="usuario o URL"
+                  className="w-full max-w-full"
                 />
               ) : (
                 displayData?.linkedin ? (
                   <a href={displayData.linkedin.startsWith('http') ? displayData.linkedin : `https://linkedin.com/company/${displayData.linkedin}`} 
                      target="_blank" rel="noopener noreferrer" 
-                     className="text-[#3259B5] hover:underline block mt-1">
+                     className="text-[#3259B5] hover:underline block mt-1 break-all">
                     {displayData.linkedin}
                   </a>
                 ) : (
@@ -1452,53 +1520,69 @@ const handleSave = async () => {
       )}
 
       {/* Contacto Principal */}
-      {(displayData?.contacto_principal_nombre || displayData?.contacto_principal_cargo || displayData?.contacto_principal_telefono || displayData?.contacto_principal_email || isEditing) && (
+      {(displayData?.contacto_principal_nombre || displayData?.contacto_principal_apellido || displayData?.contacto_principal_cargo || displayData?.contacto_principal_telefono || displayData?.contacto_principal_email || isEditing) && (
         <div className="md:col-span-2">
           <Label>Contacto Principal</Label>
-          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
-            <div>
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg w-full max-w-full">
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">Nombre</span>
               {isEditing ? (
                 <Input
                   value={editedData?.contacto_principal_nombre || ''}
                   onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_nombre: e.target.value } : null)}
+                  className="w-full max-w-full"
                 />
               ) : (
-                <p className="mt-1 font-semibold">{displayData?.contacto_principal_nombre || 'N/A'}</p>
+                <p className="mt-1 font-semibold break-words">{displayData?.contacto_principal_nombre || 'N/A'}</p>
               )}
             </div>
-            <div>
+            <div className="min-w-0 w-full">
+              <span className="text-sm text-muted-foreground">Apellido</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_principal_apellido || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_apellido: e.target.value } : null)}
+                  className="w-full max-w-full"
+                />
+              ) : (
+                <p className="mt-1 font-semibold break-words">{displayData?.contacto_principal_apellido || 'N/A'}</p>
+              )}
+            </div>
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">Cargo</span>
               {isEditing ? (
                 <Input
                   value={editedData?.contacto_principal_cargo || ''}
                   onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_cargo: e.target.value } : null)}
+                  className="w-full max-w-full"
                 />
               ) : (
-                <p className="mt-1 font-semibold">{displayData?.contacto_principal_cargo || 'N/A'}</p>
+                <p className="mt-1 font-semibold break-words">{displayData?.contacto_principal_cargo || 'N/A'}</p>
               )}
             </div>
-            <div>
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">Teléfono</span>
               {isEditing ? (
                 <Input
                   value={editedData?.contacto_principal_telefono || ''}
                   onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_telefono: e.target.value } : null)}
+                  className="w-full max-w-full"
                 />
               ) : (
-                <p className="mt-1 font-semibold">{displayData?.contacto_principal_telefono || 'N/A'}</p>
+                <p className="mt-1 font-semibold break-words">{displayData?.contacto_principal_telefono || 'N/A'}</p>
               )}
             </div>
-            <div>
+            <div className="min-w-0 w-full">
               <span className="text-sm text-muted-foreground">Email</span>
               {isEditing ? (
                 <Input
                   type="email"
                   value={editedData?.contacto_principal_email || ''}
                   onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_principal_email: e.target.value } : null)}
+                  className="w-full max-w-full"
                 />
               ) : (
-                <p className="mt-1 font-semibold">{displayData?.contacto_principal_email || 'N/A'}</p>
+                <p className="mt-1 font-semibold break-all">{displayData?.contacto_principal_email || 'N/A'}</p>
               )}
             </div>
           </div>
@@ -1524,6 +1608,17 @@ const handleSave = async () => {
                 />
               ) : (
                 <p className="mt-1 font-semibold">{displayData?.contacto_secundario_nombre || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Apellido</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_secundario_apellido || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_secundario_apellido: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_secundario_apellido || 'N/A'}</p>
               )}
             </div>
             <div>
@@ -1581,6 +1676,17 @@ const handleSave = async () => {
               )}
             </div>
             <div>
+              <span className="text-sm text-muted-foreground">Apellido</span>
+              {isEditing ? (
+                <Input
+                  value={editedData?.contacto_terciario_apellido || ''}
+                  onChange={(e) => setEditedData(editedData ? { ...editedData, contacto_terciario_apellido: e.target.value } : null)}
+                />
+              ) : (
+                <p className="mt-1 font-semibold">{displayData?.contacto_terciario_apellido || 'N/A'}</p>
+              )}
+            </div>
+            <div>
               <span className="text-sm text-muted-foreground">Cargo</span>
               {isEditing ? (
                 <Input
@@ -1624,39 +1730,41 @@ const handleSave = async () => {
   </Card>
 </TabsContent>
 
-          <TabsContent value="ubicacion" className="space-y-6">
-  <Card>
+          <TabsContent value="ubicacion" className="space-y-4 sm:space-y-6 w-full max-w-full mt-0">
+  <Card className="w-full max-w-full overflow-hidden">
     <CardHeader>
-      <CardTitle className="text-[#222A59]">Ubicación</CardTitle>
-      <CardDescription>Dirección, código postal, departamento, municipio, localidad y geolocalización</CardDescription>
+      <CardTitle className="text-[#222A59] text-base sm:text-lg md:text-xl">Ubicación</CardTitle>
+      <CardDescription className="text-xs sm:text-sm">Dirección, código postal, departamento, municipio, localidad y geolocalización</CardDescription>
     </CardHeader>
-    <CardContent className="space-y-6">
+    <CardContent className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden p-4 sm:p-6">
       {/* Domicilio del Establecimiento Productivo */}
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Domicilio del Establecimiento Productivo</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="w-full max-w-full">
+        <h3 className="text-base sm:text-lg font-semibold mb-3">Domicilio del Establecimiento Productivo</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 w-full max-w-full">
           {/* Dirección */}
-          <div>
+          <div className="min-w-0 w-full">
             <Label>Dirección</Label>
             {isEditing ? (
               <Input
                 value={editedData?.direccion || ''}
                 onChange={(e) => setEditedData(editedData ? { ...editedData, direccion: e.target.value } : null)}
                 placeholder="Calle y número"
+                className="w-full max-w-full"
               />
             ) : (
-              <p className="mt-1 font-semibold">{displayData?.direccion || 'N/A'}</p>
+              <p className="mt-1 font-semibold break-words">{displayData?.direccion || 'N/A'}</p>
             )}
           </div>
 
           {/* Código Postal */}
-          <div>
+          <div className="min-w-0 w-full">
             <Label>Código Postal</Label>
             {isEditing ? (
               <Input
                 value={editedData?.codigo_postal || ''}
                 onChange={(e) => setEditedData(editedData ? { ...editedData, codigo_postal: e.target.value } : null)}
                 placeholder="Ej: 4700"
+                className="w-full max-w-full"
               />
             ) : (
               <p className="mt-1 font-semibold">{displayData?.codigo_postal || 'N/A'}</p>
@@ -1682,7 +1790,7 @@ const handleSave = async () => {
                 }}
                 disabled={loadingGeo}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full max-w-full">
                   <SelectValue placeholder={loadingGeo ? "Cargando..." : "Selecciona un departamento"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1723,7 +1831,7 @@ const handleSave = async () => {
                 }}
                 disabled={loadingGeo || !editedData?.departamento || municipios.length === 0}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full max-w-full">
                   <SelectValue placeholder={
                     loadingGeo ? "Cargando..." : 
                     !editedData?.departamento ? "Selecciona primero un departamento" :
@@ -1763,7 +1871,7 @@ const handleSave = async () => {
                 }}
                 disabled={loadingGeo || !editedData?.municipio || localidades.length === 0}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full max-w-full">
                   <SelectValue placeholder={
                     loadingGeo ? "Cargando..." : 
                     !editedData?.municipio ? "Selecciona primero un municipio" :
@@ -1824,7 +1932,7 @@ const handleSave = async () => {
       {/* Domicilio Comercial */}
       <div className="pt-6 border-t">
         <h3 className="text-lg font-semibold mb-3">Domicilio Comercial</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 w-full max-w-full">
           {/* Dirección Comercial */}
           <div>
             <Label>Dirección</Label>
@@ -1859,12 +1967,12 @@ const handleSave = async () => {
 </TabsContent>
 
           
-<TabsContent value="comercial" className="space-y-6">
-  <Card>
+<TabsContent value="comercial" className="space-y-4 sm:space-y-6 w-full max-w-full mt-0">
+  <Card className="w-full max-w-full overflow-hidden">
     <CardHeader>
-      <CardTitle className="text-[#222A59]">Actividad Comercial</CardTitle>
+      <CardTitle className="text-[#222A59] text-base sm:text-lg md:text-xl">Actividad Comercial</CardTitle>
     </CardHeader>
-    <CardContent className="space-y-6">
+    <CardContent className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden p-4 sm:p-6">
       {/* Datos de exportación/importación */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -1874,9 +1982,9 @@ const handleSave = async () => {
       value={displayData?.exporta || ''}
       onValueChange={(value) => setEditedData(displayData ? { ...displayData, exporta: value } : null)}
     >
-      <SelectTrigger>
-        <SelectValue placeholder="Selecciona" />
-      </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
       <SelectContent>
         <SelectItem value="Sí">Sí</SelectItem>
         <SelectItem value="No, solo ventas nacionales">No</SelectItem>
@@ -1900,9 +2008,9 @@ const handleSave = async () => {
           interes_exportar: value === 'si' 
         } : null)}
       >
-        <SelectTrigger>
-          <SelectValue placeholder="Selecciona" />
-        </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
         <SelectContent>
           <SelectItem value="si">Sí</SelectItem>
           <SelectItem value="no">No</SelectItem>
@@ -1933,7 +2041,25 @@ const handleSave = async () => {
         </div>
         <div>
           <Label>¿Importa?</Label>
-          <p className="mt-1 font-semibold">{displayData?.importa ? 'Sí' : 'No'}</p>
+          {isEditing ? (
+            <Select
+              value={displayData?.importa === true || displayData?.importa === 'true' || displayData?.importa === 'si' ? 'si' : 'no'}
+              onValueChange={(value) => {
+                const importaValue = value === 'si'
+                setEditedData(displayData ? { ...displayData, importa: importaValue } : null)
+              }}
+            >
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="si">Sí</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="mt-1 font-semibold">{displayData?.importa ? 'Sí' : 'No'}</p>
+          )}
         </div>
         <div>
           <Label>Idiomas de Trabajo</Label>
@@ -1959,92 +2085,191 @@ const handleSave = async () => {
           </p>
         </div>
 
-        {displayData?.actividades_promocion_internacional && 
-         Array.isArray(displayData.actividades_promocion_internacional) && 
-         displayData.actividades_promocion_internacional.length > 0 ? (
-          <div className="space-y-3">
-            {displayData.actividades_promocion_internacional.map((actividad: any, index: number) => (
+        {isEditing ? (
+          <div className="space-y-4">
+            {actividadesPromocion.map((actividad) => (
               <div
-                key={index}
-                className="p-4 border border-[#3259B5]/30 rounded-lg bg-gradient-to-br from-[#3259B5]/5 to-transparent hover:border-[#3259B5]/50 transition-colors"
+                key={actividad.id}
+                className="space-y-3 p-4 border border-[#3259B5]/30 rounded-lg bg-[#3259B5]/5"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    {actividad.tipo === 'feria' && (
-                      <div className="flex items-center gap-2 text-[#3259B5]">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        <span className="font-semibold text-sm">Feria Internacional</span>
-                      </div>
-                    )}
-                    {actividad.tipo === 'mision' && (
-                      <div className="flex items-center gap-2 text-[#66A29C]">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-semibold text-sm">Misión Comercial</span>
-                      </div>
-                    )}
-                    {actividad.tipo === 'ronda' && (
-                      <div className="flex items-center gap-2 text-[#807DA1]">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span className="font-semibold text-sm">Ronda de Negocios</span>
-                      </div>
-                    )}
-                  </div>
-                  <span className="px-3 py-1 bg-[#222A59] text-white text-xs font-semibold rounded-full">
-                    {actividad.anio || 'N/A'}
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[#222A59] text-sm">
+                    {actividad.tipo === "feria"
+                      ? "Feria"
+                      : actividad.tipo === "mision"
+                        ? "Misión Comercial"
+                        : "Ronda de Negocios"}
                   </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => eliminarActividad(actividad.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Lugar</p>
-                      <p className="font-medium text-[#222A59]">{actividad.lugar || 'No especificado'}</p>
-                    </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Lugar</Label>
+                    <Input
+                      value={actividad.lugar}
+                      onChange={(e) => actualizarActividad(actividad.id, "lugar", toUpperCase(e.target.value))}
+                      placeholder="CIUDAD, PAÍS"
+                      className="uppercase"
+                    />
                   </div>
-                  
-                  {actividad.observaciones && (
-                    <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200">
-                      <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                      </svg>
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Observaciones</p>
-                        <p className="text-sm text-gray-700">{actividad.observaciones}</p>
-                      </div>
-                    </div>
-                  )}
+                  <div>
+                    <Label>Año</Label>
+                    <Input
+                      value={actividad.anio}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "")
+                        if (value.length <= 4) {
+                          actualizarActividad(actividad.id, "anio", value)
+                        }
+                      }}
+                      placeholder="2024"
+                      pattern="[0-9]{4}"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Observaciones</Label>
+                  <Textarea
+                    value={actividad.observaciones || ""}
+                    onChange={(e) =>
+                      actualizarActividad(actividad.id, "observaciones", toUpperCase(e.target.value))
+                    }
+                    placeholder="DETALLES O COMENTARIOS SOBRE LA ACTIVIDAD"
+                    rows={2}
+                    className="uppercase"
+                  />
                 </div>
               </div>
             ))}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => agregarActividad("feria")}
+                className="border-dashed border-[#3259B5] text-[#3259B5] hover:bg-[#3259B5]/5 bg-transparent"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Feria
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => agregarActividad("mision")}
+                className="border-dashed border-[#66A29C] text-[#66A29C] hover:bg-[#66A29C]/5 bg-transparent"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Misión
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => agregarActividad("ronda")}
+                className="border-dashed border-[#807DA1] text-[#807DA1] hover:bg-[#807DA1]/5 bg-transparent"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Ronda
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="font-medium text-gray-600">No hay actividades de promoción registradas</p>
-            <p className="text-sm text-gray-500 mt-1">Esta empresa no ha registrado participación en ferias, misiones o rondas</p>
-          </div>
+          displayData?.actividades_promocion_internacional && 
+          Array.isArray(displayData.actividades_promocion_internacional) && 
+          displayData.actividades_promocion_internacional.length > 0 ? (
+            <div className="space-y-3">
+              {displayData.actividades_promocion_internacional.map((actividad: any, index: number) => (
+                <div
+                  key={index}
+                  className="p-4 border border-[#3259B5]/30 rounded-lg bg-gradient-to-br from-[#3259B5]/5 to-transparent hover:border-[#3259B5]/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {actividad.tipo === 'feria' && (
+                        <div className="flex items-center gap-2 text-[#3259B5]">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          <span className="font-semibold text-sm">Feria Internacional</span>
+                        </div>
+                      )}
+                      {actividad.tipo === 'mision' && (
+                        <div className="flex items-center gap-2 text-[#66A29C]">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-semibold text-sm">Misión Comercial</span>
+                        </div>
+                      )}
+                      {actividad.tipo === 'ronda' && (
+                        <div className="flex items-center gap-2 text-[#807DA1]">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span className="font-semibold text-sm">Ronda de Negocios</span>
+                        </div>
+                      )}
+                    </div>
+                    <span className="px-3 py-1 bg-[#222A59] text-white text-xs font-semibold rounded-full">
+                      {actividad.anio || 'N/A'}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Lugar</p>
+                        <p className="font-medium text-[#222A59]">{actividad.lugar || 'No especificado'}</p>
+                      </div>
+                    </div>
+                    
+                    {actividad.observaciones && (
+                      <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200">
+                        <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-xs text-gray-500">Observaciones</p>
+                          <p className="text-sm text-gray-700">{actividad.observaciones}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+              <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="font-medium text-gray-600">No hay actividades de promoción registradas</p>
+              <p className="text-sm text-gray-500 mt-1">Esta empresa no ha registrado participación en ferias, misiones o rondas</p>
+            </div>
+          )
         )}
       </div>
     </CardContent>
   </Card>
 </TabsContent>
 
-          <TabsContent value="productos-servicios" className="space-y-6">
-  <Card>
+          <TabsContent value="productos-servicios" className="space-y-4 sm:space-y-6 w-full max-w-full mt-0">
+  <Card className="w-full max-w-full overflow-hidden">
     <CardHeader>
-      <CardTitle className="text-[#222A59]">
+      <CardTitle className="text-[#222A59] text-base sm:text-lg md:text-xl">
         {empresa.tipo_empresa === 'producto' || empresa.tipo_empresa_valor === 'producto' ? 'Productos' : 
          empresa.tipo_empresa === 'servicio' || empresa.tipo_empresa_valor === 'servicio' ? 'Servicios' : 
          'Productos y Servicios'}
@@ -2097,9 +2322,6 @@ const handleSave = async () => {
               ? (displayData?.productos_mixta || [])
               : (displayData?.productos || [])
             
-            console.log('🔍 Tipo empresa:', displayData?.tipo_empresa_valor)
-            console.log('🔍 Es mixta:', esMixta)
-            console.log('🔍 Productos data:', productosData)
             
             return productosData && productosData.length > 0 ? (
               <div className="space-y-4">
@@ -2187,9 +2409,9 @@ const handleSave = async () => {
                                     setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona" />
-                                  </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="kg">Kilogramos (kg)</SelectItem>
                                     <SelectItem value="tn">Toneladas (tn)</SelectItem>
@@ -2216,9 +2438,9 @@ const handleSave = async () => {
                                     setEditedData(editedData ? { ...editedData, [productosKey]: updatedProductos } : null)
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona" />
-                                  </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="mensual">Mensual</SelectItem>
                                     <SelectItem value="anual">Anual</SelectItem>
@@ -2365,7 +2587,6 @@ const handleSave = async () => {
               ? (displayData?.servicios_mixta || [])
               : (displayData?.servicios || [])
             
-            console.log('🔍 Servicios data:', serviciosData)
             
             return serviciosData && serviciosData.length > 0 ? (
               <div className="space-y-4">
@@ -2576,9 +2797,9 @@ const handleSave = async () => {
                                     setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona" />
-                                  </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="si">Sí</SelectItem>
                                     <SelectItem value="no">No</SelectItem>
@@ -2602,9 +2823,9 @@ const handleSave = async () => {
                                     setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona" />
-                                  </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="si">Sí</SelectItem>
                                     <SelectItem value="no">No</SelectItem>
@@ -2672,9 +2893,9 @@ const handleSave = async () => {
                                     setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona" />
-                                  </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="si">Sí</SelectItem>
                                     <SelectItem value="no">No</SelectItem>
@@ -2697,9 +2918,9 @@ const handleSave = async () => {
                                     setEditedData(editedData ? { ...editedData, [serviciosKey]: updatedServicios } : null)
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona" />
-                                  </SelectTrigger>
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="si">Sí</SelectItem>
                                     <SelectItem value="no">No</SelectItem>
@@ -2887,19 +3108,55 @@ const handleSave = async () => {
   </Card>
 </TabsContent>
 
-          <TabsContent value="certificaciones" className="space-y-6">
-            <Card>
+          <TabsContent value="certificaciones" className="space-y-4 sm:space-y-6 w-full max-w-full mt-0">
+            <Card className="w-full max-w-full overflow-hidden">
               <CardHeader>
-                <CardTitle className="text-[#222A59]">Certificaciones</CardTitle>
+                <CardTitle className="text-[#222A59] text-base sm:text-lg md:text-xl">Certificaciones</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 w-full max-w-full overflow-hidden">
                 <div>
                   <Label>Certificado MiPyME</Label>
-                  <p className="mt-1 font-semibold">{displayData?.certificadopyme ? 'Sí' : 'No'}</p>
+                  {isEditing ? (
+                    <Select
+                      value={displayData?.certificadopyme === true || displayData?.certificadopyme === 'true' || displayData?.certificadopyme === 'si' ? 'si' : 'no'}
+                      onValueChange={(value) => {
+                        const certificadopymeValue = value === 'si'
+                        setEditedData(displayData ? { ...displayData, certificadopyme: certificadopymeValue } : null)
+                      }}
+                    >
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="mt-1 font-semibold">{displayData?.certificadopyme ? 'Sí' : 'No'}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Material Promocional en 2 Idiomas</Label>
-                  <p className="mt-1 font-semibold">{displayData?.promo2idiomas ? 'Sí' : 'No'}</p>
+                  {isEditing ? (
+                    <Select
+                      value={displayData?.promo2idiomas === true || displayData?.promo2idiomas === 'true' || displayData?.promo2idiomas === 'si' ? 'si' : 'no'}
+                      onValueChange={(value) => {
+                        const promo2idiomasValue = value === 'si'
+                        setEditedData(displayData ? { ...displayData, promo2idiomas: promo2idiomasValue } : null)
+                      }}
+                    >
+            <SelectTrigger className="w-full max-w-full">
+              <SelectValue placeholder="Selecciona" />
+            </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="mt-1 font-semibold">{displayData?.promo2idiomas ? 'Sí' : 'No'}</p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <Label>Certificaciones</Label>

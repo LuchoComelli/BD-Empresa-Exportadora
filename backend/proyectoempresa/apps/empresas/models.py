@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
-from apps.core.models import Usuario, TimestampedModel
+from apps.core.models import Usuario, TimestampedModel, SoftDeleteModel
 from apps.geografia.models import Departamento, Municipio, Localidad
 import re
 from datetime import datetime
@@ -169,8 +169,23 @@ class Otrorubro(models.Model):
     def __str__(self):
         return self.nombre
 
+# Manager personalizado para Empresa con soft delete
+class EmpresaManager(models.Manager):
+    """
+    Manager que excluye automáticamente las empresas eliminadas (soft delete)
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(eliminado=False)
+
+class EmpresaAllManager(models.Manager):
+    """
+    Manager para acceder a todas las empresas, incluyendo las eliminadas
+    """
+    def get_queryset(self):
+        return super().get_queryset()
+
 # Modelo unificado para todas las empresas
-class Empresa(TimestampedModel):
+class Empresa(TimestampedModel, SoftDeleteModel):
     """
     Modelo unificado para todas las empresas (producto, servicio, mixta)
     Reemplaza las tablas separadas Empresaproducto, Empresaservicio, EmpresaMixta
@@ -251,9 +266,16 @@ class Empresa(TimestampedModel):
     
     # SISTEMA DE CONTACTOS SIMPLIFICADO - MEJOR UX
     contacto_principal_nombre = models.CharField(
-        max_length=100,
+        max_length=50,
         verbose_name="Nombre del Contacto Principal",
         help_text="Nombre del contacto principal de la empresa (OBLIGATORIO)"
+    )
+    contacto_principal_apellido = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        verbose_name="Apellido del Contacto Principal",
+        help_text="Apellido del contacto principal de la empresa (OBLIGATORIO)"
     )
     contacto_principal_cargo = models.CharField(
         max_length=100,
@@ -277,10 +299,16 @@ class Empresa(TimestampedModel):
     
     # Contacto secundario (opcional)
     contacto_secundario_nombre = models.CharField(
-        max_length=100, 
+        max_length=50, 
         blank=True, 
         null=True, 
         verbose_name="Nombre del Contacto Secundario"
+    )
+    contacto_secundario_apellido = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        verbose_name="Apellido del Contacto Secundario"
     )
     contacto_secundario_cargo = models.CharField(
         max_length=100, 
@@ -307,10 +335,16 @@ class Empresa(TimestampedModel):
 
     # Contacto terciario (opcional)
     contacto_terciario_nombre = models.CharField(
-        max_length=100, 
+        max_length=50, 
         blank=True, 
         null=True, 
         verbose_name="Nombre del Contacto Terciario"
+    )
+    contacto_terciario_apellido = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        verbose_name="Apellido del Contacto Terciario"
     )
     contacto_terciario_cargo = models.CharField(
         max_length=100, 
@@ -637,6 +671,10 @@ class Empresa(TimestampedModel):
         help_text="Tipo de empresa: solo productos, solo servicios, o mixta"
     )
     
+    # Managers para soft delete
+    objects = EmpresaManager()  # Manager por defecto que excluye eliminadas
+    all_objects = EmpresaAllManager()  # Manager para acceder a todas incluyendo eliminadas
+    
     class Meta:
         db_table = 'empresa'
         verbose_name = 'Empresa'
@@ -663,6 +701,7 @@ class Empresa(TimestampedModel):
             models.Index(fields=['tipo_empresa']),
             models.Index(fields=['tipo_empresa_valor']),
             models.Index(fields=['id_rubro']),
+            models.Index(fields=['eliminado']),  # Índice para soft delete
         ]
     
     def __str__(self):

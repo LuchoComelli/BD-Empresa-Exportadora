@@ -101,7 +101,7 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto">
           <Filter className="h-4 w-4" />
           Filtros
           {activeFiltersCount > 0 && (
@@ -111,7 +111,7 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 max-h-[80vh] overflow-y-auto" align="start">
+      <PopoverContent className="w-[90vw] sm:w-80 max-h-[80vh] overflow-y-auto" align="start">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-[#222A59]">Filtros</h3>

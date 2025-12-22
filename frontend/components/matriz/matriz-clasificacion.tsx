@@ -82,8 +82,12 @@ export function MatrizClasificacion({ empresaId }: MatrizClasificacionProps) {
         description: "Se han cargado los datos guardados anteriormente",
       })
     } catch (error: any) {
-      // Si es 404, no existe matriz guardada
-      if (error?.message?.includes('404') || error?.message?.includes('No se encontró')) {
+      // Si es 404, no existe matriz guardada (caso esperado)
+      const isNotFound = error?.status === 404 || 
+                        error?.message?.includes('404') || 
+                        error?.message?.includes('No se encontró')
+      
+      if (isNotFound) {
         console.log('[Matriz] ℹ️ No se encontró matriz guardada, calculando automáticamente')
         toast({
           title: "Calculando matriz",

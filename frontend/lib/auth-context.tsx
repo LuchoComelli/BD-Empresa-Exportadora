@@ -292,16 +292,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Verificar si es empresa y debe cambiar la contraseña
       // Solo empresas deben cambiar la contraseña, no admin/analista/consultor
       if (userType === "empresa" && userData.debe_cambiar_password) {
-        // No redirigir, el componente de login mostrará el modal
+        // Redirigir a perfil-empresa donde aparecerá el modal
+        // Usar setTimeout para asegurar que el estado se actualice antes de redirigir
+        setTimeout(() => {
+          router.push("/perfil-empresa")
+        }, 0)
         return true
       }
       
       // Redirigir según el tipo de usuario
-      if (userType === "admin" || userType === "staff") {
-        router.push("/dashboard")
-      } else {
-        router.push("/perfil-empresa")
-      }
+      // Usar setTimeout para asegurar que el estado se actualice antes de redirigir
+      setTimeout(() => {
+        if (userType === "admin" || userType === "staff") {
+          router.push("/dashboard")
+        } else {
+          router.push("/perfil-empresa")
+        }
+      }, 0)
       
       return true
     } catch (error: any) {

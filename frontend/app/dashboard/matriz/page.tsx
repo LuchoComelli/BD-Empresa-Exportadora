@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Building2, MapPin, Phone, Mail, Search, X, Filter } from "lucide-react"
+import { Building2, MapPin, Phone, Mail, Search, X, Filter, CheckCircle2, ArrowRight } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -109,6 +109,10 @@ export default function MatrizPage() {
     setSearchQuery(value)
   }
 
+  const handleCambiarEmpresa = () => {
+    setEmpresaSeleccionada("")
+  }
+
   const empresaActual = empresas.find((e) => e.id.toString() === empresaSeleccionada)
 
   const activeFiltersCount = Object.keys(filters).filter(
@@ -142,121 +146,117 @@ export default function MatrizPage() {
           </p>
         </div>
 
-        {/* Búsqueda y filtros - Visible en todas las pantallas */}
-        <Card>
-          <CardContent className="p-4 md:p-6">
-            <div className="space-y-4">
-              {/* Búsqueda */}
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por razón social, CUIT, email..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="pl-10 pr-10 h-11"
-                  />
-                  {searchQuery && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                      onClick={() => setSearchQuery("")}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-
-                {/* Botones de filtro */}
-                <div className="flex items-center gap-2">
-                  {/* Desktop: Dropdown */}
-                  <div className="hidden md:block">
-                    <FiltersDropdown
-                      onFilterChange={handleFilterChange}
-                      onClearFilters={handleClearFilters}
-                      filters={filters}
-                    />
-                  </div>
-
-                  {/* Mobile: Sheet */}
-                  <div className="md:hidden">
-                    <Sheet open={showFilters} onOpenChange={setShowFilters}>
-                      <SheetTrigger asChild>
-                        <Button variant="outline" size="default" className="gap-2 h-11">
-                          <Filter className="h-4 w-4" />
-                          Filtros
-                          {activeFiltersCount > 0 && (
-                            <Badge className="ml-1 bg-[#3259B5] text-white rounded-full px-2 py-0.5 text-xs">
-                              {activeFiltersCount}
-                            </Badge>
-                          )}
+        {/* Contenido principal */}
+        {!empresaSeleccionada ? (
+          // PASO 1: Selección de empresa
+          <div className="space-y-6">
+            {/* Búsqueda y filtros */}
+            <Card className="border-2 border-[#3259B5]/20">
+              <CardContent className="p-4 md:p-6">
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por razón social, CUIT, email..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="pl-10 pr-10 h-11"
+                      />
+                      {searchQuery && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                          onClick={() => setSearchQuery("")}
+                        >
+                          <X className="h-4 w-4" />
                         </Button>
-                      </SheetTrigger>
-                      <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                        <SheetHeader>
-                          <SheetTitle>Filtros de búsqueda</SheetTitle>
-                          <SheetDescription>
-                            Filtra empresas por diferentes criterios
-                          </SheetDescription>
-                        </SheetHeader>
-                        <div className="mt-6">
-                          <FiltersDropdown
-                            onFilterChange={(newFilters) => {
-                              handleFilterChange(newFilters)
-                              setShowFilters(false)
-                            }}
-                            onClearFilters={() => {
-                              handleClearFilters()
-                              setShowFilters(false)
-                            }}
-                            filters={filters}
-                          />
-                        </div>
-                      </SheetContent>
-                    </Sheet>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="hidden md:block">
+                        <FiltersDropdown
+                          onFilterChange={handleFilterChange}
+                          onClearFilters={handleClearFilters}
+                          filters={filters}
+                        />
+                      </div>
+
+                      <div className="md:hidden">
+                        <Sheet open={showFilters} onOpenChange={setShowFilters}>
+                          <SheetTrigger asChild>
+                            <Button variant="outline" size="default" className="gap-2 h-11">
+                              <Filter className="h-4 w-4" />
+                              Filtros
+                              {activeFiltersCount > 0 && (
+                                <Badge className="ml-1 bg-[#3259B5] text-white rounded-full px-2 py-0.5 text-xs">
+                                  {activeFiltersCount}
+                                </Badge>
+                              )}
+                            </Button>
+                          </SheetTrigger>
+                          <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                            <SheetHeader>
+                              <SheetTitle>Filtros de búsqueda</SheetTitle>
+                              <SheetDescription>
+                                Filtra empresas por diferentes criterios
+                              </SheetDescription>
+                            </SheetHeader>
+                            <div className="mt-6">
+                              <FiltersDropdown
+                                onFilterChange={(newFilters) => {
+                                  handleFilterChange(newFilters)
+                                  setShowFilters(false)
+                                }}
+                                onClearFilters={() => {
+                                  handleClearFilters()
+                                  setShowFilters(false)
+                                }}
+                                filters={filters}
+                              />
+                            </div>
+                          </SheetContent>
+                        </Sheet>
+                      </div>
+
+                      {activeFiltersCount > 0 && (
+                        <Button
+                          variant="outline"
+                          size="default"
+                          onClick={handleClearFilters}
+                          className="gap-2 h-11"
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="hidden sm:inline">Limpiar</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {activeFiltersCount > 0 && (
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={handleClearFilters}
-                      className="gap-2 h-11"
-                    >
-                      <X className="h-4 w-4" />
-                      <span className="hidden sm:inline">Limpiar</span>
-                    </Button>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{activeFiltersCount} {activeFiltersCount === 1 ? 'filtro activo' : 'filtros activos'}</span>
+                      {searchQuery && (
+                        <Badge variant="secondary" className="text-xs">
+                          Búsqueda: "{searchQuery}"
+                        </Badge>
+                      )}
+                    </div>
                   )}
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* Indicador de filtros activos */}
-              {activeFiltersCount > 0 && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{activeFiltersCount} {activeFiltersCount === 1 ? 'filtro activo' : 'filtros activos'}</span>
-                  {searchQuery && (
-                    <Badge variant="secondary" className="text-xs">
-                      Búsqueda: "{searchQuery}"
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Layout principal */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          {/* Lista de empresas - Ocupa más espacio en desktop */}
-          <div className="xl:col-span-4">
-            <Card className="h-full">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-[#222A59] text-base md:text-lg">
-                  Empresas Disponibles
+            {/* Lista de empresas */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-[#222A59]">
+                  Selecciona una Empresa
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  {empresas.length} {empresas.length === 1 ? 'empresa encontrada' : 'empresas encontradas'}
+                <CardDescription>
+                  {empresas.length} {empresas.length === 1 ? 'empresa disponible' : 'empresas disponibles'} para evaluación
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -268,100 +268,104 @@ export default function MatrizPage() {
                 />
               </CardContent>
             </Card>
-          </div>
 
-          {/* Área de evaluación - Más espacio en desktop */}
-          <div className="xl:col-span-8">
-            {empresaActual ? (
-              <div className="space-y-6">
-                {/* Info de empresa seleccionada */}
-                <Card>
-                  <CardContent className="p-4 md:p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-3 flex-1 min-w-0">
-                        <div className="flex items-start gap-3 flex-wrap">
-                          <h3 className="font-semibold text-base md:text-lg text-[#222A59] leading-tight">
-                            {empresaActual.razon_social}
-                          </h3>
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            {empresaActual.tipo_empresa}
-                          </Badge>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-muted-foreground">
-                          {empresaActual.rubro_nombre && (
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-[#3259B5] shrink-0" />
-                              <span className="truncate">{empresaActual.rubro_nombre}</span>
-                            </div>
-                          )}
-                          {(empresaActual.departamento_nombre || empresaActual.municipio_nombre) && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-[#3259B5] shrink-0" />
-                              <span className="truncate">
-                                {[empresaActual.municipio_nombre, empresaActual.departamento_nombre]
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </span>
-                            </div>
-                          )}
-                          {empresaActual.telefono && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-[#3259B5] shrink-0" />
-                              <span className="truncate">{empresaActual.telefono}</span>
-                            </div>
-                          )}
-                          {empresaActual.correo && (
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-[#3259B5] shrink-0" />
-                              <span className="truncate">{empresaActual.correo}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEmpresaSeleccionada("")}
-                        className="text-muted-foreground hover:text-foreground shrink-0"
-                        title="Deseleccionar empresa"
-                      >
-                        <X className="h-5 w-5" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Matriz de clasificación */}
-                <MatrizClasificacion empresaId={empresaSeleccionada} />
-              </div>
-            ) : (
-              <Card className="h-full min-h-[500px]">
-                <CardContent className="flex items-center justify-center h-full py-20">
-                  <div className="text-center space-y-4 px-4">
-                    <Building2 className="h-20 w-20 text-[#3259B5]/20 mx-auto" />
-                    <div className="space-y-2">
-                      <p className="text-lg md:text-xl font-semibold text-[#222A59]">
-                        Selecciona una empresa
-                      </p>
-                      <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                        Elige una empresa de la lista para evaluar su perfil exportador mediante la matriz de clasificación
-                      </p>
-                    </div>
-                    {empresas.length === 0 && !loading && (
-                      <p className="text-xs text-muted-foreground mt-4">
+            {empresas.length === 0 && !loading && (
+              <Card className="border-dashed">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="text-center space-y-3">
+                    <Building2 className="h-16 w-16 text-muted-foreground/30 mx-auto" />
+                    <div>
+                      <p className="font-medium text-muted-foreground">
                         {searchQuery || activeFiltersCount > 0
-                          ? "No hay empresas que coincidan con los criterios de búsqueda"
-                          : "No hay empresas aprobadas disponibles"}
+                          ? "No hay empresas que coincidan con los criterios"
+                          : "No hay empresas disponibles"}
                       </p>
-                    )}
+                      {(searchQuery || activeFiltersCount > 0) && (
+                        <Button
+                          variant="link"
+                          onClick={handleClearFilters}
+                          className="text-[#3259B5] mt-2"
+                        >
+                          Limpiar filtros
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             )}
           </div>
-        </div>
+        ) : (
+          // PASO 2: Evaluación de matriz
+          <div className="space-y-6">
+            {/* Info de empresa seleccionada */}
+            <Card className="border-2 border-[#3259B5]/20 bg-gradient-to-r from-[#3259B5]/5 to-transparent">
+              <CardContent className="p-4 md:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-4 flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Badge className="bg-[#3259B5] text-white">
+                        Empresa Seleccionada
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCambiarEmpresa}
+                        className="text-[#3259B5] hover:text-[#222A59] hover:bg-[#3259B5]/10 gap-2 h-8 px-3"
+                      >
+                        <ArrowRight className="h-4 w-4 rotate-180" />
+                        Cambiar
+                      </Button>
+                    </div>
+                    
+                    <div className="flex items-start gap-3 flex-wrap">
+                      <h3 className="font-semibold text-lg text-[#222A59] leading-tight">
+                        {empresaActual.razon_social}
+                      </h3>
+                      <Badge variant="outline" className="text-xs">
+                        {empresaActual.tipo_empresa}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                      {empresaActual.rubro_nombre && (
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-[#3259B5] shrink-0" />
+                          <span className="truncate">{empresaActual.rubro_nombre}</span>
+                        </div>
+                      )}
+                      {(empresaActual.departamento_nombre || empresaActual.municipio_nombre) && (
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-[#3259B5] shrink-0" />
+                          <span className="truncate">
+                            {[empresaActual.municipio_nombre, empresaActual.departamento_nombre]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </span>
+                        </div>
+                      )}
+                      {empresaActual.telefono && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-[#3259B5] shrink-0" />
+                          <span className="truncate">{empresaActual.telefono}</span>
+                        </div>
+                      )}
+                      {empresaActual.correo && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-[#3259B5] shrink-0" />
+                          <span className="truncate">{empresaActual.correo}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Matriz de clasificación */}
+            <MatrizClasificacion empresaId={empresaSeleccionada} />
+          </div>
+        )}
       </div>
     </MainLayout>
   )

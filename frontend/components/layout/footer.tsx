@@ -39,7 +39,7 @@ export function Footer({ showImage = true }: FooterProps) {
 
   return (
     <footer className="w-full bg-[#222A59] text-white py-4 md:py-6 z-50 relative">
-      <div className="container mx-auto px-4 md:px-6">
+      <div className="w-full px-2 sm:px-4 md:px-6">
         {showImage && (
           <div className="flex flex-col items-center gap-4 md:gap-6 mb-4 md:mb-6">
             <div className="relative w-full max-w-4xl h-auto">
@@ -55,11 +55,11 @@ export function Footer({ showImage = true }: FooterProps) {
           </div>
         )}
         <div className="flex flex-col md:flex-row justify-between items-center gap-3 md:gap-4">
-          <div className="text-center md:text-left">
-            <p className="text-xs md:text-sm font-medium break-words">{institucion}</p>
+          <div className="text-center md:text-left w-full md:w-auto">
+            <p className="text-xs sm:text-sm font-medium break-words">{institucion}</p>
             <p className="text-xs text-white/70 mt-1">Provincia de Catamarca - Argentina</p>
           </div>
-          <div className="flex flex-wrap justify-center gap-3 md:gap-6 text-xs">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 md:gap-6 text-xs w-full md:w-auto">
             <a href="#" className="hover:text-white/80 transition-colors whitespace-nowrap">
               Términos y Condiciones
             </a>
@@ -71,7 +71,7 @@ export function Footer({ showImage = true }: FooterProps) {
             </a>
           </div>
         </div>
-        <div className="mt-3 md:mt-4 text-center text-xs text-white/60">
+        <div className="mt-3 md:mt-4 text-center text-xs text-white/60 px-2">
           © {new Date().getFullYear()} Todos los derechos reservados
         </div>
       </div>

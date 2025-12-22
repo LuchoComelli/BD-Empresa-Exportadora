@@ -145,12 +145,141 @@ export function CompaniesTable({
   return (
     <Card className="shadow-sm">
       <CardContent className="p-0">
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <table className="w-full min-w-[800px]">
+        {/* Vista de Cards para móviles y tablets */}
+        <div className="block lg:hidden">
+          {/* Header con seleccionar todas */}
+          <div className="px-4 pt-4 pb-2 border-b bg-gradient-to-r from-[#EFF6FF] to-[#F0F9FF]">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isAllSelected}
+                onCheckedChange={handleSelectAll}
+                ref={(el) => {
+                  if (el) {
+                    (el as HTMLInputElement).indeterminate = isIndeterminate
+                  }
+                }}
+              />
+              <span className="text-sm font-semibold text-[#222A59]">Seleccionar todas</span>
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
+          {empresas.map((empresa, index) => {
+            const category = getCategoryFromEmpresa(empresa)
+            const isSelected = selectedEmpresas.includes(empresa.id)
+            
+            return (
+              <div
+                key={empresa.id}
+                className={`border rounded-lg p-4 space-y-3 ${
+                  isSelected ? "bg-[#EFF6FF] border-[#3259B5]" : "bg-white border-border"
+                }`}
+              >
+                {/* Checkbox y acciones en la parte superior */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => handleSelectOne(empresa.id, checked as boolean)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-foreground truncate">
+                        {empresa.razon_social}
+                      </div>
+                      <div className="text-xs text-muted-foreground">CUIT: {empresa.cuit_cuil}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      title="Ver"
+                      className="h-8 w-8 p-0 hover:bg-[#3259B5]/10 hover:text-[#3259B5]"
+                    >
+                      <Link href={`/dashboard/empresas/${empresa.id}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      title="Editar"
+                      className="h-8 w-8 p-0 hover:bg-[#3259B5]/10 hover:text-[#3259B5]"
+                    >
+                      <Link href={`/dashboard/empresas/${empresa.id}?edit=true`}>
+                        <Edit className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (onDelete) {
+                          setDeletingId(empresa.id)
+                          onDelete(empresa.id)
+                        }
+                      }}
+                      disabled={deletingId === empresa.id}
+                      title="Eliminar"
+                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      {deletingId === empresa.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Información adicional */}
+                <div className="space-y-2 text-xs">
+                  {empresa.nombre_fantasia && (
+                    <div className="text-muted-foreground italic">
+                      <span className="font-medium">Nombre fantasia: </span>
+                      {empresa.nombre_fantasia}
+                    </div>
+                  )}
+                  <div className="text-muted-foreground">
+                    <span className="font-medium">Sector: </span>
+                    {empresa.rubro_nombre || empresa.rubro_principal || empresa.id_rubro?.nombre || "N/A"}
+                  </div>
+                  <div className="text-muted-foreground">
+                    <span className="font-medium">Ubicación: </span>
+                    {[
+                      empresa.departamento_nombre || empresa.departamento?.nomdpto || empresa.departamento,
+                      empresa.municipio_nombre || empresa.municipio?.nommun || empresa.municipio,
+                      empresa.localidad_nombre || empresa.localidad?.nomloc || empresa.localidad
+                    ].filter(Boolean).join(", ") || "N/A"}
+                  </div>
+                  {(empresa.correo || empresa.telefono) && (
+                    <div className="text-muted-foreground">
+                      <span className="font-medium">Contacto: </span>
+                      {empresa.correo && <span>{empresa.correo}</span>}
+                      {empresa.correo && empresa.telefono && <span> • </span>}
+                      {empresa.telefono && <span>{empresa.telefono}</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Badge de categoría */}
+                <div>
+                  <Badge className={`${getCategoryColor(category)} text-xs`}>{category}</Badge>
+                </div>
+              </div>
+            )
+          })}
+          </div>
+        </div>
+
+        {/* Vista de Tabla para pantallas grandes (desktop) */}
+        <div className="hidden lg:block overflow-x-auto -mx-4 sm:mx-0">
+          <table className="w-full">
             <thead className="bg-gradient-to-r from-[#EFF6FF] to-[#F0F9FF] border-b-2 border-[#3259B5]/20">
               <tr>
-                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
-                  <div className="flex items-center gap-2">
+                <th className="text-left py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] w-12 lg:w-auto">
+                  <div className="flex items-center gap-1 lg:gap-2">
                     <Checkbox
                       checked={isAllSelected}
                       onCheckedChange={handleSelectAll}
@@ -160,25 +289,25 @@ export function CompaniesTable({
                         }
                       }}
                     />
-                    <span>Seleccionar</span>
+                    <span className="hidden xl:inline">Seleccionar</span>
                   </div>
                 </th>
-                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
+                <th className="text-left py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] min-w-[200px]">
                   Empresa
                 </th>
-                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
+                <th className="text-left py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] min-w-[120px]">
                   Sector
                 </th>
-                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
+                <th className="text-left py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] min-w-[150px]">
                   Ubicación
                 </th>
-                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
+                <th className="text-left py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] w-24">
                   Categoría
                 </th>
-                <th className="text-left py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
+                <th className="text-left py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] min-w-[140px]">
                   Contacto
                 </th>
-                <th className="text-right py-4 md:py-5 px-4 md:px-6 text-xs md:text-sm font-bold text-[#222A59]">
+                <th className="text-right py-3 px-3 lg:px-4 text-xs lg:text-sm font-bold text-[#222A59] w-28">
                   Acciones
                 </th>
               </tr>
@@ -190,54 +319,58 @@ export function CompaniesTable({
                 
                 return (
                   <tr key={empresa.id} className={`${index % 2 === 0 ? "bg-white" : "bg-muted/20"} hover:bg-[#EFF6FF]/50 transition-colors border-b border-border/50`}>
-                    <td className="py-3 md:py-4 px-3 md:px-6">
+                    <td className="py-3 px-3 lg:px-4">
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => handleSelectOne(empresa.id, checked as boolean)}
                       />
                     </td>
-                    <td className="py-3 md:py-4 px-3 md:px-6">
-                      <div className="font-medium text-foreground text-sm">{empresa.razon_social}</div>
+                    <td className="py-3 px-3 lg:px-4">
+                      <div className="font-medium text-foreground text-xs lg:text-sm truncate">{empresa.razon_social}</div>
                       <div className="text-xs text-muted-foreground">CUIT: {empresa.cuit_cuil}</div>
                       {empresa.nombre_fantasia && (
-                        <div className="text-xs text-muted-foreground italic">{empresa.nombre_fantasia}</div>
+                        <div className="text-xs text-muted-foreground italic truncate">{empresa.nombre_fantasia}</div>
                       )}
                     </td>
-                    <td className="py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm text-muted-foreground">
-                      {empresa.rubro_nombre || empresa.rubro_principal || empresa.id_rubro?.nombre || "N/A"}
+                    <td className="py-3 px-3 lg:px-4 text-xs lg:text-sm text-muted-foreground">
+                      <div className="truncate max-w-[120px] lg:max-w-none">
+                        {empresa.rubro_nombre || empresa.rubro_principal || empresa.id_rubro?.nombre || "N/A"}
+                      </div>
                     </td>
-                    <td className="py-3 md:py-4 px-3 md:px-6 text-xs md:text-sm text-muted-foreground">
-                      {[
-                        empresa.departamento_nombre || empresa.departamento?.nomdpto || empresa.departamento,
-                        empresa.municipio_nombre || empresa.municipio?.nommun || empresa.municipio,
-                        empresa.localidad_nombre || empresa.localidad?.nomloc || empresa.localidad
-                      ].filter(Boolean).join(", ") || "N/A"}
+                    <td className="py-3 px-3 lg:px-4 text-xs lg:text-sm text-muted-foreground">
+                      <div className="truncate max-w-[150px] lg:max-w-none">
+                        {[
+                          empresa.departamento_nombre || empresa.departamento?.nomdpto || empresa.departamento,
+                          empresa.municipio_nombre || empresa.municipio?.nommun || empresa.municipio,
+                          empresa.localidad_nombre || empresa.localidad?.nomloc || empresa.localidad
+                        ].filter(Boolean).join(", ") || "N/A"}
+                      </div>
                     </td>
-                    <td className="py-3 md:py-4 px-3 md:px-6">
-                      <Badge className={`${getCategoryColor(category)} text-xs`}>{category}</Badge>
+                    <td className="py-3 px-3 lg:px-4">
+                      <Badge className={`${getCategoryColor(category)} text-xs whitespace-nowrap`}>{category}</Badge>
                     </td>
-                    <td className="py-3 md:py-4 px-3 md:px-6">
-                      <div className="text-xs md:text-sm text-muted-foreground">
+                    <td className="py-3 px-3 lg:px-4">
+                      <div className="text-xs lg:text-sm text-muted-foreground">
                         {empresa.correo && (
-                          <div className="truncate max-w-[150px]">{empresa.correo}</div>
+                          <div className="truncate max-w-[140px] lg:max-w-[150px]">{empresa.correo}</div>
                         )}
                         {empresa.telefono && (
-                          <div>{empresa.telefono}</div>
+                          <div className="truncate">{empresa.telefono}</div>
                         )}
                         {!empresa.correo && !empresa.telefono && "N/A"}
                       </div>
                     </td>
-                    <td className="py-3 md:py-4 px-3 md:px-6">
-                      <div className="flex items-center justify-end gap-1 md:gap-2">
+                    <td className="py-3 px-3 lg:px-4">
+                      <div className="flex items-center justify-end gap-1 lg:gap-2">
                         <Button 
                           variant="ghost" 
                           size="sm" 
                           asChild 
                           title={`Ver detalles de ${empresa.razon_social}`}
-                          className="hover:bg-[#3259B5]/10 hover:text-[#3259B5]"
+                          className="hover:bg-[#3259B5]/10 hover:text-[#3259B5] h-7 w-7 lg:h-8 lg:w-8 p-0"
                         >
                           <Link href={`/dashboard/empresas/${empresa.id}`}>
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-3 w-3 lg:h-4 lg:w-4" />
                           </Link>
                         </Button>
                         <Button 
@@ -245,30 +378,29 @@ export function CompaniesTable({
                           size="sm" 
                           asChild
                           title="Editar"
-                          className="hover:bg-[#3259B5]/10 hover:text-[#3259B5]"
+                          className="hover:bg-[#3259B5]/10 hover:text-[#3259B5] h-7 w-7 lg:h-8 lg:w-8 p-0"
                         >
                           <Link href={`/dashboard/empresas/${empresa.id}?edit=true`}>
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3 w-3 lg:h-4 lg:w-4" />
                           </Link>
                         </Button>
                         <Button 
-  variant="ghost" 
-  size="sm"
-  onClick={() => {
-    if (onDelete) {
-      setDeletingId(empresa.id)
-      onDelete(empresa.id)
-      // No limpiar el deletingId aquí, se limpiará cuando se recargue la tabla
-    }
-  }}
-  disabled={deletingId === empresa.id}
-  title="Eliminar"
-  className="hover:bg-destructive/10 hover:text-destructive"
->
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            if (onDelete) {
+                              setDeletingId(empresa.id)
+                              onDelete(empresa.id)
+                            }
+                          }}
+                          disabled={deletingId === empresa.id}
+                          title="Eliminar"
+                          className="hover:bg-destructive/10 hover:text-destructive h-7 w-7 lg:h-8 lg:w-8 p-0"
+                        >
                           {deletingId === empresa.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                            <Loader2 className="h-3 w-3 lg:h-4 lg:w-4 animate-spin text-destructive" />
                           ) : (
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-3 w-3 lg:h-4 lg:w-4 text-destructive" />
                           )}
                         </Button>
                       </div>
@@ -281,8 +413,8 @@ export function CompaniesTable({
         </div>
 
         {/* Pagination */}
-        <div className="flex flex-col sm:flex-row items-center justify-between px-3 md:px-6 py-3 md:py-4 border-t border-border gap-3">
-          <div className="text-xs md:text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center justify-between px-4 md:px-6 py-4 border-t border-border gap-3">
+          <div className="text-xs sm:text-sm text-muted-foreground">
             Mostrando {((pagination.page - 1) * pagination.pageSize) + 1} a{" "}
             {Math.min(pagination.page * pagination.pageSize, pagination.total)} de {pagination.total} empresas
           </div>
@@ -292,10 +424,10 @@ export function CompaniesTable({
               size="sm"
               onClick={() => onPageChange(pagination.page - 1)}
               disabled={pagination.page === 1}
-              className="text-xs md:text-sm"
+              className="text-xs sm:text-sm"
             >
-              <ChevronLeft className="h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden sm:inline">Anterior</span>
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Anterior</span>
             </Button>
             <div className="flex items-center gap-1">
               {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
@@ -315,7 +447,7 @@ export function CompaniesTable({
                     variant={pagination.page === pageNum ? "default" : "outline"}
                     size="sm"
                     onClick={() => onPageChange(pageNum)}
-                    className={`text-xs md:text-sm ${pagination.page === pageNum ? "bg-[#3259B5]" : ""}`}
+                    className={`text-xs sm:text-sm ${pagination.page === pageNum ? "bg-[#3259B5]" : ""}`}
                   >
                     {pageNum}
                   </Button>
@@ -327,10 +459,10 @@ export function CompaniesTable({
               size="sm"
               onClick={() => onPageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages}
-              className="text-xs md:text-sm"
+              className="text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline">Siguiente</span>
-              <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline mr-1">Siguiente</span>
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

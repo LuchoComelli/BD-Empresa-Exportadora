@@ -198,25 +198,32 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         
         observaciones = request.data.get('observaciones', '')
         
+        # Guardar el rechazo primero (operación principal)
+        solicitud.estado = 'rechazada'
+        solicitud.observaciones_admin = observaciones
+        solicitud.save()
+        
+        # Intentar enviar email (no crítico si falla)
+        email_error = None
         try:
             from .views import enviar_email_rechazo
-            
-            solicitud.estado = 'rechazada'
-            solicitud.observaciones_admin = observaciones
-            solicitud.save()
-            
-            # Enviar email
             enviar_email_rechazo(solicitud)
-            
-            return Response({
-                'status': 'success',
-                'message': 'Solicitud rechazada correctamente'
-            })
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            # Registrar el error pero no fallar la operación
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f'Error al enviar email de rechazo para solicitud {solicitud.id}: {str(e)}')
+            email_error = str(e)
+        
+        # Retornar éxito siempre, con advertencia si el email falló
+        response_data = {
+            'status': 'success',
+            'message': 'Solicitud rechazada correctamente'
+        }
+        if email_error:
+            response_data['warning'] = f'La solicitud fue rechazada pero hubo un problema al enviar el email: {email_error}'
+        
+        return Response(response_data)
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.AllowAny])
     def confirmar_email(self, request, pk=None):

@@ -3,15 +3,25 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel"
-import { Globe, Award, ArrowRight, BarChart3, Instagram, Linkedin } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Globe, Award, ArrowRight, BarChart3, Instagram, Linkedin, User, LogOut } from "lucide-react"
 import api from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const router = useRouter()
   const [stats, setStats] = useState({
     total_empresas_registradas: 0,
     total_empresas_exportadoras: 0,
@@ -152,19 +162,37 @@ export default function HomePage() {
               rolNombre.toLowerCase().includes("consulta") ||
               rolNombre.toLowerCase().includes("consultor")
             
-            // Si es empresa, mostrar botón para ir a perfil
+            // Si es empresa, mostrar dropdown con icono de usuario
             if (user.type === "empresa" && !canAccessDashboard) {
               return (
                 <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-                  <Link href="/perfil-empresa">
-                    <Button
-                      size="sm"
-                      className="bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59] font-semibold text-xs md:text-sm"
-                    >
-                      <span className="hidden sm:inline">Ir a mi Perfil</span>
-                      <span className="sm:hidden">Perfil</span>
-                    </Button>
-                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 flex-shrink-0">
+                        <User className="h-4 w-4 md:h-5 md:w-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">Mi Cuenta</span>
+                          {user && <span className="text-xs text-muted-foreground font-normal">{user.email}</span>}
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => router.push('/perfil-empresa')}>
+                        Perfil
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push('/perfil-empresa/configuracion')}>
+                        Configuración
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={logout} className="text-red-600 focus:text-red-600">
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Cerrar Sesión
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )
             }

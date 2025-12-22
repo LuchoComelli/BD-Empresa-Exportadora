@@ -173,6 +173,17 @@ class ApiService {
         const apiError: any = new Error(errorMessage);
         apiError.status = response.status;
         apiError.errorData = error;
+        
+        // Marcar errores 404 como silenciosos si el mensaje indica que es un "no encontrado" esperado
+        // Esto es común cuando se busca un recurso que puede no existir (ej: matriz de clasificación)
+        if (response.status === 404 && (
+          errorMessage.includes('No se encontró') || 
+          errorMessage.includes('not found') ||
+          errorMessage.includes('does not exist')
+        )) {
+          apiError.silent = true; // No mostrar en consola
+        }
+        
         throw apiError;
       }
 
@@ -771,28 +782,38 @@ async getEmpresas(params?: {
     
     // ✅ Si NO es FormData, usar el método patch normal (JSON)
     console.log('📤 [api.updateEmpresa] Enviando como JSON')
+    
+    // Primero intentar con el endpoint unificado (ruta base)
     try {
-      return await this.patch<any>(`/empresas/empresas/${id}/`, data);
-    } catch (e) {
+      return await this.patch<any>(`/empresas/${id}/`, data);
+    } catch (e: any) {
+      console.log('⚠️ [api.updateEmpresa] Endpoint unificado falló, intentando endpoints específicos:', e.message)
+      
       // Fallback a endpoints antiguos por compatibilidad
       const tipoEmpresa = data.tipo_empresa || data.tipo_empresa_valor;
       
       if (tipoEmpresa === 'producto' || tipoEmpresa === 'productos') {
         try {
+          console.log('🔄 [api.updateEmpresa] Intentando endpoint empresas-producto')
           return await this.patch<any>(`/empresas/empresas-producto/${id}/`, data);
         } catch (e2) {
-          throw e;
+          console.log('❌ [api.updateEmpresa] Endpoint empresas-producto también falló')
+          throw e; // Lanzar el error original del endpoint unificado
         }
       } else if (tipoEmpresa === 'servicio' || tipoEmpresa === 'servicios') {
         try {
+          console.log('🔄 [api.updateEmpresa] Intentando endpoint empresas-servicio')
           return await this.patch<any>(`/empresas/empresas-servicio/${id}/`, data);
         } catch (e2) {
+          console.log('❌ [api.updateEmpresa] Endpoint empresas-servicio también falló')
           throw e;
         }
       } else if (tipoEmpresa === 'mixta' || tipoEmpresa === 'ambos') {
         try {
+          console.log('🔄 [api.updateEmpresa] Intentando endpoint empresas-mixta')
           return await this.patch<any>(`/empresas/empresas-mixta/${id}/`, data);
         } catch (e2) {
+          console.log('❌ [api.updateEmpresa] Endpoint empresas-mixta también falló')
           throw e;
         }
       }
@@ -1059,6 +1080,11 @@ async deleteServicioMixta(servicioId: number): Promise<void> {
 
   async updateUsuario(id: number, data: any): Promise<any> {
     return this.patch<any>(`/core/usuarios/${id}/`, data);
+  }
+
+  // Actualizar el perfil del usuario actual (sin necesidad de pasar ID)
+  async updateMe(data: any): Promise<any> {
+    return this.patch<any>('/core/usuarios/update_me/', data);
   }
 
   // Activar/desactivar usuario
