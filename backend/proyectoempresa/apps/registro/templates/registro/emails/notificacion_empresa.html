@@ -1,0 +1,36 @@
+{% extends "registro/emails/base_email.html" %}
+
+{% block content %}
+<h2 style="color: #66A29C;">Credenciales de Acceso</h2>
+
+<p>Estimado/a,</p>
+
+<p>Le informamos que su empresa <strong>{{ razon_social }}</strong> está registrada en nuestro sistema y le proporcionamos sus credenciales de acceso.</p>
+
+<div class="info-box" style="border-left-color: #66A29C;">
+    <p><strong>Su empresa está registrada en nuestro sistema.</strong></p>
+    <p><strong>Fecha de notificación:</strong> {{ fecha_notificacion|date:"d/m/Y H:i" }}</p>
+</div>
+
+<div class="credentials">
+    <h3 style="margin-top: 0; color: #222A59;">Credenciales de Acceso</h3>
+    <p><strong>Email de acceso:</strong> {{ email_login }}</p>
+    <p><strong>Contraseña inicial:</strong> Su CUIT/CUIL ({{ cuit_cuil }})</p>
+    <p style="color: #222A59; font-size: 14px; margin-top: 10px;">
+        <strong>⚠️ IMPORTANTE:</strong> Por seguridad, deberá cambiar su contraseña en el primer inicio de sesión.
+    </p>
+</div>
+
+<p>Una vez que inicie sesión, podrá:</p>
+<ul>
+    <li>Completar y actualizar los datos de su empresa</li>
+    <li>Gestionar su perfil y productos/servicios</li>
+    <li>Acceder a herramientas de exportación</li>
+</ul>
+
+<p>Si tiene alguna consulta, no dude en contactarnos.</p>
+
+<p>Saludos cordiales,<br>
+<strong>Equipo Sistema de Gestión de Empresas Exportadoras</strong></p>
+{% endblock %}
+

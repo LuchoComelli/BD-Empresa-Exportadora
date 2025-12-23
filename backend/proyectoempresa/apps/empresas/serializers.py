@@ -2080,7 +2080,7 @@ class EmpresaListSerializer(serializers.ModelSerializer):
             'rubro_nombre', 'id_subrubro', 'id_subrubro_producto', 'id_subrubro_servicio',
             'sub_rubro_nombre', 'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 
             'categoria_matriz', 'geolocalizacion', 'municipio_nombre', 'localidad_nombre',
-            'eliminado'
+            'eliminado', 'ultima_notificacion_credenciales'
         ]
 
 

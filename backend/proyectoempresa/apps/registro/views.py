@@ -23,7 +23,13 @@ def registro_empresa(request):
             solicitud.save()
             
             # Enviar email de confirmación
-            enviar_email_confirmacion(solicitud)
+            try:
+                from .services import enviar_email_confirmacion_registro
+                enviar_email_confirmacion_registro(solicitud)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error enviando email de confirmación: {str(e)}")
             
             messages.success(
                 request, 
@@ -133,16 +139,74 @@ def detalle_solicitud(request, solicitud_id):
             solicitud.save()
             
             # Enviar email de aprobación
-            enviar_email_aprobacion(solicitud)
+            try:
+                from .services import enviar_email_aprobacion
+                enviar_email_aprobacion(solicitud)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error enviando email de aprobación: {str(e)}")
             
             messages.success(request, 'Solicitud aprobada correctamente.')
         elif accion == 'rechazar':
-            solicitud.estado = 'rechazada'
-            solicitud.observaciones_admin = observaciones
-            solicitud.save()
+            from django.db import transaction
+            from apps.empresas.models import Empresa
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            usuario_a_eliminar = solicitud.usuario_creado
+            
+            try:
+                with transaction.atomic():
+                    # Guardar el rechazo
+                    solicitud.estado = 'rechazada'
+                    solicitud.observaciones_admin = observaciones
+                    solicitud.aprobado_por = request.user
+                    solicitud.save()
+                    
+                    # Eliminar el usuario asociado si existe
+                    if usuario_a_eliminar:
+                        # Verificar que el usuario no esté asociado a una empresa aprobada
+                        empresa_asociada = Empresa.objects.filter(id_usuario=usuario_a_eliminar).first()
+                        
+                        if empresa_asociada:
+                            logger.warning(
+                                f"Usuario {usuario_a_eliminar.email} tiene empresa asociada (ID: {empresa_asociada.id}), "
+                                f"no se eliminará el usuario al rechazar solicitud {solicitud.id}"
+                            )
+                        else:
+                            # Verificar que no tenga otras solicitudes aprobadas
+                            otras_solicitudes = SolicitudRegistro.objects.filter(
+                                usuario_creado=usuario_a_eliminar,
+                                estado='aprobada'
+                            ).exclude(id=solicitud.id).exists()
+                            
+                            if otras_solicitudes:
+                                logger.warning(
+                                    f"Usuario {usuario_a_eliminar.email} tiene otras solicitudes aprobadas, "
+                                    f"no se eliminará el usuario al rechazar solicitud {solicitud.id}"
+                                )
+                            else:
+                                # Eliminar el usuario
+                                email_usuario = usuario_a_eliminar.email
+                                usuario_a_eliminar.delete()
+                                logger.info(f"✅ Usuario {email_usuario} eliminado al rechazar solicitud {solicitud.id}")
+                    
+                    # Desvincular el usuario de la solicitud
+                    solicitud.usuario_creado = None
+                    solicitud.save()
+            
+            except Exception as e:
+                logger.error(f"❌ Error al rechazar solicitud {solicitud.id}: {str(e)}", exc_info=True)
+                messages.error(request, f'Error al rechazar la solicitud: {str(e)}')
+                return redirect('registro:detalle_solicitud', solicitud.id)
             
             # Enviar email de rechazo
-            enviar_email_rechazo(solicitud)
+            try:
+                from .services import enviar_email_rechazo
+                enviar_email_rechazo(solicitud)
+            except Exception as e:
+                logger.warning(f"Error enviando email de rechazo: {str(e)}")
             
             messages.success(request, 'Solicitud rechazada.')
         
@@ -201,140 +265,26 @@ def registro_usuario(request):
 def enviar_email_confirmacion(solicitud):
     """
     Enviar email de confirmación
+    NOTA: Esta función se mantiene por compatibilidad, pero ahora se usa el servicio centralizado
     """
-    subject = 'Confirmación de Registro - BD Empresa Exportadora'
-    message = render_to_string('registro/emails/confirmacion.html', {
-        'solicitud': solicitud,
-        'confirm_url': f"{settings.SITE_URL}/registro/confirmar/{solicitud.token_confirmacion}/"
-    })
-    
-    try:
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [solicitud.correo],
-            html_message=message,
-            fail_silently=False,
-        )
-        
-        # Crear notificación
-        NotificacionRegistro.objects.create(
-            solicitud=solicitud,
-            tipo='confirmacion',
-            asunto=subject,
-            mensaje=message,
-            email_enviado=True,
-            fecha_envio=timezone.now()
-        )
-    except Exception as e:
-        # Crear notificación de error
-        NotificacionRegistro.objects.create(
-            solicitud=solicitud,
-            tipo='confirmacion',
-            asunto=subject,
-            mensaje=message,
-            email_enviado=False,
-            error_envio=str(e)
-        )
+    from .services import enviar_email_confirmacion_registro
+    return enviar_email_confirmacion_registro(solicitud)
 
 def enviar_email_aprobacion(solicitud):
     """
     Enviar email de aprobación
+    NOTA: Esta función se mantiene por compatibilidad, pero ahora se usa el servicio centralizado
     """
-    subject = 'Solicitud Aprobada - BD Empresa Exportadora'
-    message = render_to_string('registro/emails/aprobacion.html', {
-        'solicitud': solicitud,
-    })
-    
-    try:
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [solicitud.correo],
-            html_message=message,
-            fail_silently=False,
-        )
-        
-        # Crear notificación
-        NotificacionRegistro.objects.create(
-            solicitud=solicitud,
-            tipo='aprobacion',
-            asunto=subject,
-            mensaje=message,
-            email_enviado=True,
-            fecha_envio=timezone.now()
-        )
-    except Exception as e:
-        # Crear notificación de error
-        NotificacionRegistro.objects.create(
-            solicitud=solicitud,
-            tipo='aprobacion',
-            asunto=subject,
-            mensaje=message,
-            email_enviado=False,
-            error_envio=str(e)
-        )
+    from .services import enviar_email_aprobacion as enviar_email_aprobacion_service
+    return enviar_email_aprobacion_service(solicitud)
 
 def enviar_email_rechazo(solicitud):
     """
     Enviar email de rechazo
+    NOTA: Esta función se mantiene por compatibilidad, pero ahora se usa el servicio centralizado
     """
-    subject = 'Solicitud Rechazada - BD Empresa Exportadora'
-    
-    try:
-        # Intentar renderizar el template
-    message = render_to_string('registro/emails/rechazo.html', {
-        'solicitud': solicitud,
-    })
-    except Exception as e:
-        # Si el template no existe, crear un mensaje simple
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f'Template de email de rechazo no encontrado, usando mensaje simple: {str(e)}')
-        message = f"""
-        <html>
-        <body>
-            <h2>Solicitud Rechazada</h2>
-            <p>Su solicitud de registro para la empresa <strong>{solicitud.razon_social}</strong> ha sido rechazada.</p>
-            {f'<p><strong>Observaciones:</strong> {solicitud.observaciones_admin}</p>' if solicitud.observaciones_admin else ''}
-            <p>Por favor, contacte con el administrador para más información.</p>
-        </body>
-        </html>
-        """
-    
-    try:
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [solicitud.correo],
-            html_message=message,
-            fail_silently=False,
-        )
-        
-        # Crear notificación
-        NotificacionRegistro.objects.create(
-            solicitud=solicitud,
-            tipo='rechazo',
-            asunto=subject,
-            mensaje=message,
-            email_enviado=True,
-            fecha_envio=timezone.now()
-        )
-    except Exception as e:
-        # Crear notificación de error
-        NotificacionRegistro.objects.create(
-            solicitud=solicitud,
-            tipo='rechazo',
-            asunto=subject,
-            mensaje=message,
-            email_enviado=False,
-            error_envio=str(e)
-        )
-        # Re-lanzar la excepción para que el ViewSet la maneje
-        raise
+    from .services import enviar_email_rechazo as enviar_email_rechazo_service
+    return enviar_email_rechazo_service(solicitud)
 
 def crear_empresa_desde_solicitud(solicitud):
     from apps.empresas.models import Empresa, Rubro, TipoEmpresa
@@ -574,15 +524,15 @@ def crear_empresa_desde_solicitud(solicitud):
         usuario_empresa.save()
         logger.info(f"Usuario existente actualizado: {usuario_empresa.email}")
     except User.DoesNotExist:
-    usuario_empresa = User.objects.create_user(
-        email=solicitud.correo,
+        usuario_empresa = User.objects.create_user(
+            email=solicitud.correo,
             password=solicitud.cuit_cuil,
-        nombre=solicitud.nombre_contacto,
+            nombre=solicitud.nombre_contacto,
             apellido=solicitud.apellido_contacto,
-        rol=rol_empresa,
-        telefono=solicitud.telefono_contacto,
-        departamento=solicitud.departamento,
-        municipio=solicitud.municipio,
+            rol=rol_empresa,
+            telefono=solicitud.telefono_contacto,
+            departamento=solicitud.departamento,
+            municipio=solicitud.municipio,
             localidad=solicitud.localidad,
             is_active=True,
             debe_cambiar_password=True  # Marcar que debe cambiar la contraseña

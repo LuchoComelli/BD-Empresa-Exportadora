@@ -23,7 +23,14 @@ INTERNAL_IPS = [
 ]
 
 # Email backend for development
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Si las credenciales de email están configuradas, usar SMTP real
+# Si no, usar console backend para ver emails en consola
+if os.getenv('EMAIL_HOST_USER') and os.getenv('EMAIL_HOST_PASSWORD'):
+    # Usar SMTP real si hay credenciales configuradas
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+else:
+    # Usar console backend si no hay credenciales (solo para desarrollo local)
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Logging for development
 LOGGING['handlers']['console']['level'] = 'DEBUG'

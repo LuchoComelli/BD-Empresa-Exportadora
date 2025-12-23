@@ -5,6 +5,9 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from django.utils import timezone
+import time
+import logging
 from .models import (
     TipoEmpresa,
     Rubro,
@@ -1036,13 +1039,58 @@ class EmpresaViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(eliminado=False)
         # Si mostrar_todas es True, no aplicar filtro (mostrar todas)
 
+        # Filtrar por estado de notificación
+        notificada_param = self.request.query_params.get("notificada", "").lower()
+        if notificada_param == "true":
+            # Solo empresas notificadas
+            queryset = queryset.filter(ultima_notificacion_credenciales__isnull=False)
+        elif notificada_param == "false":
+            # Solo empresas no notificadas
+            queryset = queryset.filter(ultima_notificacion_credenciales__isnull=True)
+
         return queryset
 
     def perform_create(self, serializer):
         serializer.save(creado_por=self.request.user)
 
     def perform_update(self, serializer):
+        instance = serializer.instance
+        
+        # Campos importantes que deben notificarse si cambian
+        campos_importantes = [
+            'razon_social',
+            'cuit_cuil',
+            'correo',
+            'contacto_principal_email',
+            'direccion',
+            'telefono',
+            'email_secundario',
+            'email_terciario',
+        ]
+        
+        # Detectar cambios antes de guardar
+        cambios = {}
+        for campo in campos_importantes:
+            if campo in serializer.validated_data:
+                valor_anterior = getattr(instance, campo, None)
+                valor_nuevo = serializer.validated_data[campo]
+                
+                # Comparar valores (manejar diferentes tipos)
+                if valor_anterior != valor_nuevo:
+                    # Convertir a string para comparación más robusta
+                    str_anterior = str(valor_anterior) if valor_anterior is not None else ''
+                    str_nuevo = str(valor_nuevo) if valor_nuevo is not None else ''
+                    
+                    if str_anterior != str_nuevo:
+                        cambios[campo] = {
+                            'anterior': valor_anterior,
+                            'nuevo': valor_nuevo
+                        }
+        
+        # Guardar los cambios
         serializer.save(actualizado_por=self.request.user)
+        
+        # Notificación de cambios eliminada
 
     def perform_destroy(self, instance):
         """
@@ -1169,3 +1217,145 @@ class EmpresaViewSet(viewsets.ModelViewSet):
                 ).count(),
             }
         )
+    
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageEmpresas])
+    def notificar(self, request):
+        """
+        Notificar empresas con sus credenciales de acceso.
+        Soporta notificación individual, múltiple o masiva.
+        """
+        logger = logging.getLogger(__name__)
+        
+        empresa_ids = request.data.get('empresa_ids', [])
+        notificar_todas = request.data.get('notificar_todas', False)
+        
+        # Obtener empresas a notificar
+        queryset = self.get_queryset().filter(eliminado=False)
+        
+        if notificar_todas:
+            # Notificar todas las empresas aprobadas (con usuario activo)
+            empresas = queryset.filter(
+                id_usuario__isnull=False,
+                id_usuario__is_active=True
+            ).select_related('id_usuario')
+        elif empresa_ids:
+            # Notificar empresas específicas
+            empresas = queryset.filter(
+                id__in=empresa_ids,
+                id_usuario__isnull=False,
+                id_usuario__is_active=True
+            ).select_related('id_usuario')
+        else:
+            return Response(
+                {'error': 'Debe proporcionar empresa_ids o notificar_todas=true'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Filtrar solo empresas con email válido
+        empresas_validas = []
+        for empresa in empresas:
+            if empresa.id_usuario and empresa.id_usuario.email:
+                empresas_validas.append(empresa)
+        
+        if not empresas_validas:
+            return Response(
+                {'error': 'No se encontraron empresas válidas para notificar (deben tener usuario activo con email)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Advertencia si hay muchas empresas (límite de Gmail)
+        total_empresas = len(empresas_validas)
+        if total_empresas > 500:
+            logger.warning(f"⚠️ Se intentará notificar {total_empresas} empresas. Esto puede exceder el límite de Gmail (500/día para cuentas gratuitas)")
+        
+        # Importar función de servicio
+        from apps.registro.services import enviar_email_notificacion_empresa
+        
+        # Envío en lotes con delays
+        enviados = 0
+        fallidos = 0
+        errores = []
+        lote_size = 10
+        delay_entre_lotes = 2  # segundos
+        delay_entre_emails = 0.5  # segundos
+        
+        # Dividir en lotes
+        lotes = [empresas_validas[i:i + lote_size] for i in range(0, len(empresas_validas), lote_size)]
+        
+        logger.info(f"📧 Iniciando notificación de {total_empresas} empresas en {len(lotes)} lotes")
+        
+        for lote_idx, lote in enumerate(lotes):
+            logger.info(f"📦 Procesando lote {lote_idx + 1}/{len(lotes)} ({len(lote)} empresas)")
+            
+            for empresa in lote:
+                try:
+                    # Validar que el email del usuario sea válido antes de intentar enviar
+                    if not empresa.id_usuario or not empresa.id_usuario.email:
+                        fallidos += 1
+                        errores.append({
+                            'empresa_id': empresa.id,
+                            'razon_social': empresa.razon_social,
+                            'error': 'Usuario sin email válido'
+                        })
+                        logger.warning(f"⚠️ Empresa {empresa.id} ({empresa.razon_social}) no tiene email válido")
+                        continue
+                    
+                    # Validar formato básico del email
+                    email = empresa.id_usuario.email.strip()
+                    if '@' not in email or '.' not in email.split('@')[-1]:
+                        fallidos += 1
+                        errores.append({
+                            'empresa_id': empresa.id,
+                            'razon_social': empresa.razon_social,
+                            'error': f'Email con formato inválido: {email}'
+                        })
+                        logger.warning(f"⚠️ Email con formato inválido para empresa {empresa.id}: {email}")
+                        continue
+                    
+                    resultado = enviar_email_notificacion_empresa(empresa)
+                    if resultado:
+                        # Actualizar fecha de última notificación
+                        empresa.ultima_notificacion_credenciales = timezone.now()
+                        empresa.save(update_fields=['ultima_notificacion_credenciales'])
+                        enviados += 1
+                        logger.info(f"✅ Email enviado a {empresa.razon_social} ({empresa.id_usuario.email})")
+                    else:
+                        fallidos += 1
+                        errores.append({
+                            'empresa_id': empresa.id,
+                            'razon_social': empresa.razon_social,
+                            'error': 'Error al enviar email (resultado False)'
+                        })
+                        logger.warning(f"⚠️ Error al enviar email a {empresa.razon_social}")
+                    
+                    # Delay entre emails dentro del mismo lote
+                    if delay_entre_emails > 0:
+                        time.sleep(delay_entre_emails)
+                        
+                except Exception as e:
+                    fallidos += 1
+                    error_msg = str(e)
+                    # Detectar errores de dirección no encontrada
+                    if '550' in error_msg or '5.1.1' in error_msg or 'does not exist' in error_msg.lower() or 'address not found' in error_msg.lower():
+                        error_msg = f'Dirección de email no existe o no es válida: {empresa.id_usuario.email if empresa.id_usuario else "N/A"}'
+                    
+                    errores.append({
+                        'empresa_id': empresa.id,
+                        'razon_social': empresa.razon_social,
+                        'error': error_msg
+                    })
+                    logger.error(f"❌ Error al notificar empresa {empresa.id} ({empresa.razon_social}): {error_msg}", exc_info=False)  # exc_info=False para evitar logs muy largos
+            
+            # Delay entre lotes (excepto después del último lote)
+            if lote_idx < len(lotes) - 1 and delay_entre_lotes > 0:
+                logger.info(f"⏳ Esperando {delay_entre_lotes} segundos antes del siguiente lote...")
+                time.sleep(delay_entre_lotes)
+        
+        logger.info(f"✅ Notificación completada: {enviados} enviados, {fallidos} fallidos")
+        
+        return Response({
+            'enviados': enviados,
+            'fallidos': fallidos,
+            'total': total_empresas,
+            'errores': errores if errores else None
+        }, status=status.HTTP_200_OK)

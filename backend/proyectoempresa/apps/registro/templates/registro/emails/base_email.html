@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Gestión de Empresas Exportadoras{% endblock %}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #222A59;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(34, 42, 89, 0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #3259B5;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #222A59 0%, #3259B5 100%);
+            margin: -30px -30px 30px -30px;
+            padding: 30px 30px 20px 30px;
+            border-radius: 8px 8px 0 0;
+        }
+        .header-logo {
+            max-width: 200px;
+            height: auto;
+            margin-bottom: 15px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .header h1 {
+            color: #ffffff;
+            margin: 10px 0 5px 0;
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-subtitle {
+            color: #629BD2;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .content {
+            margin: 20px 0;
+        }
+        .content p {
+            margin: 15px 0;
+        }
+        .content h2 {
+            color: #222A59;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        .content h3 {
+            color: #3259B5;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #3259B5;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #222A59;
+        }
+        .button-success {
+            background-color: #66A29C;
+        }
+        .button-success:hover {
+            background-color: #C3C840;
+        }
+        .button-warning {
+            background-color: #C3C840;
+            color: #222A59;
+        }
+        .button-warning:hover {
+            background-color: #EB7DBF;
+        }
+        .button-danger {
+            background-color: #C0217E;
+        }
+        .button-danger:hover {
+            background-color: #807DA1;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3259B5;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .info-box-success {
+            background-color: #f0f9f8;
+            border-left-color: #66A29C;
+        }
+        .info-box-warning {
+            background-color: #fffef0;
+            border-left-color: #C3C840;
+        }
+        .info-box-danger {
+            background-color: #fef0f5;
+            border-left-color: #C0217E;
+        }
+        .info-box-info {
+            background-color: #f0f4f9;
+            border-left-color: #629BD2;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #629BD2;
+            text-align: center;
+            font-size: 12px;
+            color: #807DA1;
+        }
+        .credentials {
+            background-color: #fffef0;
+            border: 2px solid #C3C840;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .credentials strong {
+            color: #222A59;
+        }
+        .credentials h3 {
+            color: #222A59;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            {% if logo_url %}
+            <!-- Logo desde URL externa - Compatible con Gmail, Outlook y todos los clientes -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 15px;">
+                <tr>
+                    <td align="center">
+                        <img src="{{ logo_url }}" alt="Logo Gobierno de Catamarca" width="200" height="auto" style="max-width: 200px; width: 200px; height: auto; display: block; margin: 0 auto; border: 0; outline: none; -ms-interpolation-mode: bicubic;" />
+                    </td>
+                </tr>
+            </table>
+            {% elif logo_base64 %}
+            <!-- Fallback: Logo como base64 (no compatible con Gmail/Outlook) -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 15px;">
+                <tr>
+                    <td align="center">
+                        <img src="{{ logo_base64 }}" alt="Logo" width="200" height="auto" style="max-width: 200px; width: 200px; height: auto; display: block; margin: 0 auto; border: 0; outline: none; -ms-interpolation-mode: bicubic;" />
+                    </td>
+                </tr>
+            </table>
+            {% endif %}
+            <h1>Sistema de Gestión de Empresas Exportadoras</h1>
+            <p class="header-subtitle">Dirección de Intercambio Comercial Internacional y Regional<br/>Provincia de Catamarca</p>
+        </div>
+        
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+        
+        <div class="footer">
+            <p>Este es un email automático, por favor no responda a este mensaje.</p>
+            <p>Si tiene consultas, puede contactarnos a través de nuestro sitio web.</p>
+            <p>&copy; {% now "Y" %} Sistema de Gestión de Empresas Exportadoras. Todos los derechos reservados.</p>
+        </div>
+    </div>
+</body>
+</html>
+

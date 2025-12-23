@@ -7,7 +7,7 @@ import { FiltersDropdown } from "@/components/empresas/filters-dropdown"
 import { CompaniesTable } from "@/components/empresas/companies-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Search, Download } from "lucide-react"
+import { Plus, Search, Download, Mail } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/api"
 import { ExportDialog } from "@/components/empresas/export-dialog"
@@ -39,6 +39,7 @@ interface Empresa {
   telefono?: string
   fecha_creacion: string
   eliminado?: boolean
+  ultima_notificacion_credenciales?: string
 }
 
 export default function EmpresasPage() {
@@ -53,6 +54,14 @@ export default function EmpresasPage() {
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [empresaAEliminar, setEmpresaAEliminar] = useState<Empresa | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [notificando, setNotificando] = useState(false)
+  const [showNotificarDialog, setShowNotificarDialog] = useState(false)
+  const [resultadoNotificacion, setResultadoNotificacion] = useState<{
+    enviados: number
+    fallidos: number
+    total: number
+    errores?: Array<{empresa_id: number, razon_social: string, error: string}>
+  } | null>(null)
   // Removemos la paginación - cargaremos todas las empresas
   const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([])
   const [currentPage, setCurrentPage] = useState(1)
@@ -148,6 +157,11 @@ export default function EmpresasPage() {
           params.eliminado = 'all'
         }
         // Si es 'activas', no enviar el parámetro (comportamiento por defecto)
+      }
+
+      // Filtro de notificación
+      if (filters.notificada && filters.notificada !== 'all') {
+        params.notificada = filters.notificada
       }
 
      console.log('[DEBUG] Params enviados al backend:', params)
@@ -354,6 +368,104 @@ const confirmarEliminacion = async () => {
   }
 }
 
+const handleNotificar = async () => {
+  if (selectedEmpresas.length === 0) {
+    // Si no hay seleccionadas, mostrar diálogo para confirmar notificación masiva
+    setShowNotificarDialog(true)
+    return
+  }
+  
+  // Notificar solo las seleccionadas
+  await notificarEmpresasSeleccionadas()
+}
+
+const notificarEmpresasSeleccionadas = async () => {
+  setNotificando(true)
+  setResultadoNotificacion(null)
+  
+  try {
+    const response = await api.notificarEmpresas(selectedEmpresas)
+    
+    setResultadoNotificacion({
+      enviados: response.enviados || 0,
+      fallidos: response.fallidos || 0,
+      total: response.total || selectedEmpresas.length,
+      errores: response.errores || []
+    })
+    
+    if (response.enviados > 0) {
+      toast({
+        title: "Notificación enviada",
+        description: `Se enviaron ${response.enviados} email(s) exitosamente${response.fallidos > 0 ? `, ${response.fallidos} fallaron` : ''}.`,
+        variant: "default",
+      })
+    }
+    
+    if (response.fallidos > 0) {
+      toast({
+        title: "Algunos emails fallaron",
+        description: `${response.fallidos} email(s) no pudieron ser enviados. Revisa los detalles.`,
+        variant: "destructive",
+      })
+    }
+    
+    // Limpiar selección después de notificar
+    setSelectedEmpresas([])
+  } catch (error: any) {
+    console.error("Error notificando empresas:", error)
+    toast({
+      title: "Error al notificar",
+      description: error?.message || "Error al enviar las notificaciones. Por favor, intenta nuevamente.",
+      variant: "destructive",
+    })
+  } finally {
+    setNotificando(false)
+    setShowNotificarDialog(false)
+  }
+}
+
+const notificarTodasLasEmpresas = async () => {
+  setNotificando(true)
+  setResultadoNotificacion(null)
+  setShowNotificarDialog(false)
+  
+  try {
+    const response = await api.notificarEmpresas(undefined, true)
+    
+    setResultadoNotificacion({
+      enviados: response.enviados || 0,
+      fallidos: response.fallidos || 0,
+      total: response.total || 0,
+      errores: response.errores || []
+    })
+    
+    if (response.enviados > 0) {
+      toast({
+        title: "Notificación masiva completada",
+        description: `Se enviaron ${response.enviados} email(s) exitosamente${response.fallidos > 0 ? `, ${response.fallidos} fallaron` : ''}.`,
+        variant: "default",
+      })
+    }
+    
+    if (response.fallidos > 0) {
+      toast({
+        title: "Algunos emails fallaron",
+        description: `${response.fallidos} email(s) no pudieron ser enviados. Revisa los detalles.`,
+        variant: "destructive",
+      })
+    }
+  } catch (error: any) {
+    console.error("Error notificando todas las empresas:", error)
+    toast({
+      title: "Error al notificar",
+      description: error?.message || "Error al enviar las notificaciones. Por favor, intenta nuevamente.",
+      variant: "destructive",
+    })
+  } finally {
+    setNotificando(false)
+  }
+}
+
 const handleRestore = async (id: number) => {
   // Buscar la empresa para obtener su información
   const empresa = empresas.find(e => e.id === id)
@@ -417,50 +529,78 @@ const handleRestore = async (id: number) => {
 
   return (
     <MainLayout>
-      <div className="space-y-4 md:space-y-6 px-2 sm:px-0">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6 w-full max-w-full overflow-x-hidden">
         {/* Header */}
-        <div className="flex flex-col gap-3 md:gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#222A59]">Empresas</h1>
+        <div className="flex flex-col gap-2 sm:gap-3 md:gap-4 w-full">
+          <div className="w-full">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-[#222A59] leading-tight">
+              Empresas
+            </h1>
             <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">
               Gestiona todas las empresas registradas en el sistema
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:gap-3">
+          <div className="flex flex-col gap-2 sm:gap-3 w-full">
             {/* Barra de búsqueda - siempre ancho completo */}
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar empresas..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-9 w-full text-sm sm:text-base"
+                className="pl-8 sm:pl-9 w-full text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10"
               />
             </div>
-            {/* Botones de acción - en fila en móviles, con wrap */}
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <FiltersDropdown 
-                onFilterChange={handleFilterChange} 
-                onClearFilters={handleClearFilters}
-                filters={filters}
-              />
+            {/* Botones de acción - responsive grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-1.5 sm:gap-2 w-full">
+              <div className="col-span-2 sm:col-span-1 min-w-0">
+                <FiltersDropdown 
+                  onFilterChange={handleFilterChange} 
+                  onClearFilters={handleClearFilters}
+                  filters={filters}
+                />
+              </div>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="flex items-center gap-2 flex-1 sm:flex-initial min-w-[120px]"
+                className="flex items-center justify-center gap-1 sm:gap-1.5 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                 onClick={handleExport}
                 disabled={selectedEmpresas.length === 0}
               >
-                <Download className="h-4 w-4" />
-                <span className="hidden xs:inline">Exportar</span>
-                <span className="xs:hidden">Exp.</span>
+                <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden sm:inline">Exportar</span>
+                <span className="sm:hidden">Exp.</span>
                 {selectedEmpresas.length > 0 && (
-                  <span className="ml-1">({selectedEmpresas.length})</span>
+                  <span className="ml-0.5 sm:ml-1 text-xs">({selectedEmpresas.length})</span>
                 )}
               </Button>
-              <Link href="/dashboard/nueva-empresa" className="flex-1 sm:flex-initial">
-                <Button size="sm" className="flex items-center gap-2 bg-[#3259B5] hover:bg-[#3259B5]/90 w-full sm:w-auto">
-                  <Plus className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center justify-center gap-1 sm:gap-1.5 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+                onClick={handleNotificar}
+                disabled={notificando || (selectedEmpresas.length === 0 && allEmpresas.length === 0)}
+              >
+                <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                <span className="hidden md:inline text-xs md:text-sm">
+                  {notificando ? "Enviando..." : selectedEmpresas.length > 0 ? "Notificar" : "Notificar Todas"}
+                </span>
+                <span className="hidden sm:inline md:hidden">
+                  {notificando ? "..." : selectedEmpresas.length > 0 ? "Notif." : "Todas"}
+                </span>
+                <span className="sm:hidden">
+                  {notificando ? "..." : selectedEmpresas.length > 0 ? "Notif." : "Todas"}
+                </span>
+                {selectedEmpresas.length > 0 && (
+                  <span className="ml-0.5 sm:ml-1 text-xs">({selectedEmpresas.length})</span>
+                )}
+              </Button>
+              <Link href="/dashboard/nueva-empresa" className="col-span-2 sm:col-span-1 min-w-0">
+                <Button 
+                  size="sm" 
+                  className="flex items-center justify-center gap-1 sm:gap-1.5 bg-[#3259B5] hover:bg-[#3259B5]/90 w-full text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+                >
+                  <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                   <span className="hidden sm:inline">Nueva Empresa</span>
                   <span className="sm:hidden">Nueva</span>
                 </Button>
@@ -470,7 +610,7 @@ const handleRestore = async (id: number) => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 w-full overflow-hidden">
+        <div className="flex-1 w-full max-w-full overflow-x-hidden">
           <CompaniesTable 
             empresas={empresas}
             loading={loading}
@@ -501,6 +641,93 @@ const handleRestore = async (id: number) => {
           }}
           empresas={allEmpresas.filter(e => selectedEmpresas.includes(e.id))}
         />
+
+        {/* Notificar Confirmation Dialog */}
+        <AlertDialog open={showNotificarDialog} onOpenChange={setShowNotificarDialog}>
+          <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-lg sm:text-xl">¿Notificar todas las empresas?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm sm:text-base">
+                  <p>
+                    Se notificarán <strong className="text-foreground">{allEmpresas.length}</strong> empresas con sus credenciales de acceso.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Este proceso puede tardar varios minutos debido a los límites de envío de email. 
+                    Los emails se enviarán en lotes con delays automáticos.
+                  </p>
+                  {allEmpresas.length > 500 && (
+                    <p className="text-amber-600 font-medium">
+                      ⚠️ Advertencia: Se intentará notificar más de 500 empresas. 
+                      Esto puede exceder el límite diario de Gmail (500 emails/día para cuentas gratuitas).
+                    </p>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+              <AlertDialogCancel 
+                className="w-full sm:w-auto order-2 sm:order-1"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={notificarTodasLasEmpresas}
+                className="bg-[#3259B5] hover:bg-[#3259B5]/90 w-full sm:w-auto order-1 sm:order-2"
+                disabled={notificando}
+              >
+                {notificando ? "Enviando..." : "Notificar Todas"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Resultado de Notificación Dialog */}
+        {resultadoNotificacion && (
+          <AlertDialog open={!!resultadoNotificacion} onOpenChange={() => setResultadoNotificacion(null)}>
+            <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-lg sm:text-xl">Resultado de Notificación</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3 text-sm sm:text-base">
+                    <div className="space-y-1">
+                      <p><strong className="text-green-600">✓ Enviados:</strong> {resultadoNotificacion.enviados}</p>
+                      {resultadoNotificacion.fallidos > 0 && (
+                        <p><strong className="text-red-600">✗ Fallidos:</strong> {resultadoNotificacion.fallidos}</p>
+                      )}
+                      <p><strong>Total procesadas:</strong> {resultadoNotificacion.total}</p>
+                    </div>
+                    {resultadoNotificacion.errores && resultadoNotificacion.errores.length > 0 && (
+                      <div className="mt-3 p-3 bg-red-50 rounded-md max-h-40 overflow-y-auto">
+                        <p className="font-semibold text-red-600 mb-2">Errores:</p>
+                        <ul className="space-y-1 text-xs">
+                          {resultadoNotificacion.errores.slice(0, 5).map((error, idx) => (
+                            <li key={idx} className="text-red-700">
+                              {error.razon_social}: {error.error}
+                            </li>
+                          ))}
+                          {resultadoNotificacion.errores.length > 5 && (
+                            <li className="text-red-600 italic">
+                              ... y {resultadoNotificacion.errores.length - 5} más
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogAction
+                  onClick={() => setResultadoNotificacion(null)}
+                  className="w-full sm:w-auto"
+                >
+                  Cerrar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

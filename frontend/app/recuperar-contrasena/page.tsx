@@ -9,40 +9,75 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react"
+import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react"
+import api from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 export default function RecuperarContrasenaPage() {
+  const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
     setIsLoading(true)
 
-    console.log("[v0] Password recovery requested for:", email)
-
-    setTimeout(() => {
+    try {
+      const response = await api.solicitarRecuperacionPassword(email)
+      
+      if (response && response.message) {
+        setIsSubmitted(true)
+        toast({
+          title: "Email enviado",
+          description: response.message || "Se han enviado las instrucciones para restablecer tu contraseña a tu correo electrónico.",
+          variant: "default",
+        })
+      }
+    } catch (error: any) {
+      // Ignorar errores silenciosos de "No hay sesión activa" para endpoints públicos
+      if (error?.silent && error?.noAuth) {
+        // Este error se puede ignorar para endpoints públicos
+        // El backend debería devolver 200 si todo está bien
+        console.warn("Error de autenticación ignorado para endpoint público:", error)
+        return
+      }
+      
+      console.error("Error solicitando recuperación:", error)
+      const errorMessage = error?.errorData?.error || 
+                          error?.errorData?.detail || 
+                          error?.message || 
+                          "Error al enviar el email. Por favor, intenta nuevamente."
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
-      setIsSubmitted(true)
-    }, 1000)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#222A59] via-[#3259B5] to-[#629BD2] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6 md:mb-8">
-          <Link href="/" className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="relative w-12 h-12 md:w-16 md:h-16 bg-white rounded-xl flex items-center justify-center shadow-lg p-2">
-              <Image
-                src="/logo.png"
-                alt="Logo Catamarca"
-                fill
-                className="object-contain"
-                priority
-              />
-            </div>
-          </Link>
+          <div className="mb-0">
+            <Link href="/" className="inline-flex p-0 hover:opacity-90 transition-opacity w-fit h-fit">
+              <div className="relative w-24 h-24 md:w-32 md:h-32">
+                <Image
+                  src="/logo.png"
+                  alt="Logo Catamarca"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            </Link>
+          </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Recuperar Contraseña</h1>
           <p className="text-sm md:text-base text-white/90">Dirección de Intercambio Comercial Internacional y Regional</p>
           <p className="text-xs md:text-sm text-white/80">Provincia de Catamarca</p>
@@ -72,9 +107,18 @@ export default function RecuperarContrasenaPage() {
                       className="pl-10 border-gray-300 focus:border-[#3259B5] focus:ring-[#3259B5]"
                       placeholder="tu@email.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        setError("")
+                      }}
                     />
                   </div>
+                  {error && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{error}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Button

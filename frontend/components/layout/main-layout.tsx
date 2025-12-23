@@ -16,11 +16,11 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-x-hidden">
       <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-      <div className="flex flex-1 pt-16 md:pt-20 relative">
+      <div className="flex flex-1 pt-16 md:pt-20 relative overflow-x-hidden">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <main className="flex-1 lg:ml-64 bg-[#F3F4F6] p-4 md:p-6">
+        <main className="flex-1 lg:ml-64 bg-[#F3F4F6] p-2 sm:p-3 md:p-4 lg:p-6 max-w-full overflow-x-hidden">
           {children}
         </main>
       </div>

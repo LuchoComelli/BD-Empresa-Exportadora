@@ -46,7 +46,8 @@ class SolicitudRegistroAdmin(admin.ModelAdmin):
     actions = ['aprobar_solicitudes', 'rechazar_solicitudes']
     
     def aprobar_solicitudes(self, request, queryset):
-        from .views import crear_empresa_desde_solicitud, enviar_email_aprobacion
+        from .views import crear_empresa_desde_solicitud
+        from .services import enviar_email_aprobacion
         from django.utils import timezone
         
         for solicitud in queryset:
@@ -62,23 +63,77 @@ class SolicitudRegistroAdmin(admin.ModelAdmin):
                 solicitud.save()
                 
                 # Enviar email
-                enviar_email_aprobacion(solicitud)
+                try:
+                    enviar_email_aprobacion(solicitud)
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Error enviando email de aprobación: {str(e)}")
         
         self.message_user(request, f'{queryset.count()} solicitudes aprobadas.')
     aprobar_solicitudes.short_description = 'Aprobar solicitudes seleccionadas'
     
     def rechazar_solicitudes(self, request, queryset):
-        from .views import enviar_email_rechazo
+        from .services import enviar_email_rechazo
         from django.utils import timezone
+        from django.db import transaction
+        from apps.empresas.models import Empresa
+        import logging
+        
+        logger = logging.getLogger(__name__)
         
         for solicitud in queryset:
             if solicitud.estado == 'pendiente':
-                solicitud.estado = 'rechazada'
-                solicitud.aprobado_por = request.user
-                solicitud.save()
+                usuario_a_eliminar = solicitud.usuario_creado
+                
+                try:
+                    with transaction.atomic():
+                        # Guardar el rechazo
+                        solicitud.estado = 'rechazada'
+                        solicitud.aprobado_por = request.user
+                        solicitud.save()
+                        
+                        # Eliminar el usuario asociado si existe
+                        if usuario_a_eliminar:
+                            # Verificar que el usuario no esté asociado a una empresa aprobada
+                            empresa_asociada = Empresa.objects.filter(id_usuario=usuario_a_eliminar).first()
+                            
+                            if empresa_asociada:
+                                logger.warning(
+                                    f"Usuario {usuario_a_eliminar.email} tiene empresa asociada (ID: {empresa_asociada.id}), "
+                                    f"no se eliminará el usuario al rechazar solicitud {solicitud.id}"
+                                )
+                            else:
+                                # Verificar que no tenga otras solicitudes aprobadas
+                                otras_solicitudes = SolicitudRegistro.objects.filter(
+                                    usuario_creado=usuario_a_eliminar,
+                                    estado='aprobada'
+                                ).exclude(id=solicitud.id).exists()
+                                
+                                if otras_solicitudes:
+                                    logger.warning(
+                                        f"Usuario {usuario_a_eliminar.email} tiene otras solicitudes aprobadas, "
+                                        f"no se eliminará el usuario al rechazar solicitud {solicitud.id}"
+                                    )
+                                else:
+                                    # Eliminar el usuario
+                                    email_usuario = usuario_a_eliminar.email
+                                    usuario_a_eliminar.delete()
+                                    logger.info(f"✅ Usuario {email_usuario} eliminado al rechazar solicitud {solicitud.id}")
+                        
+                        # Desvincular el usuario de la solicitud
+                        solicitud.usuario_creado = None
+                        solicitud.save()
+                
+                except Exception as e:
+                    logger.error(f"❌ Error al rechazar solicitud {solicitud.id}: {str(e)}", exc_info=True)
+                    continue
                 
                 # Enviar email
-                enviar_email_rechazo(solicitud)
+                try:
+                    enviar_email_rechazo(solicitud)
+                except Exception as e:
+                    logger.warning(f"Error enviando email de rechazo: {str(e)}")
         
         self.message_user(request, f'{queryset.count()} solicitudes rechazadas.')
     rechazar_solicitudes.short_description = 'Rechazar solicitudes seleccionadas'

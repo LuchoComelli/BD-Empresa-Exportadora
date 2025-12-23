@@ -1,0 +1,34 @@
+{% extends "registro/emails/base_email.html" %}
+
+{% block content %}
+<h2 style="color: #C0217E;">Solicitud Rechazada</h2>
+
+<p>Estimado/a,</p>
+
+<p>Lamentamos informarle que su solicitud de registro para la empresa <strong>{{ razon_social }}</strong> ha sido <strong>rechazada</strong>.</p>
+
+<div class="info-box" style="border-left-color: #C0217E;">
+    <p><strong>Fecha de rechazo:</strong> {{ fecha_rechazo|date:"d/m/Y H:i" }}</p>
+</div>
+
+{% if observaciones %}
+<div class="info-box" style="border-left-color: #C0217E;">
+    <p><strong>Motivo del rechazo:</strong></p>
+    <p>{{ observaciones }}</p>
+</div>
+{% else %}
+<p>Por favor, contacte con nuestro equipo administrativo para obtener más información sobre el motivo del rechazo.</p>
+{% endif %}
+
+<p>Si considera que esto es un error o desea presentar información adicional, puede:</p>
+<ul>
+    <li>Contactarnos a través de nuestro sitio web</li>
+    <li>Realizar una nueva solicitud con la información corregida</li>
+</ul>
+
+<p>Estamos a su disposición para ayudarle a resolver cualquier inconveniente.</p>
+
+<p>Saludos cordiales,<br>
+<strong>Equipo Sistema de Gestión de Empresas Exportadoras</strong></p>
+{% endblock %}
+

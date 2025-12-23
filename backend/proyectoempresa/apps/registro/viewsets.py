@@ -83,8 +83,14 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             )
             logger.info(f"Solicitud creada exitosamente: ID={solicitud.id}, Razón Social={solicitud.razon_social}, Usuario={solicitud.usuario_creado.email if solicitud.usuario_creado else 'No creado'}")
             # El usuario ya fue creado en el serializer.create()
-            # TODO: Enviar email de confirmación con credenciales
-            # enviar_email_confirmacion(solicitud)
+            
+            # Enviar email de confirmación
+            try:
+                from .services import enviar_email_confirmacion_registro
+                enviar_email_confirmacion_registro(solicitud)
+            except Exception as email_error:
+                logger.warning(f"⚠️ Error enviando email de confirmación: {str(email_error)}")
+                # No fallar la creación si el email falla
         except Exception as e:
             logger.error(f"Error al crear solicitud de registro: {str(e)}", exc_info=True)
             raise
@@ -135,7 +141,7 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         
             # Intentar enviar email (no crítico)
             try:
-                from .views import enviar_email_aprobacion
+                from .services import enviar_email_aprobacion
                 enviar_email_aprobacion(solicitud)
             except Exception as email_error:
                 logger.warning(f"⚠️ Error enviando email: {str(email_error)}")
@@ -153,41 +159,46 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
             status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            logger.error(f"❌ Error inesperado: {str(e)}", exc_info=True)
+            error_message = str(e)
+            logger.error(f"❌ Error inesperado: {error_message}", exc_info=True)
         
-        # Verificar si la empresa se creó a pesar del error
-        from apps.empresas.models import Empresa
-        cuit_normalizado = str(solicitud.cuit_cuil).replace('-', '').replace(' ', '').strip()
-        empresa_creada = Empresa.objects.filter(cuit_cuil=cuit_normalizado).first()
-        
-        if empresa_creada:
-            # La empresa existe, actualizar la solicitud
-            logger.info(f"✅ Empresa encontrada después del error, vinculando a solicitud")
-            try:
-                with transaction.atomic():
-                    solicitud.estado = 'aprobada'
-                    solicitud.fecha_aprobacion = timezone.now()
-                    solicitud.aprobado_por = request.user
-                    solicitud.observaciones_admin = observaciones
-                    solicitud.empresa_creada = empresa_creada
-                    solicitud.save()
-                
-                return Response({
-                    'status': 'success',
-                    'message': 'Solicitud aprobada exitosamente',
-                    'empresa_id': empresa_creada.id
-                })
-            except Exception as update_error:
-                logger.error(f"❌ Error actualizando solicitud: {str(update_error)}")
-        
-        return Response(
-            {'error': f'Error al aprobar la solicitud: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+            # Verificar si la empresa se creó a pesar del error
+            from apps.empresas.models import Empresa
+            cuit_normalizado = str(solicitud.cuit_cuil).replace('-', '').replace(' ', '').strip()
+            empresa_creada = Empresa.objects.filter(cuit_cuil=cuit_normalizado).first()
+            
+            if empresa_creada:
+                # La empresa existe, actualizar la solicitud
+                logger.info(f"✅ Empresa encontrada después del error, vinculando a solicitud")
+                try:
+                    with transaction.atomic():
+                        solicitud.estado = 'aprobada'
+                        solicitud.fecha_aprobacion = timezone.now()
+                        solicitud.aprobado_por = request.user
+                        solicitud.observaciones_admin = observaciones
+                        solicitud.empresa_creada = empresa_creada
+                        solicitud.save()
+                    
+                    return Response({
+                        'status': 'success',
+                        'message': 'Solicitud aprobada exitosamente',
+                        'empresa_id': empresa_creada.id
+                    })
+                except Exception as update_error:
+                    logger.error(f"❌ Error actualizando solicitud: {str(update_error)}")
+            
+            return Response(
+                {'error': f'Error al aprobar la solicitud: {error_message}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, CanManageUsers])
     def rechazar(self, request, pk=None):
-        """Rechazar solicitud"""
+        """Rechazar solicitud y eliminar usuario asociado"""
+        from django.db import transaction
+        import logging
+        logger = logging.getLogger(__name__)
+        
         solicitud = self.get_object()
         
         if solicitud.estado != 'pendiente':
@@ -198,20 +209,64 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         
         observaciones = request.data.get('observaciones', '')
         
-        # Guardar el rechazo primero (operación principal)
-        solicitud.estado = 'rechazada'
-        solicitud.observaciones_admin = observaciones
-        solicitud.save()
+        # Guardar referencia al usuario antes de eliminarlo
+        usuario_a_eliminar = solicitud.usuario_creado
+        
+        try:
+            with transaction.atomic():
+                # Guardar el rechazo primero (operación principal)
+                solicitud.estado = 'rechazada'
+                solicitud.observaciones_admin = observaciones
+                solicitud.aprobado_por = request.user
+                solicitud.save()
+                
+                # Eliminar el usuario asociado si existe
+                if usuario_a_eliminar:
+                    # Verificar que el usuario no esté asociado a una empresa aprobada
+                    from apps.empresas.models import Empresa
+                    empresa_asociada = Empresa.objects.filter(id_usuario=usuario_a_eliminar).first()
+                    
+                    if empresa_asociada:
+                        logger.warning(
+                            f"Usuario {usuario_a_eliminar.email} tiene empresa asociada (ID: {empresa_asociada.id}), "
+                            f"no se eliminará el usuario al rechazar solicitud {solicitud.id}"
+                        )
+                    else:
+                        # Verificar que no tenga otras solicitudes aprobadas
+                        otras_solicitudes = SolicitudRegistro.objects.filter(
+                            usuario_creado=usuario_a_eliminar,
+                            estado='aprobada'
+                        ).exclude(id=solicitud.id).exists()
+                        
+                        if otras_solicitudes:
+                            logger.warning(
+                                f"Usuario {usuario_a_eliminar.email} tiene otras solicitudes aprobadas, "
+                                f"no se eliminará el usuario al rechazar solicitud {solicitud.id}"
+                            )
+                        else:
+                            # Eliminar el usuario
+                            email_usuario = usuario_a_eliminar.email
+                            usuario_a_eliminar.delete()
+                            logger.info(f"✅ Usuario {email_usuario} eliminado al rechazar solicitud {solicitud.id}")
+                
+                # Desvincular el usuario de la solicitud
+                solicitud.usuario_creado = None
+                solicitud.save()
+        
+        except Exception as e:
+            logger.error(f"❌ Error al rechazar solicitud {solicitud.id}: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Error al rechazar la solicitud: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         # Intentar enviar email (no crítico si falla)
         email_error = None
         try:
-            from .views import enviar_email_rechazo
+            from .services import enviar_email_rechazo
             enviar_email_rechazo(solicitud)
         except Exception as e:
             # Registrar el error pero no fallar la operación
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f'Error al enviar email de rechazo para solicitud {solicitud.id}: {str(e)}')
             email_error = str(e)
         
@@ -435,7 +490,38 @@ class SolicitudRegistroViewSet(viewsets.ModelViewSet):
         
         serializer = serializer_class(empresa, data=request.data, partial=True)
         if serializer.is_valid():
+            # Detectar cambios importantes antes de guardar
+            campos_importantes = [
+                'razon_social',
+                'cuit_cuil',
+                'correo',
+                'contacto_principal_email',
+                'direccion',
+                'telefono',
+                'email_secundario',
+                'email_terciario',
+            ]
+            
+            cambios = {}
+            for campo in campos_importantes:
+                if campo in serializer.validated_data:
+                    valor_anterior = getattr(empresa, campo, None)
+                    valor_nuevo = serializer.validated_data[campo]
+                    
+                    if valor_anterior != valor_nuevo:
+                        str_anterior = str(valor_anterior) if valor_anterior is not None else ''
+                        str_nuevo = str(valor_nuevo) if valor_nuevo is not None else ''
+                        
+                        if str_anterior != str_nuevo:
+                            cambios[campo] = {
+                                'anterior': valor_anterior,
+                                'nuevo': valor_nuevo
+                            }
+            
             serializer.save(actualizado_por=request.user)
+            
+            # Notificación de cambios eliminada
+            
             data = serializer.data
             data['tipo_empresa'] = tipo_empresa
             data['estado'] = 'aprobada'

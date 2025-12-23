@@ -1,0 +1,26 @@
+{% extends "registro/emails/base_email.html" %}
+
+{% block content %}
+<h2 style="color: #3259B5;">Confirmación de Registro</h2>
+
+<p>Estimado/a,</p>
+
+<p>Hemos recibido exitosamente su solicitud de registro para la empresa <strong>{{ razon_social }}</strong>.</p>
+
+<div class="info-box">
+    <p><strong>Detalles de su solicitud:</strong></p>
+    <ul>
+        <li><strong>Razón Social:</strong> {{ razon_social }}</li>
+        <li><strong>Email de contacto:</strong> {{ correo }}</li>
+        <li><strong>Fecha de registro:</strong> {{ fecha_registro|date:"d/m/Y H:i" }}</li>
+    </ul>
+</div>
+
+<p>Su solicitud está siendo revisada por nuestro equipo administrativo. Le notificaremos por email una vez que se complete la revisión.</p>
+
+<p>Si no realizó esta solicitud, por favor ignore este mensaje.</p>
+
+<p>Saludos cordiales,<br>
+<strong>Equipo Sistema de Gestión de Empresas Exportadoras</strong></p>
+{% endblock %}
+

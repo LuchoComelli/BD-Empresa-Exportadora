@@ -213,6 +213,19 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
         verbose_name="Debe Cambiar Contraseña",
         help_text="Indica si el usuario debe cambiar su contraseña en el próximo inicio de sesión (solo para empresas)"
     )
+    token_recuperacion_password = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Token de Recuperación de Contraseña",
+        help_text="Token único para recuperar contraseña"
+    )
+    token_recuperacion_expira = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Expiración del Token de Recuperación",
+        help_text="Fecha y hora de expiración del token de recuperación"
+    )
     
     # Ubicación del usuario (compartida con empresas)
     departamento = models.CharField(

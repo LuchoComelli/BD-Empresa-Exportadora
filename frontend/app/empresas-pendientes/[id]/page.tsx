@@ -8,9 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, CheckCircle, XCircle, Edit2, Save } from "lucide-react"
 import Link from "next/link"
+import api from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 // Mock data - In real app, fetch from database based on ID
 const empresaData = {
@@ -52,21 +55,72 @@ const empresaData = {
 
 export default function RevisarEmpresaPage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState(empresaData)
+  const [observaciones, setObservaciones] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  const handleApprove = () => {
-    console.log("[v0] Approving company:", formData.id)
-    alert(`Empresa "${formData.razonSocial}" aprobada exitosamente. Se enviará un email de confirmación.`)
-    router.push("/empresas-pendientes")
+  const handleApprove = async () => {
+    try {
+      setLoading(true)
+      const response = await api.post(`/registro/solicitudes/${params.id}/aprobar/`, {
+        observaciones: observaciones
+      })
+      
+      if (response && (response.status === 'success' || response.status === 200 || response.empresa_id)) {
+        toast({
+          title: "Empresa aprobada",
+          description: `La empresa "${formData.razonSocial}" ha sido aprobada exitosamente. Se enviará un email de confirmación.`,
+          variant: "default",
+        })
+        setTimeout(() => {
+          router.push("/empresas-pendientes")
+          router.refresh()
+        }, 1000)
+      }
+    } catch (error: any) {
+      console.error("Error aprobando empresa:", error)
+      toast({
+        title: "Error al aprobar",
+        description: error?.message || "Error al aprobar la empresa. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleReject = () => {
+  const handleReject = async () => {
     const reason = prompt("Motivo del rechazo:")
     if (reason) {
-      console.log("[v0] Rejecting company:", formData.id, "Reason:", reason)
-      alert(`Empresa "${formData.razonSocial}" rechazada. Se enviará un email con el motivo.`)
-      router.push("/empresas-pendientes")
+      try {
+        setLoading(true)
+        const response = await api.post(`/registro/solicitudes/${params.id}/rechazar/`, {
+          observaciones: reason
+        })
+        
+        if (response && (response.status === 'success' || response.status === 200)) {
+          toast({
+            title: "Solicitud rechazada",
+            description: `La solicitud de "${formData.razonSocial}" ha sido rechazada. Se enviará un email con el motivo.`,
+            variant: "default",
+          })
+          setTimeout(() => {
+            router.push("/empresas-pendientes")
+            router.refresh()
+          }, 1000)
+        }
+      } catch (error: any) {
+        console.error("Error rechazando empresa:", error)
+        toast({
+          title: "Error al rechazar",
+          description: error?.message || "Error al rechazar la solicitud. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -299,19 +353,42 @@ export default function RevisarEmpresaPage({ params }: { params: { id: string } 
         {/* Action Buttons */}
         <Card className="p-6">
           <h3 className="font-semibold text-[#222A59] mb-4">Acciones</h3>
+          
+          {/* Campo de observaciones */}
+          <div className="mb-4">
+            <Label htmlFor="observaciones">Observaciones (se incluirán en el email)</Label>
+            <Textarea
+              id="observaciones"
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              placeholder="Agregar observaciones sobre la solicitud que se incluirán en el email de aprobación o rechazo..."
+              className="mt-2"
+              rows={3}
+            />
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4">
-            <Button onClick={handleApprove} className="flex-1 bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59]">
+            <Button 
+              onClick={handleApprove} 
+              className="flex-1 bg-[#C3C840] hover:bg-[#C3C840]/90 text-[#222A59]"
+              disabled={loading}
+            >
               <CheckCircle className="w-4 h-4 mr-2" />
-              Aprobar Empresa
+              {loading ? "Procesando..." : "Aprobar Empresa"}
             </Button>
-            <Button onClick={handleReject} variant="destructive" className="flex-1">
+            <Button 
+              onClick={handleReject} 
+              variant="destructive" 
+              className="flex-1"
+              disabled={loading}
+            >
               <XCircle className="w-4 h-4 mr-2" />
-              Rechazar Solicitud
+              {loading ? "Procesando..." : "Rechazar Solicitud"}
             </Button>
           </div>
           <p className="text-xs text-[#6B7280] mt-4">
-            Al aprobar, la empresa recibirá un email de confirmación y podrá iniciar sesión en el sistema. Al rechazar,
-            se enviará un email con el motivo del rechazo.
+            Al aprobar, la empresa recibirá un email de confirmación con las observaciones (si las hay) y podrá iniciar sesión en el sistema. Al rechazar,
+            se enviará un email con el motivo del rechazo y las observaciones.
           </p>
         </Card>
       </div>

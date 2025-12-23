@@ -626,6 +626,14 @@ class Empresa(TimestampedModel, SoftDeleteModel):
         help_text="Describa brevemente los productos/servicios de la empresa"
     )
     
+    # Notificaciones
+    ultima_notificacion_credenciales = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Última Notificación de Credenciales",
+        help_text="Fecha y hora de la última vez que se envió la notificación de credenciales de acceso a esta empresa"
+    )
+    
     # Relaciones
     id_usuario = models.ForeignKey('core.Usuario', on_delete=models.CASCADE, verbose_name="Usuario")
     id_rubro = models.ForeignKey(Rubro, on_delete=models.PROTECT, verbose_name="Rubro")

@@ -101,17 +101,25 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto">
-          <Filter className="h-4 w-4" />
-          Filtros
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="gap-1.5 sm:gap-2 w-full sm:w-auto h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
+        >
+          <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+          <span className="hidden sm:inline">Filtros</span>
+          <span className="sm:hidden">Filt.</span>
           {activeFiltersCount > 0 && (
-            <span className="ml-1 bg-[#3259B5] text-white rounded-full px-2 py-0.5 text-xs font-medium">
+            <span className="ml-0.5 sm:ml-1 bg-[#3259B5] text-white rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium">
               {activeFiltersCount}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[90vw] sm:w-80 max-h-[80vh] overflow-y-auto" align="start">
+      <PopoverContent 
+        className="w-[95vw] sm:w-[90vw] md:w-80 max-h-[85vh] sm:max-h-[80vh] overflow-y-auto p-3 sm:p-4" 
+        align="start"
+      >
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-[#222A59]">Filtros</h3>
@@ -342,6 +350,24 @@ export function FiltersDropdown({ onFilterChange, onClearFilters, filters = {} }
                   <SelectItem value="activas">Solo Activas</SelectItem>
                   <SelectItem value="eliminadas">Solo Eliminadas</SelectItem>
                   <SelectItem value="todas">Todas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Estado de Notificación */}
+            <div className="space-y-2">
+              <Label htmlFor="notificada" className="text-sm">Estado de Notificación</Label>
+              <Select 
+                value={filters.notificada || "all"} 
+                onValueChange={(value) => handleFilterChange('notificada', value)}
+              >
+                <SelectTrigger id="notificada" className="h-9">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="true">Notificadas</SelectItem>
+                  <SelectItem value="false">No Notificadas</SelectItem>
                 </SelectContent>
               </Select>
             </div>

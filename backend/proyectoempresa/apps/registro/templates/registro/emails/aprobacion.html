@@ -1,0 +1,43 @@
+{% extends "registro/emails/base_email.html" %}
+
+{% block content %}
+<h2 style="color: #66A29C;">¡Solicitud Aprobada!</h2>
+
+<p>Estimado/a,</p>
+
+<p>Nos complace informarle que su solicitud de registro para la empresa <strong>{{ razon_social }}</strong> ha sido <strong>aprobada</strong>.</p>
+
+<div class="info-box" style="border-left-color: #66A29C;">
+    <p><strong>Su empresa ha sido registrada exitosamente en nuestro sistema.</strong></p>
+    <p><strong>Fecha de aprobación:</strong> {{ fecha_aprobacion|date:"d/m/Y H:i" }}</p>
+</div>
+
+<div class="credentials">
+    <h3 style="margin-top: 0; color: #222A59;">Credenciales de Acceso</h3>
+    <p><strong>Email de acceso:</strong> {{ email_login }}</p>
+    <p><strong>Contraseña inicial:</strong> Su CUIT/CUIL ({{ cuit_cuil }})</p>
+    <p style="color: #222A59; font-size: 14px; margin-top: 10px;">
+        <strong>⚠️ IMPORTANTE:</strong> Por seguridad, deberá cambiar su contraseña en el primer inicio de sesión.
+    </p>
+</div>
+
+{% if observaciones %}
+<div class="info-box" style="border-left-color: #C3C840;">
+    <p><strong>Observaciones del administrador:</strong></p>
+    <p>{{ observaciones }}</p>
+</div>
+{% endif %}
+
+<p>Una vez que inicie sesión, podrá:</p>
+<ul>
+    <li>Completar y actualizar los datos de su empresa</li>
+    <li>Gestionar su perfil y productos/servicios</li>
+    <li>Acceder a herramientas de exportación</li>
+</ul>
+
+<p>Si tiene alguna consulta, no dude en contactarnos.</p>
+
+<p>Saludos cordiales,<br>
+<strong>Equipo Sistema de Gestión de Empresas Exportadoras</strong></p>
+{% endblock %}
+

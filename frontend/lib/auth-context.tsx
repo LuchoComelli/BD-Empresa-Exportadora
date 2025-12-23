@@ -186,6 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                               errorMessage.includes('No hay sesión activa') ||
                               errorMessage.includes('credenciales') || 
                               errorMessage.includes('autenticación') || 
+                              errorMessage.includes('Las credenciales de autenticación no se proveyeron') ||
+                              errorMessage.includes('Authentication credentials were not provided') ||
                               errorMessage.includes('401') ||
                               errorMessage.includes('Sesión expirada')
         
@@ -208,8 +210,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isLoading) {
       // Si no hay usuario, redirigir al login (excepto rutas públicas)
       if (!user) {
-        const publicRoutes = ["/", "/login", "/registro", "/recuperar-contrasena"]
-        if (!publicRoutes.includes(pathname)) {
+        const publicRoutes = ["/", "/login", "/registro", "/recuperar-contrasena", "/recuperar-contrasena/reset"]
+        // También permitir cualquier ruta que empiece con /recuperar-contrasena
+        const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith("/recuperar-contrasena")
+        if (!isPublicRoute) {
           router.push("/login")
         }
       }

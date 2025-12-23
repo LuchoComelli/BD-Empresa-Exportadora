@@ -109,6 +109,11 @@ class ApiService {
         credentials: 'include', // Importante: incluir cookies en todas las peticiones
       });
 
+      // Si la respuesta es exitosa, procesarla normalmente
+      if (response.ok) {
+        return response.json();
+      }
+
       // Si el token expiró, intentar refrescarlo
       if (response.status === 401 && token) {
         const refreshed = await this.refreshToken();
@@ -131,16 +136,8 @@ class ApiService {
         }
       }
 
-      // Si es 401 y no hay token, es normal (usuario no autenticado)
-      // No lanzar error, simplemente retornar null o lanzar un error especial que se maneje silenciosamente
-      if (response.status === 401 && !token) {
-        const error: any = new Error('No hay sesión activa');
-        error.status = 401;
-        error.noAuth = true; // Flag para indicar que es un error esperado
-        error.silent = true; // Flag adicional para indicar que no debe mostrarse en consola
-        throw error;
-      }
-
+      // Si es 401 y no hay token, puede ser un endpoint público que requiere autenticación
+      // o un error real. Procesar el error normalmente.
       if (!response.ok) {
         let error;
         try {
@@ -173,6 +170,23 @@ class ApiService {
         const apiError: any = new Error(errorMessage);
         apiError.status = response.status;
         apiError.errorData = error;
+        
+        // Marcar errores 401 sin token como silenciosos (es normal cuando no hay sesión activa)
+        if (response.status === 401 && !token) {
+          apiError.silent = true;
+          apiError.noAuth = true;
+        }
+        
+        // Marcar errores 401 con mensajes de credenciales como silenciosos
+        if (response.status === 401 && (
+          errorMessage.includes('credenciales') || 
+          errorMessage.includes('autenticación') ||
+          errorMessage.includes('Las credenciales de autenticación no se proveyeron') ||
+          errorMessage.includes('Authentication credentials were not provided')
+        )) {
+          apiError.silent = true;
+          apiError.noAuth = true;
+        }
         
         // Marcar errores 404 como silenciosos si el mensaje indica que es un "no encontrado" esperado
         // Esto es común cuando se busca un recurso que puede no existir (ej: matriz de clasificación)
@@ -432,6 +446,7 @@ async getEmpresas(params?: {
   promo2idiomas?: string;
   certificadopyme?: string;
   eliminado?: string;
+  notificada?: string;
   page?: number;
   page_size?: number;
 }): Promise<any> {
@@ -447,6 +462,7 @@ async getEmpresas(params?: {
   if (params?.promo2idiomas) queryParams.append('promo2idiomas', params.promo2idiomas);
   if (params?.certificadopyme) queryParams.append('certificadopyme', params.certificadopyme);
   if (params?.eliminado) queryParams.append('eliminado', params.eliminado);
+  if (params?.notificada) queryParams.append('notificada', params.notificada);
   
   // ✅ Usar el nuevo endpoint unificado /empresas/
   // Si se especifica tipo_empresa, agregarlo como filtro
@@ -1044,6 +1060,38 @@ async deleteServicioMixta(servicioId: number): Promise<void> {
     
     const query = queryParams.toString();
     return this.get<any>(`/registro/solicitudes/${query ? `?${query}` : ''}`);
+  }
+
+  // ========== RECUPERACIÓN DE CONTRASEÑA ==========
+  
+  // Solicitar recuperación de contraseña
+  async solicitarRecuperacionPassword(email: string): Promise<any> {
+    return this.post<any>('/core/usuarios/solicitar_recuperacion_password/', { email });
+  }
+  
+  // Resetear contraseña con token
+  async resetearPassword(token: string, password: string): Promise<any> {
+    return this.post<any>('/core/usuarios/resetear_password/', { token, password });
+  }
+
+  // ========== NOTIFICACIÓN DE EMPRESAS ==========
+  
+  /**
+   * Notificar empresas con credenciales de acceso
+   * @param empresaIds - Array de IDs de empresas a notificar (opcional)
+   * @param notificarTodas - Si es true, notifica todas las empresas (opcional)
+   * @returns Promise con resultado de la notificación
+   */
+  async notificarEmpresas(empresaIds?: number[], notificarTodas?: boolean): Promise<any> {
+    const payload: any = {}
+    if (notificarTodas) {
+      payload.notificar_todas = true
+    } else if (empresaIds && empresaIds.length > 0) {
+      payload.empresa_ids = empresaIds
+    } else {
+      throw new Error('Debe proporcionar empresaIds o notificarTodas=true')
+    }
+    return this.post<any>('/empresas/notificar/', payload)
   }
 
   // ========== USUARIOS ==========

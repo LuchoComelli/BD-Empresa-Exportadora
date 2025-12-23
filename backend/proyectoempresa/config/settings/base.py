@@ -231,3 +231,19 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
+# Email Configuration
+# En desarrollo, se puede usar console.EmailBackend para ver emails en consola
+# En producción, usar SMTP con las variables de entorno configuradas
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@empresa-exportadora.com')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL  # Para errores del servidor
+
+# URL del sitio para enlaces en emails
+SITE_URL = os.getenv('SITE_URL', 'http://localhost:3000')
