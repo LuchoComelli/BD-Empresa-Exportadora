@@ -17,7 +17,16 @@ Este documento describe el sistema completo de notificaciones por email implemen
 
 ### Variables de Entorno
 
-El sistema utiliza variables de entorno para la configuración de email. Estas deben estar definidas en el archivo `.env` o `docker.env`:
+**⚠️ IMPORTANTE**: El sistema utiliza el archivo `backend/proyectoempresa/config/docker.env` para la configuración de email cuando se ejecuta con Docker Compose.
+
+Este archivo es el que Docker Compose carga automáticamente (ver `docker-compose.yml` línea 50-51).
+
+**Si no existe el archivo `docker.env`**, copia el archivo de ejemplo:
+```bash
+cp backend/proyectoempresa/config/docker.env.example backend/proyectoempresa/config/docker.env
+```
+
+Luego edita el archivo `backend/proyectoempresa/config/docker.env` y agrega/actualiza las siguientes variables:
 
 ```bash
 # Email Configuration (Gmail SMTP)
@@ -31,6 +40,8 @@ EMAIL_HOST_PASSWORD=tu-app-password
 DEFAULT_FROM_EMAIL=noreply@empresa-exportadora.com
 SITE_URL=http://localhost:3000
 ```
+
+**Nota**: Si ejecutas Django sin Docker, el sistema intentará cargar un archivo `.env` desde la raíz del proyecto usando `python-dotenv`, pero en Docker siempre se usa `docker.env`.
 
 ### Configuración en Settings
 
@@ -157,11 +168,18 @@ El sistema envía automáticamente los siguientes tipos de emails:
 
 ### Paso 3: Configurar Variables de Entorno
 
-Actualiza el archivo `.env` o `docker.env`:
+Actualiza el archivo `backend/proyectoempresa/config/docker.env`:
 
 ```bash
 EMAIL_HOST_USER=tu-email@gmail.com
-EMAIL_HOST_PASSWORD=xxxx xxxx xxxx xxxx  # La contraseña de 16 caracteres generada
+EMAIL_HOST_PASSWORD=xxxx xxxx xxxx xxxx  # La contraseña de 16 caracteres generada (sin espacios)
+```
+
+**Ubicación del archivo**: `backend/proyectoempresa/config/docker.env`
+
+**Después de actualizar**, reinicia los contenedores de Docker:
+```bash
+docker-compose restart backend
 ```
 
 **⚠️ IMPORTANTE**: 
@@ -379,8 +397,9 @@ Todos los templates extienden de `base_email.html` que proporciona:
 - `backend/proyectoempresa/apps/registro/management/commands/enviar_recordatorios_pendientes.py`
 
 ### Configuración
-- `backend/proyectoempresa/config/settings/base.py` - Configuración de email
-- `backend/proyectoempresa/config/docker.env` - Variables de entorno
+- `backend/proyectoempresa/config/settings/base.py` - Configuración de email (lee variables de entorno)
+- `backend/proyectoempresa/config/docker.env` - **Archivo principal de variables de entorno** (usado por Docker Compose)
+- `docker-compose.yml` - Carga `docker.env` en el servicio backend (línea 50-51)
 
 ---
 

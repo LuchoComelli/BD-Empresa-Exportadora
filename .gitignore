@@ -106,10 +106,14 @@ venv.bak/
 # Entornos y configuraciones sensibles
 *.env
 *.env.*
-docker.env
 .env.local
+# docker.env contiene credenciales reales, NO subir al repo
+docker.env
 config/docker.env
 proyectoempresa/config/docker.env
+# PERO sí subir el archivo de ejemplo
+!docker.env.example
+!**/docker.env.example
 
 
 # Spyder project settings
