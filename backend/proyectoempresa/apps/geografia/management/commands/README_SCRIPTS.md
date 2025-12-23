@@ -26,11 +26,18 @@ Estos scripts son útiles para verificar la integridad de los datos geográficos
   - Uso: `python manage.py detalle_departamentos_catamarca`
   - Lista detallada de cada departamento con sus municipios y localidades
 
+### Scripts de Corrección
+
+- **`corregir_catamarca_completo.py`** - Corrige todas las relaciones de departamentos, municipios y localidades
+  - Uso: `python manage.py corregir_catamarca_completo`
+  - Aplica correcciones automáticas para todas las relaciones incorrectas
+  - Útil después de restaurar un backup o cuando se detectan problemas
+
 ### Scripts de Utilidad
 
 - **`resumen_catamarca.py`** - Genera un resumen de la estructura geográfica
 - **`revisar_catamarca.py`** - Revisión general de Catamarca
-- **`verificar_corregir_catamarca.py`** - Verificación y corrección automática
+- **`verificar_corregir_catamarca.py`** - Verificación y corrección automática (solo detecta, no corrige todo)
 - **`verificar_datos_catamarca.py`** - Verificación de datos
 - **`generar_md_catamarca.py`** - Genera documentación en Markdown
 - **`populate_catamarca.py`** - Población inicial de datos (si es necesario)

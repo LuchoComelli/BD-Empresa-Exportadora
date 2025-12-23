@@ -332,21 +332,46 @@ Todos los templates extienden de `base_email.html` que proporciona:
 
 1. **Verificar configuración de email**:
    ```bash
-   # En desarrollo, verificar que aparezcan en consola
-   # En producción, verificar logs
+   # Probar el envío de emails con el comando de prueba
+   docker-compose exec backend python manage.py test_email --email tu-email@gmail.com
+   
+   # Ver logs en tiempo real
+   docker-compose logs -f backend
+   
+   # Ver últimas 100 líneas de logs
+   docker-compose logs backend --tail=100
    ```
 
-2. **Verificar credenciales de Gmail**:
+2. **Verificar que las variables de entorno se carguen correctamente**:
+   ```bash
+   # Verificar variables dentro del contenedor
+   docker-compose exec backend python -c "import os; print('EMAIL_HOST_USER:', os.getenv('EMAIL_HOST_USER'))"
+   
+   # Si muestra "tu-email@gmail.com" en lugar de tu email real, recrea los contenedores:
+   docker-compose down
+   docker-compose up -d
+   ```
+
+3. **Verificar credenciales de Gmail**:
    - Asegúrate de usar una "Contraseña de aplicación", no tu contraseña normal
    - Verifica que la verificación en 2 pasos esté habilitada
+   - La contraseña de aplicación debe tener 16 caracteres sin espacios
 
-3. **Verificar logs**:
-   ```python
-   # Los errores se registran en los logs de Django
-   # Buscar mensajes con "Error enviando email"
+4. **Verificar logs**:
+   ```bash
+   # Ver logs en tiempo real
+   docker-compose logs -f backend | findstr "email\|Email\|EMAIL"
+   
+   # Ver todos los logs del backend
+   docker-compose logs backend --tail=200
    ```
+   
+   Los errores se registran en los logs de Django. Busca mensajes con:
+   - `✅ Email enviado exitosamente` - Email enviado correctamente
+   - `❌ Error al enviar email` - Error al enviar
+   - `SMTPAuthenticationError` - Error de autenticación con Gmail
 
-4. **Verificar firewall/red**:
+5. **Verificar firewall/red**:
    - Asegúrate de que el puerto 587 (SMTP) no esté bloqueado
 
 ### Emails van a spam
