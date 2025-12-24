@@ -111,7 +111,23 @@ class ApiService {
 
       // Si la respuesta es exitosa, procesarla normalmente
       if (response.ok) {
-        return response.json();
+        // Verificar si la respuesta está vacía o es 204 No Content antes de parsear JSON
+        if (response.status === 204 || response.headers.get('content-length') === '0') {
+          return null as T;
+        }
+        
+        // Intentar parsear el texto primero para manejar respuestas vacías
+        const text = await response.text();
+        if (!text || text.trim() === '') {
+          return null as T;
+        }
+        
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          // Si no es JSON válido, retornar null
+          return null as T;
+        }
       }
 
       // Si el token expiró, intentar refrescarlo
@@ -128,7 +144,22 @@ class ApiService {
           if (!retryResponse.ok) {
             throw new Error(`Error ${retryResponse.status}: ${retryResponse.statusText}`);
           }
-          return retryResponse.json();
+          
+          // Manejar respuestas vacías en el retry también
+          if (retryResponse.status === 204 || retryResponse.headers.get('content-length') === '0') {
+            return null as T;
+          }
+          
+          const retryText = await retryResponse.text();
+          if (!retryText || retryText.trim() === '') {
+            return null as T;
+          }
+          
+          try {
+            return JSON.parse(retryText);
+          } catch (e) {
+            return null as T;
+          }
         } else {
           // Si no se pudo refrescar, limpiar tokens y redirigir
           this.clearTokens();
@@ -200,15 +231,6 @@ class ApiService {
         
         throw apiError;
       }
-
-      // Si la respuesta es 204 No Content o está vacía, no intentar parsear JSON
-if (response.status === 204 || response.headers.get('content-length') === '0') {
-  return null as T;
-}
-
-// Intentar parsear el texto primero para manejar respuestas vacías
-const text = await response.text();
-return text ? JSON.parse(text) : null;
     } catch (error: any) {
       // No mostrar errores silenciosos en consola (cuando no hay sesión activa)
       if (!error?.silent && !error?.noAuth) {

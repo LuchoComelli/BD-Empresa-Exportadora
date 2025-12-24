@@ -7,7 +7,7 @@ import { FiltersDropdown } from "@/components/empresas/filters-dropdown"
 import { CompaniesTable } from "@/components/empresas/companies-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Search, Download, Mail } from "lucide-react"
+import { Plus, Search, Download, Mail, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import api from "@/lib/api"
 import { ExportDialog } from "@/components/empresas/export-dialog"
@@ -644,39 +644,55 @@ const handleRestore = async (id: number) => {
 
         {/* Notificar Confirmation Dialog */}
         <AlertDialog open={showNotificarDialog} onOpenChange={setShowNotificarDialog}>
-          <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
+          <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-lg sm:text-xl">¿Notificar todas las empresas?</AlertDialogTitle>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                </div>
+                <AlertDialogTitle className="text-lg sm:text-xl text-amber-900">
+                  Confirmar Notificación Masiva
+                </AlertDialogTitle>
+              </div>
               <AlertDialogDescription asChild>
-                <div className="space-y-2 text-sm sm:text-base">
-                  <p>
-                    Se notificarán <strong className="text-foreground">{allEmpresas.length}</strong> empresas con sus credenciales de acceso.
-                  </p>
-                  <p className="text-muted-foreground">
-                    Este proceso puede tardar varios minutos debido a los límites de envío de email. 
-                    Los emails se enviarán en lotes con delays automáticos.
-                  </p>
-                  {allEmpresas.length > 500 && (
-                    <p className="text-amber-600 font-medium">
-                      ⚠️ Advertencia: Se intentará notificar más de 500 empresas. 
-                      Esto puede exceder el límite diario de Gmail (500 emails/día para cuentas gratuitas).
+                <div className="space-y-3 text-sm sm:text-base mt-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 mb-2">
+                      ⚠️ ¿Estás seguro de que deseas notificar a TODAS las empresas?
                     </p>
+                    <p className="text-amber-800 mb-3">
+                      Se enviarán emails de notificación a <strong className="text-amber-900">{allEmpresas.length}</strong> empresas con sus credenciales de acceso.
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-amber-700 text-sm">
+                      <li>Este proceso puede tardar varios minutos</li>
+                      <li>Los emails se enviarán de forma gradual, con una pequeña pausa entre cada envío para evitar sobrecargar el servidor</li>
+                      <li>Esta acción no se puede deshacer</li>
+                    </ul>
+                  </div>
+                  {allEmpresas.length > 500 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <p className="text-red-800 font-medium text-sm">
+                        ⚠️ Advertencia: Se intentará notificar más de 500 empresas. 
+                        Esto puede exceder el límite diario de Gmail (500 emails/día para cuentas gratuitas).
+                      </p>
+                    </div>
                   )}
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 mt-4">
               <AlertDialogCancel 
                 className="w-full sm:w-auto order-2 sm:order-1"
+                onClick={() => setShowNotificarDialog(false)}
               >
                 Cancelar
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={notificarTodasLasEmpresas}
-                className="bg-[#3259B5] hover:bg-[#3259B5]/90 w-full sm:w-auto order-1 sm:order-2"
+                className="bg-amber-600 hover:bg-amber-700 text-white w-full sm:w-auto order-1 sm:order-2 font-semibold"
                 disabled={notificando}
               >
-                {notificando ? "Enviando..." : "Notificar Todas"}
+                {notificando ? "Enviando..." : "Sí, Notificar Todas"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

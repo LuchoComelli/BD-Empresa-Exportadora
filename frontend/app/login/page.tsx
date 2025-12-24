@@ -123,11 +123,12 @@ export default function LoginPage() {
                 Contraseña
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 md:h-5 md:w-5 text-[#6B7280]" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 md:h-5 md:w-5 text-[#6B7280] z-10 pointer-events-none" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   required
+                  autoComplete="current-password"
                   className="pl-9 md:pl-10 pr-10 border-gray-300 focus:border-[#3259B5] focus:ring-[#3259B5] text-sm md:text-base"
                   placeholder="••••••••"
                   value={formData.password}
@@ -136,7 +137,9 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-[#6B7280] hover:text-[#222A59]"
+                  className="absolute right-3 top-3 text-[#6B7280] hover:text-[#222A59] z-10 bg-transparent border-0 p-0 cursor-pointer"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  tabIndex={0}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 md:h-5 md:w-5" />

@@ -36,6 +36,12 @@ interface Empresa {
   categoria_matriz?: string
   departamento?: string
   rubro_principal?: string
+  actividades_promocion_internacional?: Array<{
+    tipo: string
+    lugar?: string
+    anio?: string
+    observaciones?: string
+  }>
   [key: string]: any
 }
 
@@ -180,7 +186,6 @@ export default function ReportesPage() {
       { id: "localidad", label: "Localidad", field: "localidad_nombre" },
       { id: "direccion", label: "Dirección", field: "direccion" },
       { id: "codigo_postal", label: "Código Postal", field: "codigo_postal" },
-      { id: "provincia", label: "Provincia", field: "provincia" },
       { id: "geolocalizacion", label: "Geolocalización", field: "geolocalizacion" },
       
       // Contacto
@@ -226,9 +231,74 @@ export default function ReportesPage() {
     ]
   }
 
-  const getFieldValue = (empresa: Empresa, fieldName: string): any => {
-    const value = empresa[fieldName]
-    if (value === null || value === undefined) return ""
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return ""
+    
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return String(dateString)
+      
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      
+      return `${day}/${month}/${year}`
+    } catch (e) {
+      return String(dateString)
+    }
+  }
+
+  const getFieldValue = (empresa: Empresa, fieldName: string, isExcel: boolean = false): any => {
+    // Manejar campos especiales que vienen del JSON actividades_promocion_internacional
+    if (fieldName === "ferias" || fieldName === "rondas" || fieldName === "misiones") {
+      const actividades = empresa.actividades_promocion_internacional
+      if (!actividades || !Array.isArray(actividades)) {
+        return ""
+      }
+      
+      const tipoMap: { [key: string]: string } = {
+        "ferias": "feria",
+        "rondas": "ronda",
+        "misiones": "mision"
+      }
+      
+      const tipo = tipoMap[fieldName]
+      const actividadesFiltradas = actividades.filter((act: any) => act.tipo === tipo)
+      
+      if (actividadesFiltradas.length === 0) {
+        return ""
+      }
+      
+      // Formatear cada actividad como "Lugar (Año): Observaciones"
+      return actividadesFiltradas.map((act: any) => {
+        const partes = []
+        if (act.lugar) partes.push(act.lugar)
+        if (act.anio) partes.push(`(${act.anio})`)
+        const actividadStr = partes.join(' ')
+        if (act.observaciones) {
+          return actividadStr ? `${actividadStr}: ${act.observaciones}` : act.observaciones
+        }
+        return actividadStr
+      }).join('; ')
+    }
+    
+    // Intentar obtener el valor del campo
+    let value = empresa[fieldName]
+    
+    // Si el valor es null o undefined, retornar cadena vacía
+    if (value === null || value === undefined) {
+      // Para tipo_sociedad, verificar si existe en el objeto aunque sea null
+      if (fieldName === "tipo_sociedad" && fieldName in empresa) {
+        return "" // El campo existe pero está vacío
+      }
+      return ""
+    }
+    
+    // Formatear fecha_creacion para Excel
+    if (isExcel && fieldName === "fecha_creacion" && value) {
+      return formatDate(String(value))
+    }
+    
     if (typeof value === 'boolean') return value ? 'Sí' : 'No'
     if (typeof value === 'object') {
       if (Array.isArray(value)) {
@@ -238,7 +308,10 @@ export default function ReportesPage() {
       if (value.razon_social) return value.razon_social
       return JSON.stringify(value)
     }
-    return String(value)
+    
+    // Convertir a string y limpiar espacios en blanco
+    const stringValue = String(value).trim()
+    return stringValue || ""
   }
 
   const escapeCSV = (value: any): string => {
@@ -258,7 +331,7 @@ export default function ReportesPage() {
     
     empresas.forEach(empresa => {
       const row = allFields.map(field => {
-        const value = getFieldValue(empresa, field.field)
+        const value = getFieldValue(empresa, field.field, false)
         return escapeCSV(value)
       })
       csvLines.push(row.join(','))
@@ -327,7 +400,7 @@ export default function ReportesPage() {
     empresas.forEach(empresa => {
       htmlContent += '<tr>'
       allFields.forEach(field => {
-        const value = getFieldValue(empresa, field.field)
+        const value = getFieldValue(empresa, field.field, true) // true para Excel
         const stringValue = String(value)
         htmlContent += `<td>${escapeHTML(stringValue)}</td>`
       })

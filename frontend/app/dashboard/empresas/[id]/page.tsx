@@ -692,6 +692,11 @@ const handleSave = async () => {
       instagram: (editedData.instagram && editedData.instagram.trim() !== '') ? editedData.instagram.trim() : null,
       facebook: (editedData.facebook && editedData.facebook.trim() !== '') ? editedData.facebook.trim() : null,
       linkedin: (editedData.linkedin && editedData.linkedin.trim() !== '') ? editedData.linkedin.trim() : null,
+      // ✅ Campos adicionales
+      certificadopyme: editedData.certificadopyme || false,
+      certificaciones: editedData.certificaciones || null,
+      promo2idiomas: editedData.promo2idiomas || false,
+      observaciones: editedData.observaciones || null,
     }
     
     // ✅ CRÍTICO: Manejar subrubros según tipo de empresa
@@ -746,8 +751,12 @@ const handleSave = async () => {
         continue
       }
       
-      // Saltar otros valores null o undefined
+      // Saltar otros valores null o undefined, EXCEPTO observaciones que debe enviarse siempre
       if (value === null || value === undefined) {
+        if (key === 'observaciones') {
+          // Enviar string vacío para observaciones si es null/undefined
+          formData.append(key, '')
+        }
         continue
       }
       
@@ -903,6 +912,9 @@ const handleSave = async () => {
     
     // 5. RECARGAR LA EMPRESA ACTUALIZADA
     const updatedEmpresa = await api.getEmpresaById(empresa.id)
+    // Debug temporal para verificar observaciones
+    console.log('[handleSave] updatedEmpresa.observaciones:', updatedEmpresa.observaciones)
+    console.log('[handleSave] updatedEmpresa keys:', Object.keys(updatedEmpresa))
     setEmpresa(updatedEmpresa)
     setEditedData(updatedEmpresa)
     setIsEditing(false)
@@ -3355,12 +3367,19 @@ const handleSave = async () => {
                   <Label>Observaciones</Label>
                   {isEditing ? (
                     <Textarea
-                      value={displayData?.observaciones || ''}
-                      onChange={(e) => setEditedData(displayData ? { ...displayData, observaciones: e.target.value } : null)}
+                      value={editedData?.observaciones || ''}
+                      onChange={(e) => setEditedData(editedData ? { ...editedData, observaciones: e.target.value } : null)}
                       rows={4}
+                      placeholder="Ingrese observaciones sobre la empresa..."
                     />
                   ) : (
-                    <p className="mt-1 font-semibold">{displayData?.observaciones || 'N/A'}</p>
+                    <div className="mt-1">
+                      <p className="font-semibold whitespace-pre-wrap break-words min-h-[1.5rem]">
+                        {empresa?.observaciones !== undefined && empresa?.observaciones !== null && empresa.observaciones !== ''
+                          ? empresa.observaciones 
+                          : 'N/A'}
+                      </p>
+                    </div>
                   )}
                 </div>
                 <div className="md:col-span-2">

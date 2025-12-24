@@ -2077,9 +2077,14 @@ class EmpresaListSerializer(serializers.ModelSerializer):
             'id', 'razon_social', 'cuit_cuil', 'direccion',
             'departamento_nombre', 'telefono', 'correo',
             'tipo_empresa_nombre', 'tipo_empresa', 'tipo_empresa_valor', 
-            'rubro_nombre', 'id_subrubro', 'id_subrubro_producto', 'id_subrubro_servicio',
+            'tipo_sociedad', 'codigo_postal', 'rubro_nombre', 'id_subrubro', 'id_subrubro_producto', 'id_subrubro_servicio',
             'sub_rubro_nombre', 'exporta', 'interes_exportar', 'importa', 'fecha_creacion', 
             'categoria_matriz', 'geolocalizacion', 'municipio_nombre', 'localidad_nombre',
+            'sitioweb', 'email_secundario', 'email_terciario',
+            'contacto_principal_nombre', 'contacto_principal_telefono', 'contacto_principal_email',
+            'contacto_secundario_nombre', 'contacto_secundario_telefono', 'contacto_secundario_email',
+            'certificadopyme', 'certificaciones', 'promo2idiomas',
+            'actividades_promocion_internacional', 'observaciones',
             'eliminado', 'ultima_notificacion_credenciales'
         ]
 
