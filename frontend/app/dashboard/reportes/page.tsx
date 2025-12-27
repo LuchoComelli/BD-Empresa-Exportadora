@@ -180,6 +180,11 @@ export default function ReportesPage() {
       { id: "rubro_principal", label: "Rubro Principal", field: "rubro_nombre" },
       { id: "categoria_matriz", label: "Categoría Matriz", field: "categoria_matriz" },
       
+      // Años por Etapa
+      { id: "anos_etapa_inicial", label: "Años en Etapa Inicial", field: "anos_etapa_inicial" },
+      { id: "anos_potencial_exportadora", label: "Años como Potencial Exportadora", field: "anos_potencial_exportadora" },
+      { id: "anos_exportadora", label: "Años como Exportadora", field: "anos_exportadora" },
+      
       // Ubicación
       { id: "departamento", label: "Departamento", field: "departamento_nombre" },
       { id: "municipio", label: "Municipio", field: "municipio_nombre" },

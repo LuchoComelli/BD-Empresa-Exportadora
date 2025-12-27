@@ -2085,7 +2085,8 @@ class EmpresaListSerializer(serializers.ModelSerializer):
             'contacto_secundario_nombre', 'contacto_secundario_telefono', 'contacto_secundario_email',
             'certificadopyme', 'certificaciones', 'promo2idiomas',
             'actividades_promocion_internacional', 'observaciones',
-            'eliminado', 'ultima_notificacion_credenciales'
+            'eliminado', 'ultima_notificacion_credenciales',
+            'anos_etapa_inicial', 'anos_potencial_exportadora', 'anos_exportadora'
         ]
 
 

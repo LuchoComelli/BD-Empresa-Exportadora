@@ -634,6 +634,26 @@ class Empresa(TimestampedModel, SoftDeleteModel):
         help_text="Fecha y hora de la última vez que se envió la notificación de credenciales de acceso a esta empresa"
     )
     
+    # Años en cada etapa de clasificación
+    anos_etapa_inicial = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Años en Etapa Inicial",
+        help_text="Cantidad de años que la empresa lleva como Etapa Inicial (0-5 puntos)"
+    )
+    anos_potencial_exportadora = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Años como Potencial Exportadora",
+        help_text="Cantidad de años que la empresa lleva como Potencial Exportadora (6-11 puntos)"
+    )
+    anos_exportadora = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name="Años como Exportadora",
+        help_text="Cantidad de años que la empresa lleva como Exportadora (12-18 puntos)"
+    )
+    
     # Relaciones
     id_usuario = models.ForeignKey('core.Usuario', on_delete=models.CASCADE, verbose_name="Usuario")
     id_rubro = models.ForeignKey(Rubro, on_delete=models.PROTECT, verbose_name="Rubro")

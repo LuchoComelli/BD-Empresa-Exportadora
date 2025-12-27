@@ -50,6 +50,11 @@ const availableFields = [
   { id: "rubro_principal", label: "Rubro Principal", category: "Rubro y Categorización", default: true },
   { id: "categoria_matriz", label: "Categoría Matriz", category: "Rubro y Categorización", default: false },
   
+  // Años por Etapa
+  { id: "anos_etapa_inicial", label: "Años en Etapa Inicial", category: "Años por Etapa", default: false },
+  { id: "anos_potencial_exportadora", label: "Años como Potencial Exportadora", category: "Años por Etapa", default: false },
+  { id: "anos_exportadora", label: "Años como Exportadora", category: "Años por Etapa", default: false },
+  
   // Ubicación
   { id: "departamento", label: "Departamento", category: "Ubicación", default: true },
   { id: "municipio", label: "Municipio", category: "Ubicación", default: false },
@@ -185,6 +190,9 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'fecha_creacion': 'fecha_creacion',
       'rubro_principal': 'rubro_nombre',
       'categoria_matriz': 'categoria_matriz',
+      'anos_etapa_inicial': 'anos_etapa_inicial',
+      'anos_potencial_exportadora': 'anos_potencial_exportadora',
+      'anos_exportadora': 'anos_exportadora',
       'departamento': 'departamento_nombre',
       'municipio': 'municipio_nombre',
       'localidad': 'localidad_nombre',
@@ -313,6 +321,9 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'fecha_creacion': 'fecha_creacion',
       'rubro_principal': 'rubro_nombre',
       'categoria_matriz': 'categoria_matriz',
+      'anos_etapa_inicial': 'anos_etapa_inicial',
+      'anos_potencial_exportadora': 'anos_potencial_exportadora',
+      'anos_exportadora': 'anos_exportadora',
       'departamento': 'departamento_nombre',
       'municipio': 'municipio_nombre',
       'localidad': 'localidad_nombre',

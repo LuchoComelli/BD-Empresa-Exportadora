@@ -97,6 +97,9 @@ interface Empresa {
   actividades_promocion_internacional?: any[]
   id_usuario?: any
   usuario_email?: string
+  anos_etapa_inicial?: number | null
+  anos_potencial_exportadora?: number | null
+  anos_exportadora?: number | null
 }
 
 function EmpresaProfileContent({ params }: { params: Promise<{ id: string }> }) {
@@ -697,6 +700,10 @@ const handleSave = async () => {
       certificaciones: editedData.certificaciones || null,
       promo2idiomas: editedData.promo2idiomas || false,
       observaciones: editedData.observaciones || null,
+      // ✅ Campos de años por etapa
+      anos_etapa_inicial: editedData.anos_etapa_inicial ?? null,
+      anos_potencial_exportadora: editedData.anos_potencial_exportadora ?? null,
+      anos_exportadora: editedData.anos_exportadora ?? null,
     }
     
     // ✅ CRÍTICO: Manejar subrubros según tipo de empresa
@@ -2264,6 +2271,71 @@ const handleSave = async () => {
           ) : (
             <p className="mt-1 font-semibold">{displayData?.idiomas_trabaja || 'N/A'}</p>
           )}
+        </div>
+      </div>
+
+      {/* Sección de Años por Etapa */}
+      <div className="pt-6 border-t">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-[#222A59]">
+            Años por Etapa de Clasificación
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            Cantidad de años que la empresa lleva en cada etapa de clasificación
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label>Años en Etapa Inicial</Label>
+            {isEditing ? (
+              <Input
+                type="number"
+                min="0"
+                value={editedData?.anos_etapa_inicial ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? null : parseInt(e.target.value, 10)
+                  setEditedData(editedData ? { ...editedData, anos_etapa_inicial: isNaN(value as number) ? null : value } : null)
+                }}
+                placeholder="Años"
+              />
+            ) : (
+              <p className="mt-1 font-semibold">{displayData?.anos_etapa_inicial ?? 'N/A'}</p>
+            )}
+          </div>
+          <div>
+            <Label>Años como Potencial Exportadora</Label>
+            {isEditing ? (
+              <Input
+                type="number"
+                min="0"
+                value={editedData?.anos_potencial_exportadora ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? null : parseInt(e.target.value, 10)
+                  setEditedData(editedData ? { ...editedData, anos_potencial_exportadora: isNaN(value as number) ? null : value } : null)
+                }}
+                placeholder="Años"
+              />
+            ) : (
+              <p className="mt-1 font-semibold">{displayData?.anos_potencial_exportadora ?? 'N/A'}</p>
+            )}
+          </div>
+          <div>
+            <Label>Años como Exportadora</Label>
+            {isEditing ? (
+              <Input
+                type="number"
+                min="0"
+                value={editedData?.anos_exportadora ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? null : parseInt(e.target.value, 10)
+                  setEditedData(editedData ? { ...editedData, anos_exportadora: isNaN(value as number) ? null : value } : null)
+                }}
+                placeholder="Años"
+              />
+            ) : (
+              <p className="mt-1 font-semibold">{displayData?.anos_exportadora ?? 'N/A'}</p>
+            )}
+          </div>
         </div>
       </div>
 

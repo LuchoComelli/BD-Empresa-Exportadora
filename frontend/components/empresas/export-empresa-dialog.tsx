@@ -136,6 +136,11 @@ const availableFields = [
   { id: "sub_rubro_servicio_nombre", label: "Sub Rubro (Servicios)", category: "rubro", default: false },
   { id: "categoria_matriz", label: "Categoría Matriz", category: "rubro", default: true },
   
+  // Años por Etapa
+  { id: "anos_etapa_inicial", label: "Años en Etapa Inicial", category: "rubro", default: false },
+  { id: "anos_potencial_exportadora", label: "Años como Potencial Exportadora", category: "rubro", default: false },
+  { id: "anos_exportadora", label: "Años como Exportadora", category: "rubro", default: false },
+  
   // Ubicación
   { id: "direccion", label: "Dirección", category: "ubicacion", default: true },
   { id: "codigo_postal", label: "Código Postal", category: "ubicacion", default: false },
