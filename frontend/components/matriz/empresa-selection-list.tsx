@@ -26,11 +26,15 @@ interface EmpresaSelectionListProps {
 }
 
 function getCategoryFromEmpresa(empresa: Empresa): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" {
-  if (empresa.categoria_matriz) {
+  // Solo usar categoria_matriz si existe y tiene un valor válido
+  // No hacer fallback al campo exporta porque son conceptos diferentes
+  if (empresa.categoria_matriz && 
+      (empresa.categoria_matriz === "Exportadora" || 
+       empresa.categoria_matriz === "Potencial Exportadora" || 
+       empresa.categoria_matriz === "Etapa Inicial")) {
     return empresa.categoria_matriz as "Exportadora" | "Potencial Exportadora" | "Etapa Inicial"
   }
-  if (empresa.exporta === 'Sí' || empresa.exporta === 'si') return "Exportadora"
-  if (empresa.exporta === 'en-proceso') return "Potencial Exportadora"
+  // Si no hay categoria_matriz válida, retornar "Etapa Inicial" por defecto
   return "Etapa Inicial"
 }
 

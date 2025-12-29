@@ -430,7 +430,7 @@ export default function PerfilEmpresaPage() {
             municipio: empresa.municipio,
             municipio_nombre: empresa.municipio_nombre || (typeof empresa.municipio === 'object' ? empresa.municipio.nombre : null),
             localidad: empresa.localidad,
-            localidad_nombre: empresa.localidad_nombre || (typeof empresa.localidad === 'object' ? empresa.localidad.nombre : null),
+            localidad_nombre: empresa.localidad_nombre || (empresa.localidad && typeof empresa.localidad === 'object' && empresa.localidad !== null ? empresa.localidad.nombre : null),
             geolocalizacion: empresa.geolocalizacion,
             
             // Contacto
@@ -1593,7 +1593,7 @@ export default function PerfilEmpresaPage() {
                             municipio: empresa.municipio,
                             municipio_nombre: empresa.municipio_nombre || (typeof empresa.municipio === 'object' ? empresa.municipio.nombre : null),
                             localidad: empresa.localidad,
-                            localidad_nombre: empresa.localidad_nombre || (typeof empresa.localidad === 'object' ? empresa.localidad.nombre : null),
+                            localidad_nombre: empresa.localidad_nombre || (empresa.localidad && typeof empresa.localidad === 'object' && empresa.localidad !== null ? empresa.localidad.nombre : null),
                             geolocalizacion: empresa.geolocalizacion,
                             
                             // Contacto
@@ -1786,7 +1786,7 @@ export default function PerfilEmpresaPage() {
                               municipio: empresa.municipio,
                               municipio_nombre: empresa.municipio_nombre || (typeof empresa.municipio === 'object' ? empresa.municipio.nombre : null),
                               localidad: empresa.localidad,
-                              localidad_nombre: empresa.localidad_nombre || (typeof empresa.localidad === 'object' ? empresa.localidad.nombre : null),
+                              localidad_nombre: empresa.localidad_nombre || (empresa.localidad && typeof empresa.localidad === 'object' && empresa.localidad !== null ? empresa.localidad.nombre : null),
                               geolocalizacion: empresa.geolocalizacion,
                               telefono: empresa.telefono,
                               correo: empresa.correo || empresa.email,
@@ -2661,7 +2661,7 @@ export default function PerfilEmpresaPage() {
                       ) : (
                         <p className="mt-1 font-semibold">
                           {empresaData?.localidad_nombre || 
-                           (typeof empresaData?.localidad === 'object' ? (empresaData.localidad.nomloc || empresaData.localidad.nombre) : empresaData?.localidad) || 
+                           (empresaData?.localidad && typeof empresaData.localidad === 'object' && empresaData.localidad !== null ? (empresaData.localidad.nomloc || empresaData.localidad.nombre) : (typeof empresaData?.localidad === 'string' ? empresaData.localidad : null)) || 
                            'N/A'}
                         </p>
                       )}

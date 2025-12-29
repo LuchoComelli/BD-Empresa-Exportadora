@@ -944,13 +944,15 @@ const handleSave = async () => {
 }
 
   const getCategoryFromEmpresa = (empresa: Empresa): "Exportadora" | "Potencial Exportadora" | "Etapa Inicial" => {
-    // Priorizar categoria_matriz si está disponible
-    if (empresa.categoria_matriz) {
+    // Solo usar categoria_matriz si existe y tiene un valor válido
+    // No hacer fallback al campo exporta porque son conceptos diferentes
+    if (empresa.categoria_matriz && 
+        (empresa.categoria_matriz === "Exportadora" || 
+         empresa.categoria_matriz === "Potencial Exportadora" || 
+         empresa.categoria_matriz === "Etapa Inicial")) {
       return empresa.categoria_matriz as "Exportadora" | "Potencial Exportadora" | "Etapa Inicial"
     }
-    // Fallback al campo exporta (legacy)
-    if (empresa.exporta === 'Sí' || empresa.exporta === 'si') return "Exportadora"
-    if (empresa.exporta === 'En proceso' || empresa.exporta === 'en-proceso') return "Potencial Exportadora"
+    // Si no hay categoria_matriz válida, retornar "Etapa Inicial" por defecto
     return "Etapa Inicial"
   }
 
@@ -2010,7 +2012,7 @@ const handleSave = async () => {
             ) : (
               <p className="mt-1 font-semibold">
                 {displayData?.localidad_nombre || 
-                 (typeof displayData?.localidad === 'object' ? (displayData.localidad.nomloc || displayData.localidad.nombre) : displayData?.localidad) || 
+                 (displayData?.localidad && typeof displayData.localidad === 'object' && displayData.localidad !== null ? (displayData.localidad.nomloc || displayData.localidad.nombre) : (typeof displayData?.localidad === 'string' ? displayData.localidad : null)) || 
                  'N/A'}
               </p>
             )}

@@ -990,9 +990,26 @@ class EmpresaViewSet(viewsets.ModelViewSet):
                 'etapa_inicial': 'etapa_inicial',
             }
             categoria_db = categoria_map.get(categoria_matriz, categoria_matriz.lower())
-            queryset = queryset.filter(
-                clasificaciones_exportador__categoria=categoria_db
-            ).distinct()
+            
+            # Si se filtra por "Etapa Inicial", incluir también empresas sin clasificación
+            # (ya que por defecto deberían considerarse como Etapa Inicial)
+            if categoria_db == 'etapa_inicial':
+                # Obtener IDs de empresas que tienen alguna clasificación (convertir a lista)
+                empresas_con_clasificacion_ids = list(
+                    MatrizClasificacionExportador.objects.exclude(
+                        empresa__isnull=True
+                    ).values_list('empresa_id', flat=True).distinct()
+                )
+                # Filtrar empresas que tienen categoria='etapa_inicial' O que no tienen ninguna clasificación
+                queryset = queryset.filter(
+                    Q(clasificaciones_exportador__categoria=categoria_db) |
+                    ~Q(id__in=empresas_con_clasificacion_ids)
+                ).distinct()
+            else:
+                # Para otras categorías, solo buscar empresas con esa categoría específica
+                queryset = queryset.filter(
+                    clasificaciones_exportador__categoria=categoria_db
+                ).distinct()
 
         # Filtrar por departamento si se proporciona (puede ser ID o nombre)
         departamento_param = self.request.query_params.get("departamento")
