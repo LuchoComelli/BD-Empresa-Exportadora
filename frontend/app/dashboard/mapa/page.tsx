@@ -315,298 +315,338 @@ export default function MapaPage() {
     setEmpresasPorDepartamento(conteo)
   }, [empresas])
 
-  // Cargar y configurar el mapa - SIMPLIFICADO
-  useEffect(() => {
-    // No inicializar si está cargando, no hay empresas, o ya se está inicializando
-    if (loading || empresas.length === 0 || isInitializingMap) return
+// Cargar y configurar el mapa - SIMPLIFICADO
+useEffect(() => {
+  // No inicializar si está cargando, no hay empresas, o ya se está inicializando
+  if (loading || empresas.length === 0 || isInitializingMap) return
 
-    const loadMap = async () => {
-      try {
-        setIsInitializingMap(true)
-        
-        const leafletModule = await import("leaflet")
-        const L = (leafletModule as any).default || leafletModule
-        const heatModule = await import("leaflet.heat")
+  let isMounted = true
+  let cleanupCompleted = false
 
-        if (!L || !L.map) {
-          console.error('Leaflet no se pudo cargar correctamente')
-          setIsInitializingMap(false)
-          return
-        }
+  const loadMap = async () => {
+    // Esperar a que cualquier cleanup previo termine
+    let attempts = 0
+    while (!cleanupCompleted && attempts < 10) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      attempts++
+    }
 
-        // Cargar Leaflet CSS
-        if (!document.querySelector('link[href*="leaflet.css"]')) {
-          const link = document.createElement("link")
-          link.rel = "stylesheet"
-          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          link.crossOrigin = "anonymous"
-          document.head.appendChild(link)
-        }
+    try {
+      if (!isMounted) return
+      
+      setIsInitializingMap(true)
+      
+      const leafletModule = await import("leaflet")
+      const L = (leafletModule as any).default || leafletModule
+      const heatModule = await import("leaflet.heat")
 
-        // Fix default marker icon
-        if (L.Icon && L.Icon.Default) {
-          delete (L.Icon.Default.prototype as any)._getIconUrl
-          L.Icon.Default.mergeOptions({
-            iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-            iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-            shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-          })
-        }
-
-        // Esperar a que el DOM esté listo
-        await new Promise(resolve => setTimeout(resolve, 100))
-
-        const mapElement = document.getElementById("empresas-map")
-        if (!mapElement) {
-          console.error('Map element not found')
-          setIsInitializingMap(false)
-          return
-        }
-
-        // Verificar que el elemento tenga dimensiones antes de inicializar
-        const checkElementReady = () => {
-          if (!mapElement) return false
-          const rect = mapElement.getBoundingClientRect()
-          const hasDimensions = rect.width > 0 && rect.height > 0
-          const hasOffset = mapElement.offsetWidth > 0 && mapElement.offsetHeight > 0
-          const isVisible = mapElement.offsetParent !== null || mapElement.style.display !== 'none'
-          return hasDimensions && hasOffset && isVisible
-        }
-
-        // Esperar hasta que el elemento tenga dimensiones
-        let attempts = 0
-        while (!checkElementReady() && attempts < 20) {
-          await new Promise(resolve => setTimeout(resolve, 100))
-          attempts++
-        }
-
-        if (!checkElementReady()) {
-          console.error('Map element does not have dimensions or is not visible', {
-            width: mapElement.offsetWidth,
-            height: mapElement.offsetHeight,
-            rect: mapElement.getBoundingClientRect()
-          })
-          setIsInitializingMap(false)
-          return
-        }
-
-        // Asegurar que el elemento tenga dimensiones explícitas
-        if (mapElement.offsetWidth === 0 || mapElement.offsetHeight === 0) {
-          console.warn('Map element has zero dimensions, setting explicit size')
-          const computedStyle = window.getComputedStyle(mapElement)
-          if (!computedStyle.width || computedStyle.width === '0px' || computedStyle.width === 'auto') {
-            mapElement.style.width = '100%'
-          }
-          if (!computedStyle.height || computedStyle.height === '0px' || computedStyle.height === 'auto') {
-            mapElement.style.height = '500px'
-          }
-          await new Promise(resolve => setTimeout(resolve, 100))
-        }
-
-        // Verificar si el contenedor ya tiene un mapa inicializado
-        if ((mapElement as any)._leaflet_id) {
-          console.warn('Map container already initialized, cleaning up first...')
-          // Limpiar mapa anterior si existe
-          if (map) {
-            try {
-              map.eachLayer((layer: any) => {
-                try {
-                  map.removeLayer(layer)
-                } catch (e) {}
-              })
-              map.remove()
-            } catch (e) {
-              console.warn('Error removing existing map:', e)
-            }
-            setMap(null)
-            setMarkers([])
-          }
-          
-          // Limpiar todas las propiedades de Leaflet del contenedor
-          const leafletProps = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet', '_leaflet_map']
-          leafletProps.forEach(prop => {
-            if ((mapElement as any)[prop]) {
-              try {
-                if (prop === '_leaflet_map' && (mapElement as any)[prop] && typeof (mapElement as any)[prop].remove === 'function') {
-                  (mapElement as any)[prop].remove()
-                }
-                delete (mapElement as any)[prop]
-              } catch (e) {}
-            }
-          })
-          
-          // Limpiar el contenido del contenedor
-          mapElement.innerHTML = ''
-          
-          // Esperar a que se complete la limpieza
-          await new Promise(resolve => setTimeout(resolve, 200))
-          
-          // Verificar nuevamente que el contenedor esté limpio
-          if ((mapElement as any)._leaflet_id) {
-            console.error('Map container still has _leaflet_id after cleanup, aborting initialization')
-            setIsInitializingMap(false)
-            return
-          }
-        }
-
-        const catamarcaCenter: [number, number] = [-28.2, -66.0]
-
-        // Crear mapa con configuración mejorada
-        let mapInstance: any
-        try {
-          mapInstance = L.map("empresas-map", {
-            preferCanvas: false,
-            dragging: true,
-            touchZoom: true,
-            scrollWheelZoom: true,
-            doubleClickZoom: true,
-            boxZoom: true,
-            keyboard: true,
-            tap: true,
-            zoomControl: true,
-            trackResize: true,
-            // Asegurar que el mapa se inicialice correctamente
-            fadeAnimation: false,
-            zoomAnimation: true
-          }).setView(catamarcaCenter, 8)
-        } catch (error) {
-          console.error('Error creating map instance:', error)
-          setIsInitializingMap(false)
-          return
-        }
-
-        // Esperar a que el mapa esté listo antes de continuar
-        await new Promise<void>((resolve) => {
-          mapInstance.whenReady(() => {
-            resolve()
-          })
-        })
-
-        // Agregar capa de tiles
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-          minZoom: 3
-        }).addTo(mapInstance)
-
-        // Esperar un poco más para que los tiles se carguen
-        await new Promise(resolve => setTimeout(resolve, 300))
-
-        // Forzar tamaño correcto múltiples veces para asegurar que funcione
-        mapInstance.invalidateSize()
-        await new Promise(resolve => setTimeout(resolve, 100))
-        mapInstance.invalidateSize()
-        
-        // Asegurar que el dragging esté habilitado
-        if (mapInstance.dragging) {
-          mapInstance.dragging.enable()
-        }
-        
-        // Verificar que el mapa tenga dimensiones válidas
-        const mapContainer = mapInstance.getContainer()
-        if (mapContainer && (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0)) {
-          console.warn('Map container has zero dimensions, forcing resize')
-          mapInstance.invalidateSize()
-          await new Promise(resolve => setTimeout(resolve, 200))
-          mapInstance.invalidateSize()
-        }
-
-        // Crear marcadores
-        const newMarkers: any[] = []
-        empresas.forEach((empresa) => {
-          if (empresa.lat && empresa.lng) {
-            const getTipoColor = (tipo: string): string => {
-              switch(tipo?.toLowerCase()) {
-                case 'producto':
-                  return '#3b82f6'
-                case 'servicio':
-                  return '#10b981'
-                case 'mixta':
-                  return '#f59e0b'
-                default:
-                  return '#6b7280'
-              }
-            }
-            
-            const tipoColor = getTipoColor(empresa.tipo_empresa || '')
-            const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
-            
-            const customIcon = L.divIcon({
-              className: 'custom-marker-icon',
-              html: `
-                <div style="
-                  background-color: ${tipoColor}; 
-                  width: 30px; 
-                  height: 30px; 
-                  border-radius: ${tipoInfo.borderRadius}; 
-                  border: 2px solid white; 
-                  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  cursor: pointer;
-                  pointer-events: auto;
-                  ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
-                ">
-                  <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
-                    ${tipoInfo.iconSvg}
-                  </div>
-                </div>
-              `,
-              iconSize: [30, 30],
-              iconAnchor: [15, 15],
-              popupAnchor: [0, -15],
-            })
-
-            const tipoEmpresaTexto = empresa.tipo_empresa === 'producto' 
-              ? 'Productos' 
-              : empresa.tipo_empresa === 'servicio' 
-                ? 'Servicios' 
-                : empresa.tipo_empresa === 'mixta'
-                  ? 'Productos y Servicios'
-                  : ''
-
-            const marker = L.marker([empresa.lat, empresa.lng], { 
-              icon: customIcon,
-              interactive: true,
-              keyboard: true
-            })
-              .addTo(mapInstance)
-              .bindPopup(`
-                <div style="min-width: 200px;">
-                  <h3 style="font-weight: bold; margin-bottom: 8px;">${empresa.razon_social}</h3>
-                  ${tipoEmpresaTexto ? `<p style="margin: 4px 0;"><strong>Tipo:</strong> ${tipoEmpresaTexto}</p>` : ''}
-                  ${empresa.categoria ? `<p style="margin: 4px 0;"><strong>Categoría:</strong> ${empresa.categoria}</p>` : ''}
-                  ${empresa.rubro_nombre ? `<p style="margin: 4px 0;"><strong>Rubro:</strong> ${empresa.rubro_nombre}</p>` : ''}
-                  ${empresa.departamento_nombre ? `<p style="margin: 4px 0;"><strong>Ubicación:</strong> ${empresa.departamento_nombre}${empresa.localidad_nombre ? `, ${empresa.localidad_nombre}` : ''}</p>` : ''}
-                  <a href="/dashboard/empresas/${empresa.id}" style="color: #3259B5; text-decoration: underline; margin-top: 8px; display: inline-block;">Ver detalles</a>
-                </div>
-              `)
-            
-            marker.on('click', (e) => {
-              if (e.originalEvent) {
-                e.originalEvent.stopPropagation()
-              }
-              setSelectedEmpresa(empresa)
-            })
-            
-            marker.on('popupopen', () => {
-              setSelectedEmpresa(empresa)
-            })
-
-            newMarkers.push(marker)
-          }
-        })
-        
-        mapInstance.invalidateSize()
-        
-        setMap(mapInstance)
-        setMarkers(newMarkers)
-        setMapLoaded(true)
+      if (!isMounted || !L || !L.map) {
+        console.error('Leaflet no se pudo cargar correctamente')
         setIsInitializingMap(false)
+        return
+      }
 
+      // Cargar Leaflet CSS
+      if (!document.querySelector('link[href*="leaflet.css"]')) {
+        const link = document.createElement("link")
+        link.rel = "stylesheet"
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        link.crossOrigin = "anonymous"
+        document.head.appendChild(link)
+      }
+
+      // Fix default marker icon
+      if (L.Icon && L.Icon.Default) {
+        delete (L.Icon.Default.prototype as any)._getIconUrl
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+          iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+          shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        })
+      }
+
+      // Esperar a que el DOM esté listo
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      if (!isMounted) return
+
+      const mapElement = document.getElementById("empresas-map")
+      
+      // Verificación mejorada con optional chaining
+      if (!mapElement || !document.body.contains(mapElement)) {
+        console.error('Map element not found or not in DOM')
+        setIsInitializingMap(false)
+        return
+      }
+      
+      // Verificar que offsetWidth está disponible antes de usarlo
+      if (typeof mapElement.offsetWidth === 'undefined') {
+        console.error('Map element properties not ready')
+        setIsInitializingMap(false)
+        return
+      }
+
+      // Verificar que el elemento tenga dimensiones antes de inicializar
+      const checkElementReady = () => {
+        if (!mapElement || !document.body.contains(mapElement)) return false
+        
+        // Usar optional chaining para seguridad
+        const rect = mapElement?.getBoundingClientRect()
+        if (!rect) return false
+        
+        const hasDimensions = rect.width > 0 && rect.height > 0
+        const hasOffset = (mapElement?.offsetWidth ?? 0) > 0 && (mapElement?.offsetHeight ?? 0) > 0
+        const isVisible = mapElement.offsetParent !== null || mapElement.style.display !== 'none'
+        
+        return hasDimensions && hasOffset && isVisible
+      }
+
+      // Esperar hasta que el elemento tenga dimensiones
+      let checkAttempts = 0
+      while (!checkElementReady() && checkAttempts < 20 && isMounted) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        checkAttempts++
+      }
+
+      if (!isMounted || !checkElementReady()) {
+        console.error('Map element does not have dimensions or is not visible', {
+          width: mapElement?.offsetWidth ?? 0,
+          height: mapElement?.offsetHeight ?? 0,
+          rect: mapElement?.getBoundingClientRect()
+        })
+        setIsInitializingMap(false)
+        return
+      }
+
+      // Asegurar que el elemento tenga dimensiones explícitas
+      if (mapElement.offsetWidth === 0 || mapElement.offsetHeight === 0) {
+        console.warn('Map element has zero dimensions, setting explicit size')
+        const computedStyle = window.getComputedStyle(mapElement)
+        if (!computedStyle.width || computedStyle.width === '0px' || computedStyle.width === 'auto') {
+          mapElement.style.width = '100%'
+        }
+        if (!computedStyle.height || computedStyle.height === '0px' || computedStyle.height === 'auto') {
+          mapElement.style.height = '500px'
+        }
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
+      if (!isMounted) return
+
+      // Verificar si el contenedor ya tiene un mapa inicializado
+      if ((mapElement as any)._leaflet_id) {
+        console.warn('Map container already initialized, cleaning up first...')
+        // Limpiar mapa anterior si existe
+        if (map) {
+          try {
+            map.eachLayer((layer: any) => {
+              try {
+                map.removeLayer(layer)
+              } catch (e) {}
+            })
+            map.remove()
+          } catch (e) {
+            console.warn('Error removing existing map:', e)
+          }
+          setMap(null)
+          setMarkers([])
+        }
+        
+        // Limpiar todas las propiedades de Leaflet del contenedor
+        const leafletProps = ['_leaflet_id', '_leaflet', '_leaflet_pos', 'leaflet', '_leaflet_map']
+        leafletProps.forEach(prop => {
+          if ((mapElement as any)[prop]) {
+            try {
+              if (prop === '_leaflet_map' && (mapElement as any)[prop] && typeof (mapElement as any)[prop].remove === 'function') {
+                (mapElement as any)[prop].remove()
+              }
+              delete (mapElement as any)[prop]
+            } catch (e) {}
+          }
+        })
+        
+        // Limpiar el contenido del contenedor
+        mapElement.innerHTML = ''
+        
+        // Esperar a que se complete la limpieza
+        await new Promise(resolve => setTimeout(resolve, 200))
+        
+        if (!isMounted) return
+        
+        // Verificar nuevamente que el contenedor esté limpio
+        if ((mapElement as any)._leaflet_id) {
+          console.error('Map container still has _leaflet_id after cleanup, aborting initialization')
+          setIsInitializingMap(false)
+          return
+        }
+      }
+
+      if (!isMounted) return
+
+      const catamarcaCenter: [number, number] = [-28.2, -66.0]
+
+      // Crear mapa con configuración mejorada
+      let mapInstance: any
+      try {
+        mapInstance = L.map("empresas-map", {
+          preferCanvas: false,
+          dragging: true,
+          touchZoom: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: true,
+          tap: true,
+          zoomControl: true,
+          trackResize: true,
+          fadeAnimation: false,
+          zoomAnimation: true
+        }).setView(catamarcaCenter, 8)
       } catch (error) {
-        console.error('Error loading map:', error)
+        console.error('Error creating map instance:', error)
+        setIsInitializingMap(false)
+        return
+      }
+
+      if (!isMounted) return
+
+      // Esperar a que el mapa esté listo antes de continuar
+      await new Promise<void>((resolve) => {
+        mapInstance.whenReady(() => {
+          resolve()
+        })
+      })
+
+      // Agregar capa de tiles
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        minZoom: 3
+      }).addTo(mapInstance)
+
+      // Esperar un poco más para que los tiles se carguen
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      // Forzar tamaño correcto múltiples veces para asegurar que funcione
+      mapInstance.invalidateSize()
+      await new Promise(resolve => setTimeout(resolve, 100))
+      mapInstance.invalidateSize()
+      
+      // Asegurar que el dragging esté habilitado
+      if (mapInstance.dragging) {
+        mapInstance.dragging.enable()
+      }
+      
+      // Verificar que el mapa tenga dimensiones válidas
+      const mapContainer = mapInstance.getContainer()
+      if (mapContainer && (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0)) {
+        console.warn('Map container has zero dimensions, forcing resize')
+        mapInstance.invalidateSize()
+        await new Promise(resolve => setTimeout(resolve, 200))
+        mapInstance.invalidateSize()
+      }
+
+      // Crear marcadores
+      const newMarkers: any[] = []
+      empresas.forEach((empresa) => {
+        if (!isMounted) return
+        
+        if (empresa.lat && empresa.lng) {
+          const getTipoColor = (tipo: string): string => {
+            switch(tipo?.toLowerCase()) {
+              case 'producto':
+                return '#3b82f6'
+              case 'servicio':
+                return '#10b981'
+              case 'mixta':
+                return '#f59e0b'
+              default:
+                return '#6b7280'
+            }
+          }
+          
+          const tipoColor = getTipoColor(empresa.tipo_empresa || '')
+          const tipoInfo = getTipoEmpresaInfo(empresa.tipo_empresa || '')
+          
+          const customIcon = L.divIcon({
+            className: 'custom-marker-icon',
+            html: `
+              <div style="
+                background-color: ${tipoColor}; 
+                width: 30px; 
+                height: 30px; 
+                border-radius: ${tipoInfo.borderRadius}; 
+                border: 2px solid white; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                pointer-events: auto;
+                ${tipoInfo.shape === 'diamond' ? 'transform: rotate(45deg);' : ''}
+              ">
+                <div style="${tipoInfo.shape === 'diamond' ? 'transform: rotate(-45deg);' : ''}">
+                  ${tipoInfo.iconSvg}
+                </div>
+              </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15],
+            popupAnchor: [0, -15],
+          })
+
+          const tipoEmpresaTexto = empresa.tipo_empresa === 'producto' 
+            ? 'Productos' 
+            : empresa.tipo_empresa === 'servicio' 
+              ? 'Servicios' 
+              : empresa.tipo_empresa === 'mixta'
+                ? 'Productos y Servicios'
+                : ''
+
+          const marker = L.marker([empresa.lat, empresa.lng], { 
+            icon: customIcon,
+            interactive: true,
+            keyboard: true
+          })
+            .addTo(mapInstance)
+            .bindPopup(`
+              <div style="min-width: 200px;">
+                <h3 style="font-weight: bold; margin-bottom: 8px;">${empresa.razon_social}</h3>
+                ${tipoEmpresaTexto ? `<p style="margin: 4px 0;"><strong>Tipo:</strong> ${tipoEmpresaTexto}</p>` : ''}
+                ${empresa.categoria ? `<p style="margin: 4px 0;"><strong>Categoría:</strong> ${empresa.categoria}</p>` : ''}
+                ${empresa.rubro_nombre ? `<p style="margin: 4px 0;"><strong>Rubro:</strong> ${empresa.rubro_nombre}</p>` : ''}
+                ${empresa.departamento_nombre ? `<p style="margin: 4px 0;"><strong>Ubicación:</strong> ${empresa.departamento_nombre}${empresa.localidad_nombre ? `, ${empresa.localidad_nombre}` : ''}</p>` : ''}
+                <a href="/dashboard/empresas/${empresa.id}" style="color: #3259B5; text-decoration: underline; margin-top: 8px; display: inline-block;">Ver detalles</a>
+              </div>
+            `)
+          
+          marker.on('click', (e) => {
+            if (e.originalEvent) {
+              e.originalEvent.stopPropagation()
+            }
+            setSelectedEmpresa(empresa)
+          })
+          
+          marker.on('popupopen', () => {
+            setSelectedEmpresa(empresa)
+          })
+
+          newMarkers.push(marker)
+        }
+      })
+      
+      if (!isMounted) return
+      
+      mapInstance.invalidateSize()
+      
+      setMap(mapInstance)
+      setMarkers(newMarkers)
+      setMapLoaded(true)
+      setIsInitializingMap(false)
+
+    } catch (error) {
+      console.error('Error loading map:', error)
+      if (isMounted) {
         setIsInitializingMap(false)
         toast({
           title: "Error",
@@ -615,11 +655,15 @@ export default function MapaPage() {
         })
       }
     }
+  }
 
-    loadMap()
+  loadMap()
 
-    return () => {
-      setIsInitializingMap(false)
+  return () => {
+    isMounted = false
+    setIsInitializingMap(false)
+    
+    const cleanup = async () => {
       const currentMap = map
       const currentMarkers = markers
       
@@ -664,8 +708,13 @@ export default function MapaPage() {
         })
         mapElement.innerHTML = ''
       }
+      
+      cleanupCompleted = true
     }
-  }, [loading, empresas, toast])
+    
+    cleanup()
+  }
+}, [loading, empresas, toast])
 
   // Actualizar capa de departamentos
   useEffect(() => {
