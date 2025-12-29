@@ -39,7 +39,6 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'apps.core',
     'apps.empresas',
-    'apps.auditoria',
     'apps.registro',
     'apps.geografia',
 ]
@@ -55,7 +54,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.auditoria.middleware.AuditoriaMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

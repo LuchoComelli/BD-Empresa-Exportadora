@@ -788,12 +788,14 @@ def generate_empresas_seleccionadas_pdf(empresas_ids, campos_seleccionados):
         
         # Contacto Principal
         'contacto_principal_nombre': {'field': 'contacto_principal_nombre', 'section': 'contacto', 'label': 'Contacto Principal - Nombre'},
+        'contacto_principal_apellido': {'field': 'contacto_principal_apellido', 'section': 'contacto', 'label': 'Contacto Principal - Apellido'},
         'contacto_principal_cargo': {'field': 'contacto_principal_cargo', 'section': 'contacto', 'label': 'Contacto Principal - Cargo'},
         'contacto_principal_telefono': {'field': 'contacto_principal_telefono', 'section': 'contacto', 'label': 'Contacto Principal - Teléfono'},
         'contacto_principal_email': {'field': 'contacto_principal_email', 'section': 'contacto', 'label': 'Contacto Principal - Email'},
         
         # Contacto Secundario
         'contacto_secundario_nombre': {'field': 'contacto_secundario_nombre', 'section': 'contacto', 'label': 'Contacto Secundario - Nombre'},
+        'contacto_secundario_apellido': {'field': 'contacto_secundario_apellido', 'section': 'contacto', 'label': 'Contacto Secundario - Apellido'},
         'contacto_secundario_cargo': {'field': 'contacto_secundario_cargo', 'section': 'contacto', 'label': 'Contacto Secundario - Cargo'},
         'contacto_secundario_telefono': {'field': 'contacto_secundario_telefono', 'section': 'contacto', 'label': 'Contacto Secundario - Teléfono'},
         'contacto_secundario_email': {'field': 'contacto_secundario_email', 'section': 'contacto', 'label': 'Contacto Secundario - Email'},
