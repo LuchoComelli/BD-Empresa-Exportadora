@@ -828,10 +828,33 @@ useEffect(() => {
       // Los contactos secundarios y actividades de promoción ya se incluyeron
       // en los datos de la empresa al crearla, no necesitan endpoints separados
       
-      toast({
-        title: "Éxito",
-        description: "Empresa creada exitosamente",
-      })
+      // Notificar automáticamente a la empresa con sus credenciales
+      try {
+        console.log(`Enviando notificación automática a empresa ID: ${empresaCreada.id}`)
+        const notificacionResponse = await api.notificarEmpresas([empresaCreada.id])
+        console.log("Notificación enviada:", notificacionResponse)
+        
+        if (notificacionResponse.enviados > 0) {
+          toast({
+            title: "Éxito",
+            description: "Empresa creada exitosamente y notificación enviada",
+          })
+        } else {
+          toast({
+            title: "Éxito",
+            description: "Empresa creada exitosamente. La notificación no pudo ser enviada.",
+            variant: "default",
+          })
+        }
+      } catch (notificacionError: any) {
+        console.error("Error al enviar notificación automática:", notificacionError)
+        // No fallar la creación si la notificación falla, solo mostrar un warning
+        toast({
+          title: "Éxito",
+          description: "Empresa creada exitosamente. Hubo un problema al enviar la notificación automática.",
+          variant: "default",
+        })
+      }
       
       // Resetear el formulario
       setFormData({

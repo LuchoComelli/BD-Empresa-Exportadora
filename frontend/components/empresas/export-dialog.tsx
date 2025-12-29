@@ -73,12 +73,14 @@ const availableFields = [
   
   // Contacto Principal
   { id: "contacto_principal_nombre", label: "Contacto Principal - Nombre", category: "Contacto Principal", default: false },
+  { id: "contacto_principal_apellido", label: "Contacto Principal - Apellido", category: "Contacto Principal", default: false },
   { id: "contacto_principal_cargo", label: "Contacto Principal - Cargo", category: "Contacto Principal", default: false },
   { id: "contacto_principal_telefono", label: "Contacto Principal - Teléfono", category: "Contacto Principal", default: false },
   { id: "contacto_principal_email", label: "Contacto Principal - Email", category: "Contacto Principal", default: false },
   
   // Contacto Secundario
   { id: "contacto_secundario_nombre", label: "Contacto Secundario - Nombre", category: "Contacto Secundario", default: false },
+  { id: "contacto_secundario_apellido", label: "Contacto Secundario - Apellido", category: "Contacto Secundario", default: false },
   { id: "contacto_secundario_cargo", label: "Contacto Secundario - Cargo", category: "Contacto Secundario", default: false },
   { id: "contacto_secundario_telefono", label: "Contacto Secundario - Teléfono", category: "Contacto Secundario", default: false },
   { id: "contacto_secundario_email", label: "Contacto Secundario - Email", category: "Contacto Secundario", default: false },
@@ -206,10 +208,12 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'email_secundario': 'email_secundario',
       'email_terciario': 'email_terciario',
       'contacto_principal_nombre': 'contacto_principal_nombre',
+      'contacto_principal_apellido': 'contacto_principal_apellido',
       'contacto_principal_cargo': 'contacto_principal_cargo',
       'contacto_principal_telefono': 'contacto_principal_telefono',
       'contacto_principal_email': 'contacto_principal_email',
       'contacto_secundario_nombre': 'contacto_secundario_nombre',
+      'contacto_secundario_apellido': 'contacto_secundario_apellido',
       'contacto_secundario_cargo': 'contacto_secundario_cargo',
       'contacto_secundario_telefono': 'contacto_secundario_telefono',
       'contacto_secundario_email': 'contacto_secundario_email',
@@ -274,6 +278,18 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
             value = empresa.municipio?.nombre || empresa.municipio_nombre || empresa.municipio || ""
           } else if (field!.id === 'localidad') {
             value = empresa.localidad?.nombre || empresa.localidad_nombre || empresa.localidad || ""
+          } else if (field!.id === 'contacto_principal_apellido') {
+            // Intentar obtener el apellido desde diferentes ubicaciones posibles
+            value = empresa.contacto_principal_apellido || 
+                    (empresa.contactos && Array.isArray(empresa.contactos) 
+                      ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.apellido 
+                      : null) || ""
+          } else if (field!.id === 'contacto_secundario_apellido') {
+            // Intentar obtener el apellido desde diferentes ubicaciones posibles
+            value = empresa.contacto_secundario_apellido || 
+                    (empresa.contactos && Array.isArray(empresa.contactos) 
+                      ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.apellido 
+                      : null) || ""
           }
         }
         
@@ -337,10 +353,12 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
       'email_secundario': 'email_secundario',
       'email_terciario': 'email_terciario',
       'contacto_principal_nombre': 'contacto_principal_nombre',
+      'contacto_principal_apellido': 'contacto_principal_apellido',
       'contacto_principal_cargo': 'contacto_principal_cargo',
       'contacto_principal_telefono': 'contacto_principal_telefono',
       'contacto_principal_email': 'contacto_principal_email',
       'contacto_secundario_nombre': 'contacto_secundario_nombre',
+      'contacto_secundario_apellido': 'contacto_secundario_apellido',
       'contacto_secundario_cargo': 'contacto_secundario_cargo',
       'contacto_secundario_telefono': 'contacto_secundario_telefono',
       'contacto_secundario_email': 'contacto_secundario_email',
@@ -426,6 +444,18 @@ export function ExportDialog({ open, onClose, empresas }: ExportDialogProps) {
             value = empresa.municipio?.nombre || empresa.municipio_nombre || empresa.municipio || ""
           } else if (field!.id === 'localidad') {
             value = empresa.localidad?.nombre || empresa.localidad_nombre || empresa.localidad || ""
+          } else if (field!.id === 'contacto_principal_apellido') {
+            // Intentar obtener el apellido desde diferentes ubicaciones posibles
+            value = empresa.contacto_principal_apellido || 
+                    (empresa.contactos && Array.isArray(empresa.contactos) 
+                      ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.apellido 
+                      : null) || ""
+          } else if (field!.id === 'contacto_secundario_apellido') {
+            // Intentar obtener el apellido desde diferentes ubicaciones posibles
+            value = empresa.contacto_secundario_apellido || 
+                    (empresa.contactos && Array.isArray(empresa.contactos) 
+                      ? empresa.contactos.find((c: any) => c.tipo === 'Secundario')?.apellido 
+                      : null) || ""
           }
         }
         
