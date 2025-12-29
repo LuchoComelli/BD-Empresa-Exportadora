@@ -490,6 +490,28 @@ export default function PerfilEmpresaPage() {
               return []
             })(),
             
+            // Productos mixta - normalizar formato (para empresas mixtas)
+            productos_mixta: (() => {
+              const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa
+              if (tipoEmpresa === 'mixta') {
+                const productos = empresa.productos_mixta || empresa.productos || empresa.productos_empresa || []
+                if (Array.isArray(productos)) {
+                  return productos.map((p: any) => ({
+                    id: p.id,
+                    nombre_producto: p.nombre_producto || p.nombre || '',
+                    nombre: p.nombre_producto || p.nombre || '',
+                    descripcion: p.descripcion || '',
+                    capacidad_productiva: p.capacidad_productiva || p.capacidadProductiva || '',
+                    unidad_medida: p.unidad_medida || p.unidadMedida || '',
+                    periodo_capacidad: p.periodo_capacidad || p.periodoCapacidad || '',
+                    posicion_arancelaria: p.posicion_arancelaria || null,
+                    es_principal: p.es_principal || p.esPrincipal || false,
+                  }))
+                }
+              }
+              return []
+            })(),
+            
             // Servicios - normalizar formato
             servicios: (() => {
               const servicios = empresa.servicios || empresa.servicios_empresa || empresa.servicios_mixta || []
@@ -505,6 +527,28 @@ export default function PerfilEmpresaPage() {
                   forma_contratacion: s.forma_contratacion || s.formaContratacion || '',
                   es_principal: s.es_principal || s.esPrincipal || false,
                 }))
+              }
+              return []
+            })(),
+            
+            // Servicios mixta - normalizar formato (para empresas mixtas)
+            servicios_mixta: (() => {
+              const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa
+              if (tipoEmpresa === 'mixta') {
+                const servicios = empresa.servicios_mixta || empresa.servicios || empresa.servicios_empresa || empresa.servicios_ofrecidos || []
+                if (Array.isArray(servicios)) {
+                  return servicios.map((s: any) => ({
+                    id: s.id,
+                    nombre_servicio: s.nombre_servicio || s.nombre || '',
+                    nombre: s.nombre_servicio || s.nombre || '',
+                    descripcion: s.descripcion || '',
+                    tipo_servicio: s.tipo_servicio || s.tipoServicio || '',
+                    sector_atendido: s.sector_atendido || (Array.isArray(s.sectores) ? s.sectores.join(', ') : s.sectores) || '',
+                    alcance_servicio: s.alcance_servicio || s.alcanceGeografico || s.alcance_geografico || '',
+                    forma_contratacion: s.forma_contratacion || s.formaContratacion || '',
+                    es_principal: s.es_principal || s.esPrincipal || false,
+                  }))
+                }
               }
               return []
             })(),
@@ -1652,7 +1696,28 @@ export default function PerfilEmpresaPage() {
                               }
                               return []
                             })(),
-                            productos_mixta: empresa.productos_mixta || empresa.productos || [],
+                            
+                            // Productos mixta - normalizar formato (para empresas mixtas)
+                            productos_mixta: (() => {
+                              const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa
+                              if (tipoEmpresa === 'mixta') {
+                                const productos = empresa.productos_mixta || empresa.productos || empresa.productos_empresa || []
+                                if (Array.isArray(productos)) {
+                                  return productos.map((p: any) => ({
+                                    id: p.id,
+                                    nombre_producto: p.nombre_producto || p.nombre || '',
+                                    nombre: p.nombre_producto || p.nombre || '',
+                                    descripcion: p.descripcion || '',
+                                    capacidad_productiva: p.capacidad_productiva || p.capacidadProductiva || '',
+                                    unidad_medida: p.unidad_medida || p.unidadMedida || '',
+                                    periodo_capacidad: p.periodo_capacidad || p.periodoCapacidad || '',
+                                    posicion_arancelaria: p.posicion_arancelaria || null,
+                                    es_principal: p.es_principal || p.esPrincipal || false,
+                                  }))
+                                }
+                              }
+                              return []
+                            })(),
                             
                             // Servicios - normalizar formato
                             servicios: (() => {
@@ -1672,7 +1737,28 @@ export default function PerfilEmpresaPage() {
                               }
                               return []
                             })(),
-                            servicios_mixta: empresa.servicios_mixta || empresa.servicios || [],
+                            
+                            // Servicios mixta - normalizar formato (para empresas mixtas)
+                            servicios_mixta: (() => {
+                              const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa
+                              if (tipoEmpresa === 'mixta') {
+                                const servicios = empresa.servicios_mixta || empresa.servicios || empresa.servicios_empresa || empresa.servicios_ofrecidos || []
+                                if (Array.isArray(servicios)) {
+                                  return servicios.map((s: any) => ({
+                                    id: s.id,
+                                    nombre_servicio: s.nombre_servicio || s.nombre || '',
+                                    nombre: s.nombre_servicio || s.nombre || '',
+                                    descripcion: s.descripcion || '',
+                                    tipo_servicio: s.tipo_servicio || s.tipoServicio || '',
+                                    sector_atendido: s.sector_atendido || (Array.isArray(s.sectores) ? s.sectores.join(', ') : s.sectores) || '',
+                                    alcance_servicio: s.alcance_servicio || s.alcanceGeografico || s.alcance_geografico || '',
+                                    forma_contratacion: s.forma_contratacion || s.formaContratacion || '',
+                                    es_principal: s.es_principal || s.esPrincipal || false,
+                                  }))
+                                }
+                              }
+                              return []
+                            })(),
                             servicios_ofrecidos: empresa.servicios_ofrecidos || empresa.servicios || [],
                             
                             // Contactos - Construir array asegurando que siempre incluya el contacto principal
@@ -1835,7 +1921,29 @@ export default function PerfilEmpresaPage() {
                                 }
                                 return []
                               })(),
-                              productos_mixta: empresa.productos_mixta || empresa.productos || [],
+                              
+                              // Productos mixta - normalizar formato (para empresas mixtas)
+                              productos_mixta: (() => {
+                                const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa
+                                if (tipoEmpresa === 'mixta') {
+                                  const productos = empresa.productos_mixta || empresa.productos || empresa.productos_empresa || []
+                                  if (Array.isArray(productos)) {
+                                    return productos.map((p: any) => ({
+                                      id: p.id,
+                                      nombre_producto: p.nombre_producto || p.nombre || '',
+                                      nombre: p.nombre_producto || p.nombre || '',
+                                      descripcion: p.descripcion || '',
+                                      capacidad_productiva: p.capacidad_productiva || p.capacidadProductiva || '',
+                                      unidad_medida: p.unidad_medida || p.unidadMedida || '',
+                                      periodo_capacidad: p.periodo_capacidad || p.periodoCapacidad || '',
+                                      posicion_arancelaria: p.posicion_arancelaria || null,
+                                      es_principal: p.es_principal || p.esPrincipal || false,
+                                    }))
+                                  }
+                                }
+                                return []
+                              })(),
+                              
                               servicios: (() => {
                                 const servicios = empresa.servicios || empresa.servicios_empresa || empresa.servicios_mixta || []
                                 if (Array.isArray(servicios)) {
@@ -1853,7 +1961,28 @@ export default function PerfilEmpresaPage() {
                                 }
                                 return []
                               })(),
-                              servicios_mixta: empresa.servicios_mixta || empresa.servicios || [],
+                              
+                              // Servicios mixta - normalizar formato (para empresas mixtas)
+                              servicios_mixta: (() => {
+                                const tipoEmpresa = empresa.tipo_empresa_valor || empresa.tipo_empresa
+                                if (tipoEmpresa === 'mixta') {
+                                  const servicios = empresa.servicios_mixta || empresa.servicios || empresa.servicios_empresa || empresa.servicios_ofrecidos || []
+                                  if (Array.isArray(servicios)) {
+                                    return servicios.map((s: any) => ({
+                                      id: s.id,
+                                      nombre_servicio: s.nombre_servicio || s.nombre || '',
+                                      nombre: s.nombre_servicio || s.nombre || '',
+                                      descripcion: s.descripcion || '',
+                                      tipo_servicio: s.tipo_servicio || s.tipoServicio || '',
+                                      sector_atendido: s.sector_atendido || (Array.isArray(s.sectores) ? s.sectores.join(', ') : s.sectores) || '',
+                                      alcance_servicio: s.alcance_servicio || s.alcanceGeografico || s.alcance_geografico || '',
+                                      forma_contratacion: s.forma_contratacion || s.formaContratacion || '',
+                                      es_principal: s.es_principal || s.esPrincipal || false,
+                                    }))
+                                  }
+                                }
+                                return []
+                              })(),
                               servicios_ofrecidos: empresa.servicios_ofrecidos || empresa.servicios || [],
                               contacto_principal_nombre: empresa.contacto_principal_nombre || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.nombre : null),
                               contacto_principal_apellido: empresa.contacto_principal_apellido || (empresa.contactos && Array.isArray(empresa.contactos) ? empresa.contactos.find((c: any) => c.tipo === 'Principal')?.apellido : null),

@@ -56,6 +56,7 @@ export default function EmpresasPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [notificando, setNotificando] = useState(false)
   const [showNotificarDialog, setShowNotificarDialog] = useState(false)
+  const [showNotificarSeleccionadasDialog, setShowNotificarSeleccionadasDialog] = useState(false)
   const [resultadoNotificacion, setResultadoNotificacion] = useState<{
     enviados: number
     fallidos: number
@@ -375,13 +376,14 @@ const handleNotificar = async () => {
     return
   }
   
-  // Notificar solo las seleccionadas
-  await notificarEmpresasSeleccionadas()
+  // Mostrar diálogo de confirmación para empresas seleccionadas
+  setShowNotificarSeleccionadasDialog(true)
 }
 
 const notificarEmpresasSeleccionadas = async () => {
   setNotificando(true)
   setResultadoNotificacion(null)
+  setShowNotificarSeleccionadasDialog(false)
   
   try {
     const response = await api.notificarEmpresas(selectedEmpresas)
@@ -420,7 +422,6 @@ const notificarEmpresasSeleccionadas = async () => {
     })
   } finally {
     setNotificando(false)
-    setShowNotificarDialog(false)
   }
 }
 
@@ -642,7 +643,62 @@ const handleRestore = async (id: number) => {
           empresas={allEmpresas.filter(e => selectedEmpresas.includes(e.id))}
         />
 
-        {/* Notificar Confirmation Dialog */}
+        {/* Notificar Empresas Seleccionadas Confirmation Dialog */}
+        <AlertDialog open={showNotificarSeleccionadasDialog} onOpenChange={setShowNotificarSeleccionadasDialog}>
+          <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Mail className="h-5 w-5 text-blue-600" />
+                </div>
+                <AlertDialogTitle className="text-lg sm:text-xl text-blue-900">
+                  Confirmar Notificación de Empresas Seleccionadas
+                </AlertDialogTitle>
+              </div>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm sm:text-base mt-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="font-semibold text-blue-900 mb-2">
+                      ¿Estás seguro de que deseas notificar a las empresas seleccionadas?
+                    </p>
+                    <p className="text-blue-800 mb-3">
+                      Se enviarán emails de notificación a <strong className="text-blue-900">{selectedEmpresas.length}</strong> empresa{selectedEmpresas.length !== 1 ? 's' : ''} con sus credenciales de acceso.
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm mt-3">
+                      <li>Los emails se enviarán de forma gradual</li>
+                      <li>Esta acción no se puede deshacer</li>
+                    </ul>
+                  </div>
+                  {selectedEmpresas.length > 100 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-amber-800 font-medium text-sm">
+                        ⚠️ Advertencia: Se intentará notificar más de 100 empresas. 
+                        Este proceso puede tardar varios minutos.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 mt-4">
+              <AlertDialogCancel 
+                className="w-full sm:w-auto order-2 sm:order-1"
+                onClick={() => setShowNotificarSeleccionadasDialog(false)}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={notificarEmpresasSeleccionadas}
+                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto order-1 sm:order-2 font-semibold"
+                disabled={notificando}
+              >
+                {notificando ? "Enviando..." : "Sí, Notificar Empresas"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Notificar Todas Confirmation Dialog */}
         <AlertDialog open={showNotificarDialog} onOpenChange={setShowNotificarDialog}>
           <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
             <AlertDialogHeader>
