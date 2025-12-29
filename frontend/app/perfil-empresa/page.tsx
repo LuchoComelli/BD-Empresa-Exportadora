@@ -1830,7 +1830,7 @@ export default function PerfilEmpresaPage() {
                             facebook: empresa.facebook !== null && empresa.facebook !== undefined ? empresa.facebook : '',
                             linkedin: empresa.linkedin !== null && empresa.linkedin !== undefined ? empresa.linkedin : '',
                             
-                            // Otros
+                            
                             observaciones: empresa.observaciones,
                             categoria_matriz: empresa.categoria_matriz,
                             fecha_creacion: empresa.fecha_creacion,
