@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     'django_filters',
     'apps.core',
     'apps.empresas',
-    'apps.auditoria',
     'apps.registro',
 ]
 
@@ -52,7 +51,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.auditoria.middleware.AuditoriaMiddleware',
 ]
 
 ROOT_URLCONF = 'urls'
